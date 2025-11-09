@@ -1,23 +1,14 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
     "module": "NodeNext",
+    "target": "ES2022",
     "moduleResolution": "NodeNext",
-
     "strict": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-
-    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
     "isolatedModules": true,
-    "verbatimModuleSyntax": false,
-
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-
+    "jsx": "react-jsx",
     "sourceMap": true,
-    "declaration": true,
-    "declarationMap": true,
     "outDir": "dist"
   },
   "include": ["src"]

@@ -1,0 +1,72 @@
+import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { IngestReq } from "../models.js";
+import { handleIngest } from "../services/ingest.js";
+import { getDayExercises } from "../services/plans.js";
+import { db } from "../db.js";
+import { THOR_PLAN_ID } from "../config.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export const router = express.Router();
+
+router.post("/ingest", async (req, res) => {
+  const parsed = IngestReq.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.flatten());
+  try {
+    const out = await handleIngest(parsed.data.text, parsed.data.date, parsed.data.planId);
+    res.json(out);
+  } catch (e: any) {
+    console.error(e);
+    res.status(500).json({ error: e.message || "ingest_failed" });
+  }
+});
+
+router.get("/day/:dow", (req, res) => {
+  const dow = parseInt(req.params.dow, 10);
+  if (Number.isNaN(dow) || dow < 1 || dow > 7) return res.status(400).json({ error: "dow must be 1..7" });
+  const rows = getDayExercises(THOR_PLAN_ID, dow).map(r => ({ id: r.id, name: r.name, aliases: JSON.parse(r.aliases || "[]") }));
+  res.json({ planId: THOR_PLAN_ID, dow, exercises: rows });
+});
+
+router.get("/progress/summary", (req, res) => {
+  const from = (req.query.from as string) || "1970-01-01";
+  const to = (req.query.to as string) || "2999-12-31";
+
+  const sessions = db.prepare(`
+    SELECT session_date, COUNT(*) AS logs
+    FROM workout_sessions s
+    JOIN exercise_logs l ON l.session_id = s.id
+    WHERE s.session_date BETWEEN ? AND ?
+    GROUP BY session_date
+    ORDER BY session_date DESC
+  `).all(from, to);
+
+  const topLifts = db.prepare(`
+    SELECT e.name, COUNT(*) AS cnt
+    FROM exercise_logs l
+    JOIN workout_sessions s ON s.id = l.session_id
+    JOIN exercises e ON e.id = l.exercise_id
+    WHERE s.session_date BETWEEN ? AND ?
+    GROUP BY e.name
+    ORDER BY cnt DESC
+    LIMIT 10
+  `).all(from, to);
+
+  const recent = db.prepare(`
+    SELECT s.session_date, e.name, l.sets, l.reps_per_set, l.weight_lbs
+    FROM exercise_logs l
+    JOIN workout_sessions s ON s.id = l.session_id
+    JOIN exercises e ON e.id = l.exercise_id
+    WHERE s.session_date BETWEEN ? AND ?
+    ORDER BY s.session_date DESC
+    LIMIT 50
+  `).all(from, to);
+
+  res.json({ sessions, topLifts, recent });
+});
+
+// Static UI
+router.use(express.static(path.join(__dirname, "..", "..", "public")));
