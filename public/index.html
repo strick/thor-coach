@@ -243,7 +243,7 @@
   async function fetchDay() {
     const date = $("dateInput").value || todayISO();
     const dow = toDow(date);
-    const res = await fetch(apiBase() + '/day/' + 1);
+    const res = await fetch(apiBase() + '/day/' + dow);
     if (!res.ok) { $("dayList").innerHTML = `<li class="text-red-600">Failed to load day ${dow}</li>`; return; }
     const data = await res.json();
     const items = (data.exercises || []).map(e => `<li>${e.name}</li>`).join('');
