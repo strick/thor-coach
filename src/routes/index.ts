@@ -92,6 +92,13 @@ router.get("/config", (req, res) => {
   });
 });
 
+// in routes/index.ts
+router.post("/admin/clear-logs", (req, res) => {
+  db.exec("DELETE FROM exercise_logs; DELETE FROM workout_sessions; VACUUM;");
+  res.json({ status: "cleared_logs" });
+});
+
+
 
 // Static UI
 router.use(express.static(path.join(__dirname, "..", "..", "public")));
