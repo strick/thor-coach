@@ -6,6 +6,7 @@ import { handleIngest } from "../services/ingest.js";
 import { getDayExercises } from "../services/plans.js";
 import { db } from "../db.js";
 import { THOR_PLAN_ID } from "../config.js";
+import { USE_OLLAMA, OLLAMA_MODEL, OLLAMA_URL, OPENAI_API_KEY } from "../config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,6 +68,30 @@ router.get("/progress/summary", (req, res) => {
 
   res.json({ sessions, topLifts, recent });
 });
+
+// ...
+
+// Healthcheck
+router.get("/health", (req, res) => {
+  try {
+    // cheap DB ping
+    db.prepare("select 1").get();
+    res.json({ status: "ok" });
+  } catch (e: any) {
+    res.status(500).json({ status: "error", error: e?.message || "db_unavailable" });
+  }
+});
+
+// Runtime config (safe subset)
+router.get("/config", (req, res) => {
+  res.json({
+    llm: USE_OLLAMA ? "ollama" : (OPENAI_API_KEY ? "openai" : "none"),
+    ollama: USE_OLLAMA ? { model: OLLAMA_MODEL, url: OLLAMA_URL } : null,
+    openai: OPENAI_API_KEY ? { enabled: true } : null,
+    port: req.app.get("port") ?? undefined
+  });
+});
+
 
 // Static UI
 router.use(express.static(path.join(__dirname, "..", "..", "public")));
