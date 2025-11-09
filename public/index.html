@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Workout MVP — Thor Logger</title>
+  <!-- Tailwind (CDN for quick MVP) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js for quick charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root { color-scheme: light dark; }
+  </style>
+</head>
+<body class="bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-h-screen">
+  <div class="max-w-4xl mx-auto p-4 sm:p-8">
+    <header class="mb-6">
+      <h1 class="text-3xl font-semibold tracking-tight">Workout MVP — Thor Logger</h1>
+      <p class="text-sm text-neutral-500 dark:text-neutral-400 mt-2">Type or dictate your workout update, then submit to log. Uses your running backend (<code>/ingest</code>, <code>/day/:dow</code>, <code>/progress/summary</code>).</p>
+    </header>
+
+    <!-- API config bar -->
+    <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end mb-5">
+      <div class="flex-1">
+        <label class="block text-sm font-medium mb-1" for="apiUrl">API URL</label>
+        <input id="apiUrl" type="url" class="w-full rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-800 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" value="http://localhost:3000" />
+        <p class="text-xs text-neutral-500 mt-1">Change this if your server runs elsewhere (e.g., your LAN IP for mobile).</p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1" for="planId">Plan</label>
+        <select id="planId" class="rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-800 px-3 py-2">
+          <option value="thor" selected>Thor (Dumbbell-only)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1" for="dateInput">Date</label>
+        <input id="dateInput" type="date" class="rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-800 px-3 py-2" />
+      </div>
+    </div>
+
+    <!-- Input card -->
+    <section class="bg-white dark:bg-neutral-800 rounded-2xl shadow p-4 sm:p-6 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold">Update</h2>
+        <div class="flex items-center gap-2">
+          <button id="micBtn" class="rounded-full px-3 py-1.5 bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 text-sm">🎤 Dictate</button>
+          <button id="clearBtn" class="rounded-full px-3 py-1.5 bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 text-sm">Clear</button>
+        </div>
+      </div>
+      <textarea id="updateText" rows="5" class="w-full rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. DB floor press 4x12 @30; incline press 4x12 @25; flys 3x12 @15; push-ups 3x max"></textarea>
+      <div class="mt-4 flex gap-3">
+        <button id="submitBtn" class="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 font-medium">Submit</button>
+        <button id="fetchDayBtn" class="rounded-xl bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 px-4 py-2 font-medium">Show Today’s Day</button>
+      </div>
+      <p id="micStatus" class="text-xs text-neutral-500 mt-2"></p>
+    </section>
+
+    <!-- Results + Day info -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <section class="bg-white dark:bg-neutral-800 rounded-2xl shadow p-4 sm:p-6">
+        <h3 class="text-base font-semibold mb-3">Ingest Result</h3>
+        <div id="ingestResult" class="text-sm text-neutral-700 dark:text-neutral-300"></div>
+      </section>
+
+      <section class="bg-white dark:bg-neutral-800 rounded-2xl shadow p-4 sm:p-6">
+        <h3 class="text-base font-semibold mb-3">Today’s Exercises</h3>
+        <ul id="dayList" class="list-disc pl-5 space-y-1 text-sm text-neutral-700 dark:text-neutral-300"></ul>
+      </section>
+    </div>
+
+    <!-- Progress -->
+    <section class="bg-white dark:bg-neutral-800 rounded-2xl shadow p-4 sm:p-6">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-semibold">Progress (last 30 days)</h3>
+        <button id="refreshProgressBtn" class="rounded-xl bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 px-3 py-1.5 text-sm font-medium">Refresh</button>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4">
+        <div class="lg:col-span-2">
+          <canvas id="sessionsChart" height="140"></canvas>
+        </div>
+        <div>
+          <h4 class="font-medium mb-2">Top Exercises</h4>
+          <ol id="topExercises" class="list-decimal pl-5 space-y-1 text-sm text-neutral-700 dark:text-neutral-300"></ol>
+        </div>
+      </div>
+      <div class="mt-6">
+        <h4 class="font-medium mb-2">Recent Logs</h4>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead class="text-left text-neutral-600 dark:text-neutral-400">
+              <tr>
+                <th class="py-2 pr-4">Date</th>
+                <th class="py-2 pr-4">Exercise</th>
+                <th class="py-2 pr-4">Sets</th>
+                <th class="py-2 pr-4">Reps</th>
+                <th class="py-2 pr-4">Weight (lb)</th>
+              </tr>
+            </thead>
+            <tbody id="recentTable" class="divide-y divide-neutral-200 dark:divide-neutral-700"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <footer class="text-xs text-neutral-500 dark:text-neutral-400 mt-10 text-center">
+      <p>Built for MVP testing. Dictate via your phone’s voice keyboard, then submit.</p>
+    </footer>
+  </div>
+
+<script>
+  // ======= Helpers =======
+  const $ = (id) => document.getElementById(id);
+  const todayISO = () => new Date().toISOString().slice(0,10);
+  const toDow = (d) => { const x=new Date(d); const g=x.getDay(); return g===0?7:g; };
+
+  // Init date input to today
+  $("dateInput").value = todayISO();
+
+  function apiBase() {
+    return $("apiUrl").value.replace(/\/$/, "");
+  }
+
+  // ======= Speech-to-text (Web Speech API) =======
+  let recognition = null;
+  let micActive = false;
+  let transcriptBuffer = '';
+
+  function setupSTT() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      $("micStatus").textContent = "SpeechRecognition not supported in this browser.";
+      $("micBtn").disabled = true;
+      return;
+    }
+    recognition = new SR();
+    recognition.lang = 'en-US';
+    recognition.interimResults = true;
+    recognition.continuous = true;
+
+    recognition.onresult = (e) => {
+      let finalText = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i];
+        const txt = res[0].transcript;
+        if (res.isFinal) finalText += txt + ' ';
+      }
+      if (finalText) {
+        transcriptBuffer += finalText;
+        const current = $("updateText").value;
+        $("updateText").value = (current ? current + ' ' : '') + finalText.trim();
+      }
+    };
+
+    recognition.onstart = () => { $("micStatus").textContent = "Listening… speak your workout sets (e.g., 'incline press 4 by 12 at 25')."; };
+    recognition.onend = () => { micActive = false; $("micBtn").textContent = '🎤 Dictate'; $("micStatus").textContent = "Mic stopped."; };
+    recognition.onerror = (e) => { $("micStatus").textContent = 'Mic error: ' + (e.error || 'unknown'); };
+  }
+  setupSTT();
+
+  $("micBtn").addEventListener('click', () => {
+    if (!recognition) return;
+    if (micActive) {
+      recognition.stop();
+      micActive = false;
+      $("micBtn").textContent = '🎤 Dictate';
+      return;
+    }
+    transcriptBuffer='';
+    recognition.start();
+    micActive = true;
+    $("micBtn").textContent = '⏹ Stop';
+  });
+
+  $("clearBtn").addEventListener('click', () => {
+    $("updateText").value = '';
+    $("ingestResult").innerHTML = '';
+  });
+
+  // ======= Networking =======
+  async function postIngest() {
+    const text = $("updateText").value.trim();
+    if (!text) { alert('Please enter or dictate an update.'); return; }
+    const body = {
+      text,
+      date: $("dateInput").value || undefined,
+      planId: $("planId").value
+    };
+
+    const res = await fetch(apiBase() + '/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+      const t = await res.text();
+      $("ingestResult").innerHTML = `<div class="text-red-600">Error: ${res.status} ${t}</div>`;
+      return;
+    }
+
+    const data = await res.json();
+    renderIngestResult(data);
+    // also refresh progress automatically
+    refreshProgress();
+  }
+
+  function renderIngestResult(data) {
+    const { sessionId, date, day_of_week, results } = data;
+    const rows = (results || []).map(r => {
+      if (r.status === 'logged') {
+        return `<tr class="border-b border-neutral-200 dark:border-neutral-700">
+          <td class="py-1 pr-3">✅</td>
+          <td class="py-1 pr-3">${r.exercise}</td>
+          <td class="py-1 pr-3">${r.sets ?? ''}</td>
+          <td class="py-1 pr-3">${r.reps ?? ''}</td>
+          <td class="py-1 pr-3">${r.weight_lbs ?? ''}</td>
+        </tr>`;
+      }
+      return `<tr class="border-b border-neutral-200 dark:border-neutral-700">
+        <td class="py-1 pr-3">⏭️</td>
+        <td class="py-1 pr-3" colspan="4">Skipped: <code>${r.input || r.exercise}</code> (unknown for this day)</td>
+      </tr>`;
+    }).join('');
+
+    $("ingestResult").innerHTML = `
+      <div class="text-sm mb-2 text-neutral-600 dark:text-neutral-400">Session <code>${sessionId}</code> • Date <strong>${date}</strong> • DOW <strong>${day_of_week}</strong></div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="text-left text-neutral-600 dark:text-neutral-400">
+            <tr>
+              <th class="py-2 pr-3">Status</th>
+              <th class="py-2 pr-3">Exercise</th>
+              <th class="py-2 pr-3">Sets</th>
+              <th class="py-2 pr-3">Reps</th>
+              <th class="py-2 pr-3">Weight</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  async function fetchDay() {
+    const date = $("dateInput").value || todayISO();
+    const dow = toDow(date);
+    const res = await fetch(apiBase() + '/day/' + 1);
+    if (!res.ok) { $("dayList").innerHTML = `<li class="text-red-600">Failed to load day ${dow}</li>`; return; }
+    const data = await res.json();
+    const items = (data.exercises || []).map(e => `<li>${e.name}</li>`).join('');
+    $("dayList").innerHTML = items || '<li class="text-neutral-500">No entries.</li>';
+  }
+
+  // ======= Progress =======
+  let sessionsChart = null;
+  async function refreshProgress() {
+    const to = todayISO();
+    const from = new Date(Date.now() - 29*24*60*60*1000).toISOString().slice(0,10);
+    const res = await fetch(`${apiBase()}/progress/summary?from=${from}&to=${to}`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // sessions per day chart
+    const labels = (data.sessions || []).map(r => r.session_date).reverse();
+    const values = (data.sessions || []).map(r => r.logs).reverse();
+
+    const ctx = $("sessionsChart");
+    if (sessionsChart) { sessionsChart.destroy(); }
+    sessionsChart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Logs per day', data: values }] },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      }
+    });
+
+    // top exercises
+    $("topExercises").innerHTML = (data.topLifts || [])
+      .map(x => `<li>${x.name} — ${x.cnt}</li>`)
+      .join('') || '<li class="text-neutral-500">No data yet.</li>';
+
+    // recent table
+    $("recentTable").innerHTML = (data.recent || [])
+      .map(r => `<tr>
+        <td class="py-1 pr-4">${r.session_date}</td>
+        <td class="py-1 pr-4">${r.name}</td>
+        <td class="py-1 pr-4">${r.sets ?? ''}</td>
+        <td class="py-1 pr-4">${r.reps_per_set ?? ''}</td>
+        <td class="py-1 pr-4">${r.weight_lbs ?? ''}</td>
+      </tr>`).join('');
+  }
+
+  // ======= Wire up =======
+  $("submitBtn").addEventListener('click', postIngest);
+  $("fetchDayBtn").addEventListener('click', fetchDay);
+  $("refreshProgressBtn").addEventListener('click', refreshProgress);
+
+  // Auto-load
+  fetchDay();
+  refreshProgress();
+</script>
+</body>
+</html>
