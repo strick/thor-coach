@@ -37,6 +37,19 @@ export function ensureSchemaAndSeed() {
     FOREIGN KEY(session_id) REFERENCES workout_sessions(id),
     FOREIGN KEY(exercise_id) REFERENCES exercises(id)
   );
+  CREATE TABLE IF NOT EXISTS weekly_summaries (
+    id TEXT PRIMARY KEY,
+    plan_id TEXT NOT NULL,
+    week_start_date TEXT NOT NULL,
+    week_end_date TEXT NOT NULL,
+    total_sessions INTEGER NOT NULL DEFAULT 0,
+    total_volume REAL NOT NULL DEFAULT 0,
+    summary_text TEXT,
+    metrics_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(plan_id) REFERENCES plans(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_weekly_summaries_dates ON weekly_summaries(week_start_date, week_end_date);
   `);
 
   const thorExists = db.prepare(`SELECT 1 FROM plans WHERE id=?`).get(THOR_PLAN_ID);

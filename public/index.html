@@ -15,7 +15,11 @@
 <body class="bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-h-screen">
   <div class="max-w-4xl mx-auto p-4 sm:p-8">
     <header class="mb-6">
-      <h1 class="text-3xl font-semibold tracking-tight">Workout MVP — Thor Logger</h1>
+      <h1 class="text-3xl font-semibold tracking-tight flex items-center gap-2">
+  Workout MVP — Thor Logger
+  <span id="cfgPill" class="text-xs px-2 py-0.5 rounded-full bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-200">config…</span>
+</h1>
+
       <p class="text-sm text-neutral-500 dark:text-neutral-400 mt-2">Type or dictate your workout update, then submit to log. Uses your running backend (<code>/ingest</code>, <code>/day/:dow</code>, <code>/progress/summary</code>).</p>
     </header>
 
@@ -108,6 +112,8 @@
   </div>
 
 <script>
+
+  
   // ======= Helpers =======
   const $ = (id) => document.getElementById(id);
   const todayISO = () => new Date().toISOString().slice(0,10);
@@ -119,6 +125,82 @@
   function apiBase() {
     return $("apiUrl").value.replace(/\/$/, "");
   }
+
+  // ======= Config bootstrap & persistence =======
+const LS_KEY = "thor_mvp_cfg";
+function loadStoredCfg() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch { return {}; }
+}
+function saveStoredCfg(obj) {
+  localStorage.setItem(LS_KEY, JSON.stringify(obj || {}));
+}
+
+// Default API base: same origin (if not stored)
+const stored = loadStoredCfg();
+const defaultApi = stored.apiBase || window.location.origin.replace(/\/$/, "");
+$("apiUrl").value = defaultApi;
+
+// Show active backend status
+function setCfgPill(state, detail) {
+  const el = $("cfgPill");
+  if (!el) return;
+  const classes = "text-xs px-2 py-0.5 rounded-full";
+  if (state === "ok") {
+    el.className = classes + " bg-emerald-200/70 dark:bg-emerald-700/60 text-emerald-900 dark:text-emerald-100";
+    el.textContent = detail || "ready";
+  } else if (state === "warn") {
+    el.className = classes + " bg-amber-200/70 dark:bg-amber-700/60 text-amber-900 dark:text-amber-100";
+    el.textContent = detail || "config?";
+  } else {
+    el.className = classes + " bg-rose-200/70 dark:bg-rose-700/60 text-rose-900 dark:text-rose-100";
+    el.textContent = detail || "offline";
+  }
+}
+
+// Probe /config and /health (safe subset)
+async function probeBackend() {
+  const base = apiBase();
+  try {
+    const [cfgRes, healthRes] = await Promise.allSettled([
+      fetch(base + "/config"),
+      fetch(base + "/health")
+    ]);
+
+    let llm = "none", ollama = null, openai = null, healthOk = false;
+
+    if (cfgRes.status === "fulfilled" && cfgRes.value.ok) {
+      const cfg = await cfgRes.value.json();
+      llm = cfg.llm; ollama = cfg.ollama; openai = cfg.openai;
+    }
+
+    if (healthRes.status === "fulfilled" && healthRes.value.ok) {
+      const h = await healthRes.value.json();
+      healthOk = h.status === "ok";
+    }
+
+    // Build pill text
+    let label = healthOk ? "server: ok" : "server: ?";
+    if (llm === "ollama" && ollama) label += ` • LLM: ollama (${ollama.model})`;
+    else if (llm === "openai") label += " • LLM: openai";
+    else label += " • LLM: none";
+
+    setCfgPill(healthOk ? "ok" : "warn", label);
+
+    // Persist chosen base
+    saveStoredCfg({ apiBase: base });
+  } catch {
+    setCfgPill("err", "offline");
+  }
+}
+
+// Re-probe when API URL changes
+$("apiUrl").addEventListener("change", () => {
+  saveStoredCfg({ apiBase: apiBase() });
+  probeBackend();
+});
+
+// Kick off probe on load
+probeBackend();
 
   // ======= Speech-to-text (Web Speech API) =======
   let recognition = null;

@@ -7,6 +7,8 @@ import { getDayExercises } from "../services/plans.js";
 import { db } from "../db.js";
 import { THOR_PLAN_ID } from "../config.js";
 import { USE_OLLAMA, OLLAMA_MODEL, OLLAMA_URL, OPENAI_API_KEY } from "../config.js";
+import { getWeeklySummaries, getWeeklySummary } from "../services/weekly-summary.js";
+import { triggerWeeklySummary } from "../services/cron.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,7 +30,7 @@ router.post("/ingest", async (req, res) => {
 router.get("/day/:dow", (req, res) => {
   const dow = parseInt(req.params.dow, 10);
   if (Number.isNaN(dow) || dow < 1 || dow > 7) return res.status(400).json({ error: "dow must be 1..7" });
-  const rows = getDayExercises(THOR_PLAN_ID, dow).map(r => ({ id: r.id, name: r.name, aliases: JSON.parse(r.aliases || "[]") }));
+  const rows = getDayExercises(THOR_PLAN_ID, dow).map((r: any) => ({ id: r.id, name: r.name, aliases: JSON.parse(r.aliases || "[]") }));
   res.json({ planId: THOR_PLAN_ID, dow, exercises: rows });
 });
 
@@ -98,7 +100,48 @@ router.post("/admin/clear-logs", (req, res) => {
   res.json({ status: "cleared_logs" });
 });
 
+// Weekly summaries
+router.get("/weekly-summaries", (req, res) => {
+  const planId = (req.query.planId as string) || THOR_PLAN_ID;
+  const limit = parseInt(req.query.limit as string, 10) || 10;
+  try {
+    const summaries = getWeeklySummaries(planId, limit);
+    res.json({ planId, summaries });
+  } catch (e: any) {
+    console.error(e);
+    res.status(500).json({ error: e.message || "failed_to_fetch_summaries" });
+  }
+});
 
+router.get("/weekly-summaries/:id", (req, res) => {
+  try {
+    const summary = getWeeklySummary(req.params.id);
+    if (!summary) {
+      return res.status(404).json({ error: "summary_not_found" });
+    }
+    // Parse metrics_json for better response
+    const parsed = {
+      ...summary,
+      metrics: JSON.parse(summary.metrics_json)
+    };
+    res.json(parsed);
+  } catch (e: any) {
+    console.error(e);
+    res.status(500).json({ error: e.message || "failed_to_fetch_summary" });
+  }
+});
+
+router.post("/weekly-summaries/generate", async (req, res) => {
+  const planId = req.body.planId || THOR_PLAN_ID;
+  try {
+    const summaryId = await triggerWeeklySummary(planId);
+    const summary = getWeeklySummary(summaryId);
+    res.json({ summaryId, summary });
+  } catch (e: any) {
+    console.error(e);
+    res.status(500).json({ error: e.message || "failed_to_generate_summary" });
+  }
+});
 
 // Static UI
 router.use(express.static(path.join(__dirname, "..", "..", "public")));

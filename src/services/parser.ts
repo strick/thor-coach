@@ -42,7 +42,7 @@ export async function parseFreeform(text: string, planId: string, dow: number): 
   if (!USE_LLM) throw new Error("Must use LLM parser");
 
   const normalizedText = text.replace(/£\s*/g, "").replace(/\bpounds?\b/gi, " lbs");
-  const valid = getDayExercises(planId, dow).map(e => e.name);
+  const valid = getDayExercises(planId, dow).map((e: any) => e.name);
 
   const sys = `
 You are a precise workout log parser.
