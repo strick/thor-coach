@@ -3,6 +3,7 @@ import { ensureSchemaAndSeed } from "./seed.js";
 import { router } from "./routes/index.js";
 import { USE_OLLAMA, OLLAMA_MODEL, OLLAMA_URL, OPENAI_API_KEY, PORT } from "./config.js";
 import { initializeCronJobs } from "./services/cron.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 ensureSchemaAndSeed();
 initializeCronJobs();
@@ -10,6 +11,7 @@ initializeCronJobs();
 const app = express();
 app.use(express.json());
 app.use(router);
+app.use(errorHandler);
 
 app.listen(PORT, () => {
   const configSummary = {
