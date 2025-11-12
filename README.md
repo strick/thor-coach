@@ -92,23 +92,61 @@ workout-mvp/
 
 ---
 
-### **Phase 2 — AI Coach (In Progress 🧠)**  
+### **Phase 2 — AI Coach (Complete ✅)**
 > Adds intelligence, summaries, and progress reports.
 
-- [x] Weekly progress summary table  
-- [ ] Cron job (Sunday 6pm) to auto-generate weekly summaries  
-- [ ] Compare week-over-week performance (% change in volume, best sets, etc.)  
-- [ ] Store LLM summaries (via Ollama/OpenAI)  
-- [ ] Generate visual “Weekly Report” card in the dashboard  
+- [x] Weekly progress summary table
+- [x] Cron job (Sunday 6pm) to auto-generate weekly summaries
+- [x] Compare week-over-week performance (% change in volume, best sets, etc.)
+- [x] Store LLM summaries (via Ollama/OpenAI)
+- [x] Generate visual "Weekly Report" card in the dashboard
+- [x] Enable editing of single days
+- [x] Enable user to track single exercises at a time
+- [x] Users should be able to inline edit each workout
+- [x] Users should be able to tell what is going on when a button is clicked
 
 ---
 
-### **Phase 3 — Voice & Dictation (Planned 🎤)**  
+### **Phase 2.5 — UX Polish (Complete ✅)**
+> Refine the user experience with better feedback, safety, and convenience features.
+
+**Safety & Core UX:**
+- [x] Confirmation dialogs for destructive actions (delete workouts)
+- [x] Empty states with helpful guidance for new users
+- [x] Loading skeletons for data fetching (not just buttons)
+- [x] Better error handling and retry suggestions
+
+**Convenience & Engagement:**
+- [x] "Today's Workout" quick view (planned exercises + last session data)
+- [x] Progressive overload helper (show last session's weights/reps during logging)
+- [x] Better date navigation (Today/Yesterday buttons, arrow key navigation)
+- [x] Keyboard shortcuts (Ctrl+Enter to submit, Esc to cancel, arrows for dates)
+- [x] Data export (CSV/JSON download)
+- [x] Todays indiviual workouts should show at the bottom of the Today tab and be persistent so that users can modify their current workout if needed.
+- [x] Settings should allow the user to switch the model being used.  They should be aple to toggle between OpenAI or Ollama. OpenAI will require a key (if not set already) and Ollama would require to choose between models available.
+- [x] When a user changes teh day, the Today's Plan list should automatically update.
+- [x] Today's workouts should show in a single pane
+- [x] Enable multi select for deleting today's workouts
+- [x] Show single pane Review and Edit workouts when the workouts are loaded for better UX.  This would be hte same as Today's works single pane view.
+- [x] Enable mult select for deleting workouts in the history.
+
+**Future Enhancements (Deferred):**
+- [ ] Personal Records (PRs) tracking with highlights
+- [x] Form validation with real-time feedback
+- [ ] Workout templates and "repeat last workout" functionality
+- [ ] Data import (CSV/JSON upload)
+- [ ] Exercise autocomplete with recent suggestions
+- [x] Optimistic UI updates (instant feedback, rollback on error)
+- [x] Create a calendar pane as the first item in workout history that shows days you hit and missed.
+
+---
+
+### **Phase 3 — Voice & Dictation (Planned 🎤)**
 > Hands-free logging and live parsing.
 
-- [ ] Add speech-to-text (Web Speech API or Whisper.cpp)  
-- [ ] Support real-time dictation input  
-- [ ] “Start workout” and “log next set” voice commands  
+- [ ] Add speech-to-text (Web Speech API or Whisper.cpp)
+- [ ] Support real-time dictation input
+- [ ] "Start workout" and "log next set" voice commands
 
 ---
 

@@ -124,6 +124,18 @@ The database auto-initializes on first run with these tables:
 
 - `GET /config` - Runtime config (LLM provider, model, etc.)
 
+- `GET /workouts?date=YYYY-MM-DD` - Get workouts for a specific date
+  - Returns: `{ date, workouts: [{ id, session_date, day_of_week, exercises: [...] }] }`
+
+- `DELETE /workouts/:sessionId` - Delete a specific workout session
+  - Returns: `{ status: "deleted", sessionId }`
+
+- `GET /exercises?planId=thor&dow=1` - Get list of exercises (optionally filtered by day)
+  - Returns: `{ planId, exercises: [{ id, name, day_of_week, aliases }] }`
+
+- `GET /exercises/:exerciseId/history?limit=50` - Get history for a specific exercise
+  - Returns: `{ exercise, history: [...], stats: { total_sessions, total_sets, max_weight, avg_weight, total_volume } }`
+
 - `POST /admin/clear-logs` - Delete all workout data (use with caution)
 
 ### Frontend (public/index.html)
@@ -131,6 +143,21 @@ The database auto-initializes on first run with these tables:
 Single-file SPA that:
 - Allows natural language input (typing or speech-to-text via Web Speech API)
 - Displays parsed results and exercise validation
+- **Weekly Reports Dashboard** - AI-powered weekly summaries with:
+  - Latest week summary card showing sessions, volume, and week-over-week % change
+  - AI-generated coaching text from LLM
+  - Top exercises breakdown with volume metrics
+  - Historical summaries with trend indicators (📈 📉 ➡️)
+  - "Generate Now" button for manual summary generation
+- **Workout Management** - Edit and delete past workouts:
+  - Select a date to view all workouts for that day
+  - Delete individual workout sessions with confirmation
+  - View exercise details for each session
+- **Single Exercise Tracking** - Track progress for individual exercises:
+  - Select any exercise from the plan
+  - View comprehensive stats (total sessions, sets, max weight, total volume)
+  - See complete history with dates, sets, reps, and weights
+  - Calculated volume per session
 - Shows progress charts (last 30 days) using Chart.js
 - Configurable API URL (useful for mobile devices connecting to LAN)
 
