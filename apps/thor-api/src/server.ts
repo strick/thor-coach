@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { ensureSchemaAndSeed } from "./seed.js";
 import { router } from "./routes/index.js";
 import { USE_OLLAMA, OLLAMA_MODEL, OLLAMA_URL, OPENAI_API_KEY, PORT } from "./config.js";
@@ -9,6 +10,7 @@ ensureSchemaAndSeed();
 initializeCronJobs();
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 app.use(router);
 app.use(errorHandler);

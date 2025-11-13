@@ -1,7 +1,8 @@
 import 'dotenv/config';
+import { THOR_PLAN_ID } from "@thor/shared";
 
 export const PORT = Number(process.env.PORT || 3000);
-export const THOR_PLAN_ID = "thor";
+export { THOR_PLAN_ID };
 
 export const USE_LLM = Boolean(process.env.OPENAI_API_KEY) || process.env.USE_OLLAMA === "true";
 

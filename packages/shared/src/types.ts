@@ -1,5 +1,6 @@
-import { z } from "zod";
-
+/**
+ * Parsed workout log entry
+ */
 export type ParsedLog = {
   exercise: string;
   sets?: number;
@@ -8,12 +9,9 @@ export type ParsedLog = {
   notes?: string;
 };
 
-export const IngestReq = z.object({
-  text: z.string().min(3),
-  date: z.string().optional(), // YYYY-MM-DD
-  planId: z.string().optional().default("thor")
-});
-
+/**
+ * Exercise database row
+ */
 export type ExRow = {
   id: string;
   plan_id: string;

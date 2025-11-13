@@ -189,9 +189,9 @@ function saveStoredCfg(obj) {
   localStorage.setItem(LS_KEY, JSON.stringify(obj || {}));
 }
 
-// Default API base: same origin (if not stored)
+// Default API base: port 3000 for separate API server (if not stored)
 const stored = loadStoredCfg();
-const defaultApi = stored.apiBase || window.location.origin.replace(/\/$/, "");
+const defaultApi = stored.apiBase || "http://localhost:3000";
 
 // Show active backend status
 function setCfgPill(state, detail) {

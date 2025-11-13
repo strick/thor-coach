@@ -4,32 +4,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Thor Logger** is a local-first, AI-powered workout tracker that uses natural language input to log structured workout data. It runs entirely on your machine with privacy-first principles.
+**Thor Stack** is a local-first, AI-powered workout tracking monorepo with Model Context Protocol (MCP) integration. It uses natural language input to log structured workout data and integrates with AI agents. Everything runs locally with privacy-first principles.
 
-- **Backend**: TypeScript + Express + SQLite (better-sqlite3)
-- **AI Parsing**: Supports both Ollama (local) and OpenAI (cloud) for parsing natural language workout descriptions
-- **Frontend**: Single-page HTML with Tailwind CSS + Chart.js (served from `public/`)
-- **Database**: SQLite with WAL mode (`workout.db` created in project root)
+- **Monorepo**: npm workspaces with separate apps/, mcp/, and packages/ directories
+- **Backend API**: TypeScript + Express + SQLite (better-sqlite3) in `apps/thor-api/`
+- **Web Frontend**: Static HTML + Tailwind CSS + Chart.js in `apps/thor-web/`
+- **MCP Server**: Model Context Protocol server in `mcp/thor-mcp/`
+- **Shared Package**: Common types/schemas in `packages/shared/`
+- **AI Parsing**: Supports both Ollama (local) and OpenAI (cloud) for parsing natural language
+- **Database**: SQLite with WAL mode (`workout.db` created in `apps/thor-api/`)
 
 ## Development Commands
 
 ```bash
-# Install dependencies
+# Install all workspace dependencies
 npm install
 
-# Development mode (hot reload with tsx watch)
-npm run dev
+# Development mode (hot reload)
+npm run dev:api      # Start API server (http://localhost:3000)
+npm run dev:web      # Start web server (http://localhost:3001)
+npm run dev:mcp      # Start MCP server (stdio mode)
 
-# Build TypeScript to JavaScript
+# Build all workspaces
 npm run build
 
-# Production mode (run compiled JavaScript)
-npm start
+# Build specific workspaces
+npm run build:api
+npm run build:web
+npm run build:mcp
+
+# Run tests
+npm run test         # All workspaces
+npm run test:api     # API only
+
+# Production mode
+npm run start --workspace=thor-api
+npm run start --workspace=thor-web
+
+# Cleanup
+npm run clean        # Remove all dist/ and node_modules/
 ```
 
 ## Environment Configuration
 
-Create a `.env` file in the project root:
+Create a `.env` file in `apps/thor-api/`:
 
 ```env
 # LLM Configuration (choose one)
@@ -45,13 +63,49 @@ PORT=3000                          # API server port
 
 **Note**: If `USE_OLLAMA=true`, the system uses Ollama. Otherwise, if `OPENAI_API_KEY` is set, it uses OpenAI. If neither is configured, LLM parsing will fail.
 
-**Important**: LLM configuration is read from the `.env` file at server startup. The frontend settings UI displays the current backend configuration but does not allow changing it. To switch between Ollama and OpenAI, you must:
-1. Edit the `.env` file
-2. Restart the server (`npm run dev` or `npm start`)
+**Important**: LLM configuration is read from the `.env` file at server startup. To switch between Ollama and OpenAI:
+1. Edit `apps/thor-api/.env`
+2. Restart the API server (`npm run dev:api`)
 
 ## Architecture
 
-### Database Schema (src/seed.ts)
+### Monorepo Structure
+
+```
+thor-stack/
+├── apps/
+│   ├── thor-api/          # Backend REST API
+│   │   ├── src/           # TypeScript source
+│   │   ├── dist/          # Compiled JS (gitignored)
+│   │   ├── workout.db     # SQLite database (gitignored)
+│   │   └── .env           # Environment config (gitignored)
+│   │
+│   └── thor-web/          # Frontend web server
+│       ├── public/        # Static files (HTML, CSS, JS)
+│       └── server.js      # Express static file server
+│
+├── mcp/
+│   └── thor-mcp/          # Model Context Protocol server
+│       ├── src/           # MCP server implementation
+│       ├── dist/          # Compiled JS
+│       └── README.md      # MCP documentation
+│
+└── packages/
+    └── shared/            # Shared types and schemas
+        ├── src/
+        │   ├── types.ts      # TypeScript types
+        │   ├── schemas.ts    # Zod validation schemas
+        │   └── constants.ts  # Shared constants
+        └── dist/          # Compiled declarations
+```
+
+**Key Points:**
+- All imports from shared package use `@thor/shared`
+- API paths are relative to `apps/thor-api/src/`
+- Database is created at `apps/thor-api/workout.db`
+- `.env` file goes in `apps/thor-api/`
+
+### Database Schema (apps/thor-api/src/seed.ts)
 
 The database auto-initializes on first run with these tables:
 
@@ -69,15 +123,15 @@ The database auto-initializes on first run with these tables:
 
 ### Request Flow
 
-1. **User submits text** → `POST /ingest`
-2. **Parser service** (`src/services/parser.ts`):
+1. **User submits text** → `POST /api/ingest`
+2. **Parser service** (`apps/thor-api/src/services/parser.ts`):
    - Fetches valid exercises for the day from the plan
    - Sends natural language text + valid exercise list to LLM (Ollama or OpenAI)
    - LLM returns structured JSON with parsed exercises, sets, reps, weights, and notes
    - Handles multiple notation formats: `4x12 @45`, `4*12 with 45 lbs`, `11, 8, 5` (variable reps)
    - **Captures contextual notes**: Comments like "This was brutal", "felt easy", "personal best!" are automatically parsed and stored per-exercise
-3. **Ingest service** (`src/services/ingest.ts`):
-   - Normalizes parsed exercise names against the database using fuzzy matching (src/services/plans.ts:normalizeExercise)
+3. **Ingest service** (`apps/thor-api/src/services/ingest.ts`):
+   - Normalizes parsed exercise names against the database using fuzzy matching (apps/thor-api/src/services/plans.ts:normalizeExercise)
    - **Prevents duplicate exercises**: Checks if an exercise has already been logged today before inserting
    - Creates a workout_session and exercise_logs entries in a transaction
    - Returns results with per-exercise status:
@@ -87,47 +141,47 @@ The database auto-initializes on first run with these tables:
 
 ### Key Services
 
-- **src/services/parser.ts**: LLM integration layer
+- **apps/thor-api/src/services/parser.ts**: LLM integration layer
   - `parseFreeform()`: Main parsing function
   - `parseWithOllama()`: Ollama-specific client (uses `/api/chat` endpoint with `format: "json"`)
   - OpenAI path uses structured outputs with strict JSON schema
 
-- **src/services/plans.ts**: Exercise database queries and normalization
+- **apps/thor-api/src/services/plans.ts**: Exercise database queries and normalization
   - `getDayExercises(planId, dow)`: Returns exercises for a given plan and day-of-week
   - `normalizeExercise(input, candidates)`: Fuzzy matching (exact → alias → substring)
 
-- **src/services/ingest.ts**: Transaction logic for logging workouts
+- **apps/thor-api/src/services/ingest.ts**: Transaction logic for logging workouts
   - `handleIngest(text, dateISO?, planId?)`: Main ingestion pipeline
 
-- **src/services/weekly-summary.ts**: Weekly workout summary generation
+- **apps/thor-api/src/services/weekly-summary.ts**: Weekly workout summary generation
   - `calculateWeeklyMetrics(planId, weekStart)`: Calculates workout metrics for a week (sessions, volume, exercises, week-over-week comparison)
   - `generateWeeklySummary(planId, weekStart?)`: Generates AI-powered summary and stores in database
   - `getWeeklySummaries(planId, limit)`: Retrieves stored summaries
   - `getWeeklySummary(summaryId)`: Gets a specific summary with full metrics
 
-- **src/services/cron.ts**: Automated task scheduling
+- **apps/thor-api/src/services/cron.ts**: Automated task scheduling
   - `initializeCronJobs()`: Sets up cron jobs (called on server startup)
   - Weekly summary generation: Runs every Sunday at 6:00 PM
   - `triggerWeeklySummary(planId)`: Manually trigger summary generation (useful for testing)
 
-### API Endpoints (src/routes/index.ts)
+### API Endpoints (apps/thor-api/src/routes/index.ts)
 
-- `POST /ingest` - Parse and log workout from natural language
+- `POST /api/ingest` - Parse and log workout from natural language
   - Body: `{ text: string, date?: "YYYY-MM-DD", planId?: "thor" }`
 
-- `GET /day/:dow` - Get exercises for a day (1-7)
+- `GET /api/day/:dow` - Get exercises for a day (1-7)
   - Returns: `{ planId, dow, exercises: [{ id, name, aliases }] }`
 
-- `GET /progress/summary?from=YYYY-MM-DD&to=YYYY-MM-DD` - Analytics
+- `GET /api/progress/summary?from=YYYY-MM-DD&to=YYYY-MM-DD` - Analytics
   - Returns: `{ sessions, topLifts, recent }`
 
-- `GET /weekly-summaries?planId=thor&limit=10` - Get weekly summaries
+- `GET /api/weekly-summaries?planId=thor&limit=10` - Get weekly summaries
   - Returns: `{ planId, summaries: [{ id, week_start_date, week_end_date, total_sessions, total_volume, summary_text, created_at }] }`
 
-- `GET /weekly-summaries/:id` - Get specific weekly summary with full metrics
+- `GET /api/weekly-summaries/:id` - Get specific weekly summary with full metrics
   - Returns: `{ id, plan_id, week_start_date, week_end_date, total_sessions, total_volume, summary_text, metrics, created_at }`
 
-- `POST /weekly-summaries/generate` - Manually trigger weekly summary generation
+- `POST /api/weekly-summaries/generate` - Manually trigger weekly summary generation
   - Body: `{ planId?: "thor" }`
   - Returns: `{ summaryId, summary }`
 
@@ -135,21 +189,21 @@ The database auto-initializes on first run with these tables:
 
 - `GET /config` - Runtime config (LLM provider, model, etc.)
 
-- `GET /workouts?date=YYYY-MM-DD` - Get workouts for a specific date
+- `GET /api/workouts?date=YYYY-MM-DD` - Get workouts for a specific date
   - Returns: `{ date, workouts: [{ id, session_date, day_of_week, exercises: [...] }] }`
 
-- `DELETE /workouts/:sessionId` - Delete a specific workout session
+- `DELETE /api/workouts/:sessionId` - Delete a specific workout session
   - Returns: `{ status: "deleted", sessionId }`
 
-- `GET /exercises?planId=thor&dow=1` - Get list of exercises (optionally filtered by day)
+- `GET /api/exercises?planId=thor&dow=1` - Get list of exercises (optionally filtered by day)
   - Returns: `{ planId, exercises: [{ id, name, day_of_week, aliases }] }`
 
-- `GET /exercises/:exerciseId/history?limit=50` - Get history for a specific exercise
+- `GET /api/exercises/:exerciseId/history?limit=50` - Get history for a specific exercise
   - Returns: `{ exercise, history: [...], stats: { total_sessions, total_sets, max_weight, avg_weight, total_volume } }`
 
-- `POST /admin/clear-logs` - Delete all workout data (use with caution)
+- `POST /api/admin/clear-logs` - Delete all workout data (use with caution)
 
-### Frontend (public/index.html)
+### Frontend (apps/thor-web/public/index.html)
 
 Single-file SPA that:
 - Allows natural language input (typing or speech-to-text via Web Speech API)
@@ -189,23 +243,23 @@ Single-file SPA that:
 
 ### Adding a New Exercise
 
-Edit `src/seed.ts` and add to the appropriate day array (D1-D5), then delete `workout.db` and restart the server to re-seed.
+Edit `apps/thor-api/src/seed.ts` and add to the appropriate day array (D1-D5), then delete `apps/thor-api/workout.db` and restart the server to re-seed.
 
 ### Changing LLM Behavior
 
-Modify the system prompt in `src/services/parser.ts:parseFreeform()` (the `sys` variable). The prompt instructs the LLM on how to parse workout notation and match exercises.
+Modify the system prompt in `apps/thor-api/src/services/parser.ts:parseFreeform()` (the `sys` variable). The prompt instructs the LLM on how to parse workout notation and match exercises.
 
-For weekly summaries, edit the prompt in `src/services/weekly-summary.ts:generateSummaryText()`.
+For weekly summaries, edit the prompt in `apps/thor-api/src/services/weekly-summary.ts:generateSummaryText()`.
 
 ### Adding a New API Endpoint
 
-1. Add route handler in `src/routes/index.ts`
+1. Add route handler in `apps/thor-api/src/routes/index.ts`
 2. Use `db.prepare()` for SQL queries (better-sqlite3 synchronous API)
-3. Validate request bodies with Zod schemas (define in `src/models.ts`)
+3. Validate request bodies with Zod schemas (define in `packages/shared/src/schemas.ts` or `apps/thor-api/src/models.ts`)
 
 ### Configuring Cron Jobs
 
-Cron job schedules are defined in `src/services/cron.ts`. To change the timezone or schedule:
+Cron job schedules are defined in `apps/thor-api/src/services/cron.ts`. To change the timezone or schedule:
 
 1. Edit the cron expression: `'0 18 * * 0'` (minute hour day month weekday)
 2. Change timezone in the options: `timezone: "America/New_York"`
@@ -217,19 +271,31 @@ Common timezones: `America/New_York`, `America/Los_Angeles`, `Europe/London`, `U
 
 After modifying code:
 
-1. Run `npm run dev` to test with hot reload
-2. Visit `http://localhost:3000` to access the UI
-3. Test the `/health` endpoint to verify DB connectivity: `curl http://localhost:3000/health`
-4. Test parsing: `curl -X POST http://localhost:3000/ingest -H "Content-Type: application/json" -d '{"text":"floor press 4x12 @45"}'`
-5. Test weekly summary generation: `curl -X POST http://localhost:3000/weekly-summaries/generate -H "Content-Type: application/json" -d '{}'`
-6. View weekly summaries: `curl http://localhost:3000/weekly-summaries`
+1. **Start the API server**: `npm run dev:api` (runs on http://localhost:3000)
+2. **Start the web server**: `npm run dev:web` (runs on http://localhost:3001)
+3. **Visit the UI**: Open http://localhost:3001 in your browser
+4. **Test health endpoint**: `curl http://localhost:3000/health`
+5. **Test workout parsing**: `curl -X POST http://localhost:3000/api/ingest -H "Content-Type: application/json" -d '{"text":"floor press 4x12 @45"}'`
+6. **Test weekly summary generation**: `curl -X POST http://localhost:3000/api/weekly-summaries/generate -H "Content-Type: application/json" -d '{}'`
+7. **View weekly summaries**: `curl http://localhost:3000/api/weekly-summaries`
+8. **Test MCP server**: `echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}},"id":1}' | node mcp/thor-mcp/dist/index.js`
 
 ## Roadmap Context
 
-- **Current Phase**: MVP complete, adding AI Coach features (weekly summaries)
-- **Planned Features**: Voice dictation, trend detection, periodization planning
+- **Current Phase**: Phase 3 complete (Monorepo & MCP integration)
+- **Completed Features**: Natural language logging, AI-powered weekly summaries, MCP server with 8 tools
+- **Next Phase**: Voice & Dictation (Phase 4)
+- **Planned Features**: Voice control, trend detection, periodization planning, multi-device sync
 - See README.md for full roadmap
 
 ## Database File
 
-`workout.db` is created at the project root. It's excluded from git. To reset the database, delete the file and restart the server.
+`apps/thor-api/workout.db` is created when the API server first runs. It's excluded from git (.gitignore). To reset the database, delete the file and restart the API server.
+
+## MCP Integration
+
+The Thor MCP Server (`mcp/thor-mcp/`) exposes workout logging tools to AI agents via Model Context Protocol. See `mcp/thor-mcp/README.md` for:
+- Configuration instructions for Claude Desktop
+- List of 8 available tools (log_workout, get_today_exercises, etc.)
+- Known Windows/WSL stdio encoding issues and workarounds
+- Usage examples

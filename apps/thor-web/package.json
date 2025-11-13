@@ -1,0 +1,15 @@
+{
+  "name": "thor-web",
+  "version": "1.0.0",
+  "description": "Thor workout logger web frontend",
+  "type": "module",
+  "scripts": {
+    "start": "bash -c 'source ~/.nvm/nvm.sh && nvm use 22 && node server.js'"
+  },
+  "dependencies": {
+    "express": "^4.21.1"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

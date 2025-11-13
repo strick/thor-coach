@@ -1,0 +1,21 @@
+{
+  "name": "@thor/shared",
+  "version": "1.0.0",
+  "description": "Shared types, schemas, and constants for Thor stack",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "bash -c 'source ~/.nvm/nvm.sh && nvm use 22 && tsc -p tsconfig.json'",
+    "dev": "bash -c 'source ~/.nvm/nvm.sh && nvm use 22 && tsc -p tsconfig.json --watch'"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
