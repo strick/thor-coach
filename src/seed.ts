@@ -23,6 +23,8 @@ export function ensureSchemaAndSeed() {
     plan_id TEXT NOT NULL,
     session_date TEXT NOT NULL,
     day_of_week INTEGER NOT NULL,
+    llm_provider TEXT,
+    llm_model TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY(plan_id) REFERENCES plans(id)
   );
@@ -51,6 +53,16 @@ export function ensureSchemaAndSeed() {
   );
   CREATE INDEX IF NOT EXISTS idx_weekly_summaries_dates ON weekly_summaries(week_start_date, week_end_date);
   `);
+
+  // Migration: Add LLM tracking columns if they don't exist
+  const checkColumn = db.prepare(`PRAGMA table_info(workout_sessions)`).all() as Array<{ name: string }>;
+  const hasLlmProvider = checkColumn.some(col => col.name === 'llm_provider');
+  if (!hasLlmProvider) {
+    db.exec(`
+      ALTER TABLE workout_sessions ADD COLUMN llm_provider TEXT;
+      ALTER TABLE workout_sessions ADD COLUMN llm_model TEXT;
+    `);
+  }
 
   const thorExists = db.prepare(`SELECT 1 FROM plans WHERE id=?`).get(THOR_PLAN_ID);
   if (thorExists) return;

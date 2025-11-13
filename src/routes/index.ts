@@ -5,6 +5,7 @@ import { workoutRoutes } from "./workouts.js";
 import { exerciseRoutes } from "./exercises.js";
 import { summaryRoutes } from "./summaries.js";
 import { systemRoutes } from "./system.js";
+import { testRoutes } from "./tests.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +17,7 @@ router.use("/api", workoutRoutes);
 router.use("/api", exerciseRoutes);
 router.use("/api", summaryRoutes);
 router.use("/api", systemRoutes);
+router.use("/api", testRoutes);
 
 // Serve static files (HTML, CSS, JS)
 router.use(express.static(path.join(__dirname, "..", "..", "public")));

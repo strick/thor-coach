@@ -45,6 +45,10 @@ PORT=3000                          # API server port
 
 **Note**: If `USE_OLLAMA=true`, the system uses Ollama. Otherwise, if `OPENAI_API_KEY` is set, it uses OpenAI. If neither is configured, LLM parsing will fail.
 
+**Important**: LLM configuration is read from the `.env` file at server startup. The frontend settings UI displays the current backend configuration but does not allow changing it. To switch between Ollama and OpenAI, you must:
+1. Edit the `.env` file
+2. Restart the server (`npm run dev` or `npm start`)
+
 ## Architecture
 
 ### Database Schema (src/seed.ts)
@@ -55,7 +59,9 @@ The database auto-initializes on first run with these tables:
 - **exercises**: Exercise catalog, organized by `plan_id` and `day_of_week` (1-7, where Sunday=7)
   - Includes `aliases` (JSON array) for fuzzy matching user input
 - **workout_sessions**: Logged workout sessions (one per submission)
+  - Tracks which LLM parsed each workout (`llm_provider` and `llm_model` columns)
 - **exercise_logs**: Individual exercise entries per session (sets, reps, weight, notes)
+  - Notes capture contextual comments like "This was brutal" or "felt easy" for each exercise
 - **weekly_summaries**: AI-generated weekly workout summaries
   - Stores metrics (total_sessions, total_volume) and AI-generated summary text
   - Includes `metrics_json` with detailed breakdown (exercises, days trained, week-over-week comparison)
@@ -67,12 +73,17 @@ The database auto-initializes on first run with these tables:
 2. **Parser service** (`src/services/parser.ts`):
    - Fetches valid exercises for the day from the plan
    - Sends natural language text + valid exercise list to LLM (Ollama or OpenAI)
-   - LLM returns structured JSON with parsed exercises, sets, reps, weights
+   - LLM returns structured JSON with parsed exercises, sets, reps, weights, and notes
    - Handles multiple notation formats: `4x12 @45`, `4*12 with 45 lbs`, `11, 8, 5` (variable reps)
+   - **Captures contextual notes**: Comments like "This was brutal", "felt easy", "personal best!" are automatically parsed and stored per-exercise
 3. **Ingest service** (`src/services/ingest.ts`):
    - Normalizes parsed exercise names against the database using fuzzy matching (src/services/plans.ts:normalizeExercise)
+   - **Prevents duplicate exercises**: Checks if an exercise has already been logged today before inserting
    - Creates a workout_session and exercise_logs entries in a transaction
-   - Returns results with per-exercise status (logged vs skipped_unknown_exercise)
+   - Returns results with per-exercise status:
+     - `logged`: Successfully added
+     - `skipped_unknown_exercise`: Exercise not found in plan for this day
+     - `skipped_already_logged_today`: Exercise already logged today (duplicate prevention)
 
 ### Key Services
 
@@ -159,7 +170,11 @@ Single-file SPA that:
   - See complete history with dates, sets, reps, and weights
   - Calculated volume per session
 - Shows progress charts (last 30 days) using Chart.js
-- Configurable API URL (useful for mobile devices connecting to LAN)
+- **Settings Modal** - Configuration interface:
+  - View current LLM backend configuration (provider and model) - read-only
+  - Shows which AI model parsed each workout (displayed with 🤖 emoji)
+  - Instructions for changing LLM settings via `.env` file
+  - Configurable API URL (useful for mobile devices connecting to LAN)
 
 ## TypeScript Configuration
 

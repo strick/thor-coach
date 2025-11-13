@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Test Results — Thor Logger</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-h-screen">
+  <div class="max-w-6xl mx-auto p-6">
+    <header class="mb-8">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-bold tracking-tight">🧪 Test Results</h1>
+          <p class="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Automated test suite for Thor Logger</p>
+        </div>
+        <a href="/" class="px-4 py-2 rounded-lg bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors">
+          ← Back to App
+        </a>
+      </div>
+    </header>
+
+    <!-- Test Summary -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+        <div class="text-sm text-neutral-600 dark:text-neutral-400 mb-1">Status</div>
+        <div id="testStatus" class="text-2xl font-bold">-</div>
+      </div>
+      <div class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+        <div class="text-sm text-neutral-600 dark:text-neutral-400 mb-1">Passed</div>
+        <div id="testsPassed" class="text-2xl font-bold text-green-600 dark:text-green-400">-</div>
+      </div>
+      <div class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+        <div class="text-sm text-neutral-600 dark:text-neutral-400 mb-1">Failed</div>
+        <div id="testsFailed" class="text-2xl font-bold text-red-600 dark:text-red-400">-</div>
+      </div>
+      <div class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+        <div class="text-sm text-neutral-600 dark:text-neutral-400 mb-1">Duration</div>
+        <div id="testDuration" class="text-2xl font-bold">-</div>
+      </div>
+    </div>
+
+    <!-- Run Tests Button -->
+    <div class="mb-6">
+      <button id="runTestsBtn" onclick="runTests()" class="px-6 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-colors">
+        🚀 Run Tests
+      </button>
+      <span id="runningStatus" class="ml-4 text-sm text-neutral-600 dark:text-neutral-400 hidden">
+        Running tests... This may take up to 2 minutes.
+      </span>
+    </div>
+
+    <!-- Test Output -->
+    <div class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+      <h2 class="text-lg font-semibold mb-4">Test Output</h2>
+      <pre id="testOutput" class="bg-neutral-900 text-neutral-100 p-4 rounded-lg overflow-x-auto text-xs font-mono whitespace-pre-wrap">
+Click "Run Tests" to execute the test suite...
+      </pre>
+    </div>
+
+    <!-- Last Run Info -->
+    <div class="mt-4 text-sm text-neutral-500 dark:text-neutral-400 text-center">
+      <span id="lastRunTime"></span>
+    </div>
+  </div>
+
+  <script>
+    async function runTests() {
+      const btn = document.getElementById('runTestsBtn');
+      const status = document.getElementById('runningStatus');
+      const output = document.getElementById('testOutput');
+
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+      status.classList.remove('hidden');
+      output.textContent = 'Running tests...\n\n';
+
+      try {
+        const response = await fetch('/api/tests/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const data = await response.json();
+
+        // Update summary cards
+        document.getElementById('testStatus').textContent = data.success ? '✅ Pass' : '❌ Fail';
+        document.getElementById('testStatus').className = data.success
+          ? 'text-2xl font-bold text-green-600 dark:text-green-400'
+          : 'text-2xl font-bold text-red-600 dark:text-red-400';
+        document.getElementById('testsPassed').textContent = data.passed;
+        document.getElementById('testsFailed').textContent = data.failed;
+        document.getElementById('testDuration').textContent = data.duration;
+
+        // Update output
+        output.textContent = data.output;
+
+        // Update last run time
+        const time = new Date(data.timestamp).toLocaleString();
+        document.getElementById('lastRunTime').textContent = `Last run: ${time}`;
+      } catch (error) {
+        output.textContent = `Error running tests:\n${error.message}`;
+        document.getElementById('testStatus').textContent = '⚠️ Error';
+      } finally {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        status.classList.add('hidden');
+      }
+    }
+
+    // Auto-load test status on page load
+    async function loadTestStatus() {
+      try {
+        const response = await fetch('/api/tests/status');
+        const data = await response.json();
+        document.getElementById('testOutput').textContent =
+          `Test framework: ${data.testFramework}\nCommand: ${data.testCommand}\n\n${data.lastRun}`;
+      } catch (error) {
+        console.error('Failed to load test status:', error);
+      }
+    }
+
+    loadTestStatus();
+  </script>
+</body>
+</html>

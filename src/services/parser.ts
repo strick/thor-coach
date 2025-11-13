@@ -38,7 +38,13 @@ async function parseWithOllama(system: string, user: string) {
   }
 }
 
-export async function parseFreeform(text: string, planId: string, dow: number): Promise<ParsedLog[]> {
+export interface ParseResult {
+  items: ParsedLog[];
+  llm_provider: string;
+  llm_model: string;
+}
+
+export async function parseFreeform(text: string, planId: string, dow: number): Promise<ParseResult> {
   if (!USE_LLM) throw new Error("Must use LLM parser");
 
   const normalizedText = text.replace(/£\s*/g, "").replace(/\bpounds?\b/gi, " lbs");
@@ -54,6 +60,9 @@ Rules:
 - Handle: "4*12 floor press @45", "4x9 with 35 lbs incline", "3x10 with 30 lbs flys",
   "3x12 trciep overhead", "11, 8, 5 push ups", "12x 3 leg raises".
 - If comma reps given, variable_reps=[...], reps_per_set=rounded average.
+- IMPORTANT: Capture any contextual notes, feelings, or comments following the exercise.
+  Examples: "This was brutal", "felt easy", "struggled with form", "personal best!"
+- Put exercise-specific comments in the "notes" field for that exercise.
 - Output ONLY valid JSON.`.trim();
 
   const user = `
@@ -71,14 +80,20 @@ ${normalizedText}
         const sum = i.variable_reps.reduce((a: number, b: number) => a + b, 0);
         reps = Math.round(sum / i.variable_reps.length);
       }
+
+      // Build notes: combine user notes + variable reps info if present
+      let notes = i.notes ?? undefined;
+      if (Array.isArray(i?.variable_reps) && i.variable_reps.length) {
+        const repsInfo = `reps_per_set=${JSON.stringify(i.variable_reps)}`;
+        notes = notes ? `${notes} [${repsInfo}]` : repsInfo;
+      }
+
       return {
         exercise: i.exercise_match,
         sets: i.sets ?? undefined,
         reps: reps ?? undefined,
         weight_lbs: i.weight_lbs ?? undefined,
-        notes: Array.isArray(i?.variable_reps) && i.variable_reps.length
-          ? `reps_per_set=${JSON.stringify(i.variable_reps)}`
-          : (i.notes ?? undefined),
+        notes: notes,
       } as ParsedLog;
     });
   }
@@ -86,7 +101,11 @@ ${normalizedText}
   if (USE_OLLAMA) {
     const parsed = await parseWithOllama(sys, user);
     if (!parsed?.items || !Array.isArray(parsed.items)) throw new Error("Model returned no items (Ollama)");
-    return normalizeItems(parsed.items);
+    return {
+      items: normalizeItems(parsed.items),
+      llm_provider: "ollama",
+      llm_model: OLLAMA_MODEL
+    };
   }
 
   // OpenAI path: strict schema, fallback to json_object
@@ -126,9 +145,11 @@ ${normalizedText}
     strict: true
   } as const;
 
+  const openaiModel = "gpt-4o-mini";
+
   try {
     const resp = await client.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: openaiModel,
       response_format: { type: "json_schema", json_schema: schema },
       messages: [{ role: "system", content: sys }, { role: "user", content: user }],
       temperature: 0
@@ -136,10 +157,14 @@ ${normalizedText}
     const content = resp.choices[0]?.message?.content ?? "{}";
     const parsed = JSON.parse(content) as { items?: any[] };
     if (!parsed?.items || !Array.isArray(parsed.items)) throw new Error("Model returned no items (schema)");
-    return normalizeItems(parsed.items);
+    return {
+      items: normalizeItems(parsed.items),
+      llm_provider: "openai",
+      llm_model: openaiModel
+    };
   } catch {
     const resp2 = await client.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: openaiModel,
       response_format: { type: "json_object" },
       messages: [{ role: "system", content: sys }, { role: "user", content: user }],
       temperature: 0
@@ -147,6 +172,10 @@ ${normalizedText}
     const content2 = resp2.choices[0]?.message?.content ?? "{}";
     const parsed2 = JSON.parse(content2) as { items?: any[] };
     if (!parsed2?.items || !Array.isArray(parsed2.items)) throw new Error("Model returned no items (json_object)");
-    return normalizeItems(parsed2.items);
+    return {
+      items: normalizeItems(parsed2.items),
+      llm_provider: "openai",
+      llm_model: openaiModel
+    };
   }
 }

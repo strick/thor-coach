@@ -10,11 +10,11 @@ export async function handleIngest(text: string, dateISO?: string, planId = THOR
   const dow = getDOW(date);
   const dayExercises = getDayExercises(planId, dow);
 
-  const parsed = await parseFreeform(text, planId, dow);
+  const parseResult = await parseFreeform(text, planId, dow);
 
   const insertSession = db.prepare(`
-    INSERT INTO workout_sessions (id,plan_id,session_date,day_of_week)
-    VALUES (@id,@plan_id,@session_date,@day_of_week)
+    INSERT INTO workout_sessions (id,plan_id,session_date,day_of_week,llm_provider,llm_model)
+    VALUES (@id,@plan_id,@session_date,@day_of_week,@llm_provider,@llm_model)
   `);
 
   const insertLog = db.prepare(`
@@ -22,12 +22,22 @@ export async function handleIngest(text: string, dateISO?: string, planId = THOR
     VALUES (@id,@session_id,@exercise_id,@sets,@reps_per_set,@weight_lbs,@notes)
   `);
 
+  // Check if exercise already logged today
+  const checkExistingLog = db.prepare(`
+    SELECT 1 FROM exercise_logs el
+    JOIN workout_sessions ws ON ws.id = el.session_id
+    WHERE ws.session_date = ? AND el.exercise_id = ?
+    LIMIT 1
+  `);
+
   const sessionId = randomUUID();
   const sessionRow = {
     id: sessionId,
     plan_id: planId,
     session_date: toISODate(date),
-    day_of_week: dow
+    day_of_week: dow,
+    llm_provider: parseResult.llm_provider,
+    llm_model: parseResult.llm_model
   };
 
   const results: any[] = [];
@@ -41,6 +51,18 @@ export async function handleIngest(text: string, dateISO?: string, planId = THOR
         results.push({ status: "skipped_unknown_exercise", input: item.exercise });
         continue;
       }
+
+      // Check if this exercise was already logged today
+      const alreadyLogged = checkExistingLog.get(sessionRow.session_date, match.id);
+      if (alreadyLogged) {
+        results.push({
+          status: "skipped_already_logged_today",
+          exercise: normalized,
+          message: `${normalized} was already logged today`
+        });
+        continue;
+      }
+
       const row = {
         id: randomUUID(),
         session_id: sessionId,
@@ -51,11 +73,18 @@ export async function handleIngest(text: string, dateISO?: string, planId = THOR
         notes: item.notes ?? null
       };
       insertLog.run(row);
-      results.push({ status: "logged", exercise: normalized, sets: item.sets, reps: item.reps, weight_lbs: item.weight_lbs });
+      results.push({ status: "logged", exercise: normalized, sets: item.sets, reps: item.reps, weight_lbs: item.weight_lbs, notes: item.notes });
     }
   });
 
-  tx(parsed);
+  tx(parseResult.items);
 
-  return { sessionId, date: sessionRow.session_date, day_of_week: dow, results };
+  return {
+    sessionId,
+    date: sessionRow.session_date,
+    day_of_week: dow,
+    llm_provider: parseResult.llm_provider,
+    llm_model: parseResult.llm_model,
+    results
+  };
 }

@@ -167,11 +167,17 @@
 
   function apiBase() {
     const apiUrlEl = $("apiUrl");
-    if (apiUrlEl) {
-      return apiUrlEl.value.replace(/\/$/, "") + "/api";
+    let base = apiUrlEl ? apiUrlEl.value.replace(/\/$/, "") : defaultApi;
+
+    // Remove any repeated /api segments (fixes corruption from previous bug)
+    base = base.replace(/\/api(\/api)+/g, '/api');
+
+    // Only add /api if it's not already there
+    if (!base.endsWith('/api')) {
+      base += '/api';
     }
-    // Fallback to default if element doesn't exist yet
-    return defaultApi + "/api";
+
+    return base;
   }
 
   // ======= Config bootstrap & persistence =======
@@ -489,12 +495,22 @@ probeBackend();
     const { sessionId, date, day_of_week, results } = data;
     const rows = (results || []).map(r => {
       if (r.status === 'logged') {
+        const noteRow = r.notes ? `<tr class="border-b border-neutral-200 dark:border-neutral-700">
+          <td class="py-1 pr-3"></td>
+          <td class="py-1 pr-3 italic text-neutral-500 dark:text-neutral-400 text-xs" colspan="4">💭 ${r.notes}</td>
+        </tr>` : '';
         return `<tr class="border-b border-neutral-200 dark:border-neutral-700">
           <td class="py-1 pr-3">✅</td>
           <td class="py-1 pr-3">${r.exercise}</td>
           <td class="py-1 pr-3">${r.sets ?? ''}</td>
           <td class="py-1 pr-3">${r.reps ?? ''}</td>
           <td class="py-1 pr-3">${r.weight_lbs ?? ''}</td>
+        </tr>${noteRow}`;
+      }
+      if (r.status === 'skipped_already_logged_today') {
+        return `<tr class="border-b border-neutral-200 dark:border-neutral-700">
+          <td class="py-1 pr-3">⚠️</td>
+          <td class="py-1 pr-3" colspan="4">Skipped: <code>${r.exercise}</code> <span class="text-amber-600 dark:text-amber-400">(already logged today)</span></td>
         </tr>`;
       }
       return `<tr class="border-b border-neutral-200 dark:border-neutral-700">
@@ -795,7 +811,14 @@ probeBackend();
 
     // Flatten all exercises from all workouts into a single list
     const allExercises = workouts.flatMap(workout =>
-      (workout.exercises || []).map(ex => ({ ...ex, sessionId: workout.id, sessionDate: workout.session_date, dayOfWeek: workout.day_of_week }))
+      (workout.exercises || []).map(ex => ({
+        ...ex,
+        sessionId: workout.id,
+        sessionDate: workout.session_date,
+        dayOfWeek: workout.day_of_week,
+        llm_provider: workout.llm_provider,
+        llm_model: workout.llm_model
+      }))
     );
 
     $("workoutsList").innerHTML = `
@@ -820,13 +843,20 @@ probeBackend();
                   <button onclick="toggleEditMode('history-${ex.id}')" class="text-indigo-600 dark:text-indigo-400 hover:underline text-xs">Edit</button>
                 </div>
                 <div class="view-mode-history-${ex.id}">
-                  <span class="text-neutral-600 dark:text-neutral-400">${ex.sets || '?'}x${ex.reps_per_set || '?'} ${ex.weight_lbs ? '@' + ex.weight_lbs + ' lbs' : ''}</span>
+                  <div class="text-neutral-600 dark:text-neutral-400">${ex.sets || '?'}x${ex.reps_per_set || '?'} ${ex.weight_lbs ? '@' + ex.weight_lbs + ' lbs' : ''}</div>
+                  ${ex.notes ? `<div class="text-xs text-neutral-500 dark:text-neutral-400 italic mt-1">💭 ${ex.notes}</div>` : ''}
+                  ${ex.llm_provider && ex.llm_model ? `<div class="text-[10px] text-neutral-400 dark:text-neutral-500 mt-1 flex items-center gap-1">
+                    <span title="AI Model used to parse this workout">🤖 ${ex.llm_provider}: ${ex.llm_model}</span>
+                  </div>` : ''}
                 </div>
                 <div class="edit-mode-history-${ex.id} hidden">
                   <div class="grid grid-cols-3 gap-2 mb-2">
                     <input type="number" id="sets-history-${ex.id}" value="${ex.sets || ''}" placeholder="Sets" class="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" />
                     <input type="number" id="reps-history-${ex.id}" value="${ex.reps_per_set || ''}" placeholder="Reps" class="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" />
                     <input type="number" step="0.5" id="weight-history-${ex.id}" value="${ex.weight_lbs || ''}" placeholder="Weight" class="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" />
+                  </div>
+                  <div class="mb-2">
+                    <textarea id="notes-history-${ex.id}" placeholder="Notes (optional)" class="w-full px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs resize-none" rows="2">${ex.notes || ''}</textarea>
                   </div>
                   <div class="flex gap-2">
                     <button onclick="saveExerciseLog('history-${ex.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded">Save</button>
@@ -867,7 +897,13 @@ probeBackend();
 
     // Flatten all exercises from all workouts into a single list
     const allExercises = workouts.flatMap(workout =>
-      (workout.exercises || []).map(ex => ({ ...ex, sessionId: workout.id, sessionDate: workout.session_date }))
+      (workout.exercises || []).map(ex => ({
+        ...ex,
+        sessionId: workout.id,
+        sessionDate: workout.session_date,
+        llm_provider: workout.llm_provider,
+        llm_model: workout.llm_model
+      }))
     );
 
     $("todaysWorkoutsList").innerHTML = `
@@ -892,13 +928,20 @@ probeBackend();
                   <button onclick="toggleEditMode('today-${ex.id}')" class="text-indigo-600 dark:text-indigo-400 hover:underline text-xs">Edit</button>
                 </div>
                 <div class="view-mode-today-${ex.id}">
-                  <span class="text-neutral-600 dark:text-neutral-400">${ex.sets || '?'}x${ex.reps_per_set || '?'} ${ex.weight_lbs ? '@' + ex.weight_lbs + ' lbs' : ''}</span>
+                  <div class="text-neutral-600 dark:text-neutral-400">${ex.sets || '?'}x${ex.reps_per_set || '?'} ${ex.weight_lbs ? '@' + ex.weight_lbs + ' lbs' : ''}</div>
+                  ${ex.notes ? `<div class="text-xs text-neutral-500 dark:text-neutral-400 italic mt-1">💭 ${ex.notes}</div>` : ''}
+                  ${ex.llm_provider && ex.llm_model ? `<div class="text-[10px] text-neutral-400 dark:text-neutral-500 mt-1 flex items-center gap-1">
+                    <span title="AI Model used to parse this workout">🤖 ${ex.llm_provider}: ${ex.llm_model}</span>
+                  </div>` : ''}
                 </div>
                 <div class="edit-mode-today-${ex.id} hidden">
                   <div class="grid grid-cols-3 gap-2 mb-2">
                     <input type="number" id="sets-today-${ex.id}" value="${ex.sets || ''}" placeholder="Sets" class="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" />
                     <input type="number" id="reps-today-${ex.id}" value="${ex.reps_per_set || ''}" placeholder="Reps" class="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" />
                     <input type="number" step="0.5" id="weight-today-${ex.id}" value="${ex.weight_lbs || ''}" placeholder="Weight" class="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" />
+                  </div>
+                  <div class="mb-2">
+                    <textarea id="notes-today-${ex.id}" placeholder="Notes (optional)" class="w-full px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs resize-none" rows="2">${ex.notes || ''}</textarea>
                   </div>
                   <div class="flex gap-2">
                     <button onclick="saveExerciseLog('today-${ex.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded">Save</button>
@@ -930,15 +973,18 @@ probeBackend();
     const setsInput = document.getElementById(`sets-${prefixedLogId}`);
     const repsInput = document.getElementById(`reps-${prefixedLogId}`);
     const weightInput = document.getElementById(`weight-${prefixedLogId}`);
+    const notesInput = document.getElementById(`notes-${prefixedLogId}`);
 
     const newSets = setsInput.value;
     const newReps = repsInput.value;
     const newWeight = weightInput.value;
+    const newNotes = notesInput ? notesInput.value : '';
 
     // Store old values for rollback
     const oldSets = setsInput.defaultValue;
     const oldReps = repsInput.defaultValue;
     const oldWeight = weightInput.defaultValue;
+    const oldNotes = notesInput ? notesInput.defaultValue : '';
 
     const viewMode = document.querySelector(`.view-mode-${prefixedLogId}`);
     const oldViewHTML = viewMode ? viewMode.innerHTML : '';
@@ -949,7 +995,8 @@ probeBackend();
         const setsVal = newSets || '?';
         const repsVal = newReps || '?';
         const weightText = newWeight ? `@${newWeight} lbs` : '';
-        viewMode.innerHTML = `<span class="text-neutral-600 dark:text-neutral-400">${setsVal}x${repsVal} ${weightText}</span><span class="text-yellow-500 ml-2 text-xs">⏳ Saving...</span>`;
+        const notesHTML = newNotes ? `<div class="text-xs text-neutral-500 dark:text-neutral-400 italic mt-1">💭 ${newNotes}</div>` : '';
+        viewMode.innerHTML = `<div class="text-neutral-600 dark:text-neutral-400">${setsVal}x${repsVal} ${weightText}</div>${notesHTML}<span class="text-yellow-500 ml-2 text-xs">⏳ Saving...</span>`;
       }
 
       toggleEditMode(prefixedLogId);
@@ -961,7 +1008,8 @@ probeBackend();
         body: JSON.stringify({
           sets: newSets ? parseInt(newSets) : null,
           reps_per_set: newReps ? parseInt(newReps) : null,
-          weight_lbs: newWeight ? parseFloat(newWeight) : null
+          weight_lbs: newWeight ? parseFloat(newWeight) : null,
+          notes: newNotes || null
         })
       });
 
@@ -972,11 +1020,13 @@ probeBackend();
         const setsVal = newSets || '?';
         const repsVal = newReps || '?';
         const weightText = newWeight ? `@${newWeight} lbs` : '';
-        viewMode.innerHTML = `<span class="text-neutral-600 dark:text-neutral-400">${setsVal}x${repsVal} ${weightText}</span>`;
+        const notesHTML = newNotes ? `<div class="text-xs text-neutral-500 dark:text-neutral-400 italic mt-1">💭 ${newNotes}</div>` : '';
+        viewMode.innerHTML = `<div class="text-neutral-600 dark:text-neutral-400">${setsVal}x${repsVal} ${weightText}</div>${notesHTML}`;
       }
       setsInput.defaultValue = newSets;
       repsInput.defaultValue = newReps;
       weightInput.defaultValue = newWeight;
+      if (notesInput) notesInput.defaultValue = newNotes;
 
       showToast('Exercise updated successfully!', 'success');
       await loadWorkoutsByDate();
@@ -991,6 +1041,7 @@ probeBackend();
       setsInput.value = oldSets;
       repsInput.value = oldReps;
       weightInput.value = oldWeight;
+      if (notesInput) notesInput.value = oldNotes;
 
       showToast('Failed to update exercise. Changes reverted.', 'error');
       toggleEditMode(prefixedLogId);  // Show edit mode again so user can retry
@@ -1719,51 +1770,38 @@ probeBackend();
         </div>
 
         <div class="pt-4 border-t border-neutral-200 dark:border-neutral-700">
-          <label class="block text-sm font-medium mb-3">AI Model Provider</label>
-          <div class="flex gap-4 mb-4">
-            <label class="flex items-center cursor-pointer">
-              <input type="radio" name="llmProvider" value="ollama" id="providerOllama" class="mr-2" checked />
-              <span class="text-sm">Ollama (Local)</span>
-            </label>
-            <label class="flex items-center cursor-pointer">
-              <input type="radio" name="llmProvider" value="openai" id="providerOpenAI" class="mr-2" />
-              <span class="text-sm">OpenAI</span>
-            </label>
-          </div>
-
-          <!-- Ollama Settings -->
-          <div id="ollamaSettings" class="space-y-3">
-            <div>
-              <label class="block text-sm font-medium mb-2">Ollama Model</label>
-              <select id="ollamaModel" class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <option value="">Loading models...</option>
-              </select>
-              <p class="text-xs text-neutral-500 mt-1">Choose from locally available models</p>
+          <label class="block text-sm font-medium mb-3">AI Model Configuration</label>
+          <div id="llmConfigDisplay" class="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4 space-y-2">
+            <p class="text-xs text-neutral-500 mb-3">⚙️ Backend configuration (read-only)</p>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <span class="text-neutral-500">Provider:</span>
+                <span id="configLlmProvider" class="ml-2 font-medium text-neutral-700 dark:text-neutral-300">Loading...</span>
+              </div>
+              <div>
+                <span class="text-neutral-500">Model:</span>
+                <span id="configLlmModel" class="ml-2 font-medium text-neutral-700 dark:text-neutral-300">Loading...</span>
+              </div>
             </div>
-          </div>
-
-          <!-- OpenAI Settings -->
-          <div id="openaiSettings" class="space-y-3 hidden">
-            <div>
-              <label class="block text-sm font-medium mb-2">OpenAI API Key</label>
-              <input id="openaiApiKey" type="password" placeholder="sk-..." class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              <p class="text-xs text-neutral-500 mt-1">Your API key is stored locally in your browser</p>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-2">OpenAI Model</label>
-              <select id="openaiModel" class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <option value="gpt-4o">GPT-4o</option>
-                <option value="gpt-4o-mini" selected>GPT-4o Mini</option>
-                <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-              </select>
+            <div class="mt-3 pt-3 border-t border-neutral-200 dark:border-neutral-700">
+              <p class="text-xs text-neutral-600 dark:text-neutral-400">
+                💡 To change LLM settings, edit the <code class="bg-neutral-200 dark:bg-neutral-800 px-1 rounded">.env</code> file in your project root and restart the server.
+              </p>
+              <details class="mt-2">
+                <summary class="text-xs text-indigo-600 dark:text-indigo-400 cursor-pointer hover:underline">Show .env example</summary>
+                <pre class="text-xs bg-neutral-800 text-neutral-200 p-2 rounded mt-2 overflow-x-auto">USE_OLLAMA=true
+OLLAMA_MODEL=llama3.1:8b
+# Or for OpenAI:
+# USE_OLLAMA=false
+# OPENAI_API_KEY=sk-...</pre>
+              </details>
             </div>
           </div>
         </div>
 
         <div class="pt-4 border-t border-neutral-200 dark:border-neutral-700">
           <button id="closeSettingsBtn2" class="w-full px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-colors">
-            Save & Close
+            Close
           </button>
         </div>
       </div>
@@ -1789,104 +1827,37 @@ probeBackend();
     probeBackend();
   });
 
-  // LLM Provider switching
-  function toggleLLMProvider() {
-    const provider = document.querySelector('input[name="llmProvider"]:checked').value;
-    const ollamaSettings = $("ollamaSettings");
-    const openaiSettings = $("openaiSettings");
-
-    if (provider === "ollama") {
-      ollamaSettings.classList.remove('hidden');
-      openaiSettings.classList.add('hidden');
-    } else {
-      ollamaSettings.classList.add('hidden');
-      openaiSettings.classList.remove('hidden');
-    }
-  }
-
-  $("providerOllama").addEventListener("change", toggleLLMProvider);
-  $("providerOpenAI").addEventListener("change", toggleLLMProvider);
-
-  // Load available Ollama models
-  async function loadOllamaModels() {
+  // Load backend LLM config and display
+  async function loadBackendLLMConfig() {
     try {
-      const res = await fetch(`${apiBase()}/ollama/models`);
-      if (!res.ok) throw new Error('Failed to fetch Ollama models');
+      const res = await fetch(`${apiBase()}/config`);
+      if (!res.ok) throw new Error('Failed to fetch config');
 
       const data = await res.json();
-      const select = $("ollamaModel");
 
-      if (data.models && data.models.length > 0) {
-        select.innerHTML = data.models.map(model =>
-          `<option value="${model.name}">${model.name}</option>`
-        ).join('');
+      // Display provider
+      const provider = data.llm || 'unknown';
+      $("configLlmProvider").textContent = provider.charAt(0).toUpperCase() + provider.slice(1);
 
-        // Select saved model or first available
-        const saved = loadStoredCfg();
-        if (saved.ollamaModel) {
-          select.value = saved.ollamaModel;
-        }
-      } else {
-        select.innerHTML = '<option value="">No models found</option>';
+      // Display model
+      let model = 'N/A';
+      if (provider === 'ollama' && data.ollama?.model) {
+        model = data.ollama.model;
+      } else if (provider === 'openai') {
+        model = 'gpt-4o-mini'; // Backend uses this model
       }
+      $("configLlmModel").textContent = model;
     } catch (e) {
-      console.error('Failed to load Ollama models:', e);
-      $("ollamaModel").innerHTML = '<option value="">Failed to load models</option>';
+      console.error('Failed to load backend config:', e);
+      $("configLlmProvider").textContent = 'Error loading';
+      $("configLlmModel").textContent = 'Error loading';
     }
   }
 
-  // Load LLM settings from localStorage
-  function loadLLMSettings() {
-    const cfg = loadStoredCfg();
-
-    // Set provider
-    if (cfg.llmProvider === "openai") {
-      $("providerOpenAI").checked = true;
-    } else {
-      $("providerOllama").checked = true;
-    }
-    toggleLLMProvider();
-
-    // Set OpenAI settings
-    if (cfg.openaiApiKey) {
-      $("openaiApiKey").value = cfg.openaiApiKey;
-    }
-    if (cfg.openaiModel) {
-      $("openaiModel").value = cfg.openaiModel;
-    }
-
-    // Load Ollama models
-    loadOllamaModels();
-  }
-
-  // Save LLM settings when modal closes
-  function saveLLMSettings() {
-    const provider = document.querySelector('input[name="llmProvider"]:checked').value;
-    const cfg = {
-      llmProvider: provider,
-      openaiApiKey: $("openaiApiKey").value,
-      openaiModel: $("openaiModel").value,
-      ollamaModel: $("ollamaModel").value
-    };
-
-    saveStoredCfg(cfg);
-    showToast('Settings saved successfully!', 'success');
-  }
-
-  // Load settings when modal opens
+  // Load config when modal opens
   $("settingsBtn").addEventListener('click', () => {
-    loadLLMSettings();
+    loadBackendLLMConfig();
   });
-
-  // Save settings when "Save & Close" is clicked
-  const originalCloseBtn2Handler = () => {
-    saveLLMSettings();
-    toggleSettings();
-  };
-
-  // Replace the close button event listener
-  $("closeSettingsBtn2").removeEventListener('click', toggleSettings);
-  $("closeSettingsBtn2").addEventListener('click', originalCloseBtn2Handler);
 
   // ======= Keyboard Shortcuts =======
   document.addEventListener('keydown', (e) => {

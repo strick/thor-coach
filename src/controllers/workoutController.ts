@@ -29,7 +29,7 @@ export const getWorkouts = asyncHandler(async (req: Request, res: Response) => {
   if (date) {
     // Get workouts for specific date
     const sessions = db.prepare(`
-      SELECT s.id, s.session_date, s.day_of_week, s.created_at
+      SELECT s.id, s.session_date, s.day_of_week, s.llm_provider, s.llm_model, s.created_at
       FROM workout_sessions s
       WHERE s.session_date = ?
       ORDER BY s.created_at DESC
@@ -55,7 +55,7 @@ export const getWorkouts = asyncHandler(async (req: Request, res: Response) => {
     const to = new Date().toISOString().slice(0, 10);
 
     const sessions = db.prepare(`
-      SELECT s.id, s.session_date, s.day_of_week, COUNT(l.id) as exercise_count
+      SELECT s.id, s.session_date, s.day_of_week, s.llm_provider, s.llm_model, COUNT(l.id) as exercise_count
       FROM workout_sessions s
       LEFT JOIN exercise_logs l ON l.session_id = s.id
       WHERE s.session_date BETWEEN ? AND ?
