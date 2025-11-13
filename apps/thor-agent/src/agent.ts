@@ -4,12 +4,7 @@
  */
 
 import OpenAI from 'openai';
-import { MCPClient } from './mcp-client.js';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { MCPClientHTTP as MCPClient } from './mcp-client-http.js';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -53,13 +48,13 @@ export class ThorAgent {
       });
     }
 
-    // Initialize MCP client - point to built MCP server
-    const mcpServerPath = join(__dirname, '../../../mcp/thor-mcp/dist/index.js');
-    this.mcpClient = new MCPClient(mcpServerPath);
+    // Initialize MCP client - connect to HTTP MCP server
+    const mcpServerUrl = process.env.MCP_SERVER_URL || 'http://localhost:3003';
+    this.mcpClient = new MCPClient(mcpServerUrl);
   }
 
   /**
-   * Start the MCP server
+   * Connect to the MCP server via HTTP
    */
   async start(): Promise<void> {
     await this.mcpClient.start();
@@ -69,7 +64,7 @@ export class ThorAgent {
   }
 
   /**
-   * Stop the MCP server
+   * Disconnect from the MCP server
    */
   stop(): void {
     this.mcpClient.stop();
@@ -215,7 +210,7 @@ Always be encouraging and celebrate their progress!`;
       throw new Error(`Ollama error: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as { message: any };
     const message = data.message;
 
     // Check if Ollama returned tool calls
@@ -254,7 +249,7 @@ Always be encouraging and celebrate their progress!`;
         })
       });
 
-      const finalData = await finalResponse.json();
+      const finalData = await finalResponse.json() as { message: { content: string } };
       return {
         message: finalData.message.content,
         toolCalls: toolCallResults

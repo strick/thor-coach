@@ -27,6 +27,12 @@ AI parses workout text into sets, reps, weights, and exercises.
 ✅ **Web dashboard (Tailwind + Chart.js)**
 View progress, edit workouts, track exercises, and review weekly AI-generated summaries.
 
+✅ **Conversational AI Agent**
+Chat endpoint with LLM tool calling, session management, and MCP backend integration.
+
+✅ **Raspberry Pi Voice Client**
+Voice-enabled frontend with speech-to-text, text-to-speech, and agent integration.
+
 ---
 
 ## 🧠 Tech Stack
@@ -58,9 +64,14 @@ thor-stack/
 │   │   │   └── middleware/
 │   │   └── package.json
 │   │
-│   └── thor-web/          # Web Frontend
-│       ├── public/
-│       ├── server.js
+│   ├── thor-web/          # Web Frontend
+│   │   ├── public/
+│   │   ├── server.js
+│   │   └── package.json
+│   │
+│   └── thor-agent/        # Conversational Agent
+│       ├── src/
+│       ├── README.md
 │       └── package.json
 │
 ├── mcp/
@@ -69,6 +80,15 @@ thor-stack/
 │       ├── dist/
 │       ├── README.md
 │       └── package.json
+│
+├── pi/
+│   └── (Python)           # Raspberry Pi Voice Client
+│       ├── main.py
+│       ├── stt.py
+│       ├── tts.py
+│       ├── client.py
+│       ├── requirements.txt
+│       └── README.md
 │
 ├── packages/
 │   └── shared/            # Shared Types & Schemas
@@ -282,8 +302,12 @@ Thor Stack is a fully local, privacy-first AI workout companion that integrates 
 
 ## 📚 Documentation
 
+- **ARCHITECTURE.md** - Complete request flow diagrams and LLM interaction details
 - **CLAUDE.md** - Development guide for working with this codebase
 - **mcp/thor-mcp/README.md** - MCP Server documentation
+- **apps/thor-agent/README.md** - Conversational Agent documentation
+- **pi/README.md** - Raspberry Pi Voice Client deployment guide
+- **mcp/thor-mcp/TESTING.md** - MCP Server testing guide
 - **MONOREPO_MIGRATION_PLAN.md** - Migration history and decisions
 
 ---

@@ -1,0 +1,22 @@
+# Thor Pi Voice Client Dependencies
+
+# Audio recording and playback
+sounddevice>=0.4.6
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Speech-to-Text (Whisper)
+openai-whisper>=20230314  # Local Whisper (optional, heavy)
+openai>=1.0.0             # OpenAI API (for cloud Whisper)
+
+# Text-to-Speech
+pyttsx3>=2.90             # Cross-platform TTS
+
+# HTTP Client
+requests>=2.31.0
+
+# Configuration
+python-dotenv>=1.0.0
+
+# Audio format handling
+soundfile>=0.12.1

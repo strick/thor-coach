@@ -1,281 +1,278 @@
 #!/usr/bin/env node
 
 /**
- * Thor MCP Server
- * Exposes workout logging tools to AI agents via Model Context Protocol
+ * Thor MCP Server - HTTP Transport
+ * Exposes workout logging tools via HTTP REST API for multi-agent access
  */
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
-import { ThorApiClient } from "./api-client.js";
+import express from 'express';
+import cors from 'cors';
+import { z } from 'zod';
+import { ThorApiClient } from './api-client.js';
+
+const PORT = process.env.MCP_PORT ? parseInt(process.env.MCP_PORT) : 3003;
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
 
 // Initialize API client
 const apiClient = new ThorApiClient();
 
-// Initialize MCP server
-const server = new McpServer(
-  {
-    name: "thor-mcp",
-    version: "1.0.0",
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
-);
-
 /**
- * Helper to create successful tool response
+ * Tool definitions
  */
-function createToolResponse(data: any) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: JSON.stringify(data, null, 2),
+const TOOLS = [
+  {
+    name: 'log_workout',
+    description: 'Log a workout using natural language. Parse exercises, sets, reps, and weights from text.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          description: `Natural language workout description (e.g., 'floor press 4x12 @45, dumbbell row 3x8 @35')`
+        },
+        date: {
+          type: 'string',
+          description: `Optional date in YYYY-MM-DD format (defaults to today: ${new Date().toISOString().split('T')[0]})`
+        }
       },
-    ],
-  };
-}
-
-/**
- * Helper to create error response
- */
-function createErrorResponse(error: unknown) {
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `Error: ${errorMessage}`,
+      required: ['text']
+    }
+  },
+  {
+    name: 'get_today_exercises',
+    description: 'Get the list of exercises scheduled for today based on the workout plan',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'get_exercises_for_day',
+    description: 'Get exercises for a specific day of the week (1=Monday, 7=Sunday)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        day_of_week: {
+          type: 'number',
+          description: 'Day of week (1-7, where 1=Monday, 7=Sunday)'
+        }
       },
-    ],
-    isError: true,
-  };
-}
+      required: ['day_of_week']
+    }
+  },
+  {
+    name: 'get_progress_summary',
+    description: 'Get workout progress summary for a date range, including sessions count and top lifts',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        from: {
+          type: 'string',
+          description: 'Start date in YYYY-MM-DD format'
+        },
+        to: {
+          type: 'string',
+          description: 'End date in YYYY-MM-DD format'
+        }
+      },
+      required: ['from', 'to']
+    }
+  },
+  {
+    name: 'get_weekly_summaries',
+    description: 'Get AI-generated weekly workout summaries with metrics and insights',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: 'Number of summaries to retrieve (default: 10)'
+        }
+      }
+    }
+  },
+  {
+    name: 'get_workouts_by_date',
+    description: 'Get all workouts logged on a specific date',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: {
+          type: 'string',
+          description: 'Date in YYYY-MM-DD format'
+        }
+      },
+      required: ['date']
+    }
+  },
+  {
+    name: 'get_all_exercises',
+    description: 'Get list of all exercises in the workout plan',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        day_of_week: {
+          type: 'number',
+          description: 'Optional: filter by day of week (1-7)'
+        }
+      }
+    }
+  },
+  {
+    name: 'get_exercise_history',
+    description: 'Get historical performance data for a specific exercise',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        exercise_id: {
+          type: 'string',
+          description: 'Exercise ID (UUID)'
+        },
+        limit: {
+          type: 'number',
+          description: 'Number of sessions to retrieve (default: 50)'
+        }
+      },
+      required: ['exercise_id']
+    }
+  }
+];
 
 /**
- * Register tools
+ * GET /tools
+ * List all available tools
  */
-
-// log_workout tool
-server.registerTool(
-  "log_workout",
-  {
-    title: "Log Workout",
-    description:
-      "Log a workout using natural language. Parse exercises, sets, reps, and weights from text.",
-    inputSchema: {
-      text: z
-        .string()
-        .min(1)
-        .describe(
-          "Natural language workout description (e.g., 'floor press 4x12 @45, dumbbell row 3x8 @35')"
-        ),
-      date: z
-        .string()
-        .optional()
-        .describe(`Optional date in YYYY-MM-DD format (defaults to today: ${new Date().toISOString().split('T')[0]})`),
-    },
-  },
-  async (args: { text: string; date?: string }) => {
-    try {
-      const result = await apiClient.logWorkout(args.text, args.date);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
-
-// get_today_exercises tool
-server.registerTool(
-  "get_today_exercises",
-  {
-    title: "Get Today's Exercises",
-    description:
-      "Get the list of exercises scheduled for today based on the workout plan",
-    inputSchema: {},
-  },
-  async () => {
-    try {
-      const today = new Date().getDay() || 7; // Sunday=7
-      const result = await apiClient.getDayExercises(today);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
-
-// get_exercises_for_day tool
-server.registerTool(
-  "get_exercises_for_day",
-  {
-    title: "Get Exercises for Day",
-    description:
-      "Get exercises for a specific day of the week (1=Monday, 7=Sunday)",
-    inputSchema: {
-      day_of_week: z
-        .number()
-        .int()
-        .min(1)
-        .max(7)
-        .describe("Day of week (1-7, where 1=Monday, 7=Sunday)"),
-    },
-  },
-  async (args: { day_of_week: number }) => {
-    try {
-      const result = await apiClient.getDayExercises(args.day_of_week);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
-
-// get_progress_summary tool
-server.registerTool(
-  "get_progress_summary",
-  {
-    title: "Get Progress Summary",
-    description:
-      "Get workout progress summary for a date range, including sessions count and top lifts",
-    inputSchema: {
-      from: z.string().describe("Start date in YYYY-MM-DD format"),
-      to: z.string().describe("End date in YYYY-MM-DD format"),
-    },
-  },
-  async (args: { from: string; to: string }) => {
-    try {
-      const result = await apiClient.getProgressSummary(args.from, args.to);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
-
-// get_weekly_summaries tool
-server.registerTool(
-  "get_weekly_summaries",
-  {
-    title: "Get Weekly Summaries",
-    description:
-      "Get AI-generated weekly workout summaries with metrics and insights",
-    inputSchema: {
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(100)
-        .optional()
-        .describe("Number of summaries to retrieve (default: 10)"),
-    },
-  },
-  async (args: { limit?: number }) => {
-    try {
-      const result = await apiClient.getWeeklySummaries(args.limit || 10);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
-
-// get_workouts_by_date tool
-server.registerTool(
-  "get_workouts_by_date",
-  {
-    title: "Get Workouts by Date",
-    description: "Get all workouts logged on a specific date",
-    inputSchema: {
-      date: z.string().describe("Date in YYYY-MM-DD format"),
-    },
-  },
-  async (args: { date: string }) => {
-    try {
-      const result = await apiClient.getWorkoutsByDate(args.date);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
-
-// get_all_exercises tool
-server.registerTool(
-  "get_all_exercises",
-  {
-    title: "Get All Exercises",
-    description: "Get list of all exercises in the workout plan",
-    inputSchema: {
-      day_of_week: z
-        .number()
-        .int()
-        .min(1)
-        .max(7)
-        .optional()
-        .describe("Optional: filter by day of week (1-7)"),
-    },
-  },
-  async (args: { day_of_week?: number }) => {
-    try {
-      const result = await apiClient.getExercises(args.day_of_week);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
-
-// get_exercise_history tool
-server.registerTool(
-  "get_exercise_history",
-  {
-    title: "Get Exercise History",
-    description: "Get historical performance data for a specific exercise",
-    inputSchema: {
-      exercise_id: z.string().uuid().describe("Exercise ID (UUID)"),
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(200)
-        .optional()
-        .describe("Number of sessions to retrieve (default: 50)"),
-    },
-  },
-  async (args: { exercise_id: string; limit?: number }) => {
-    try {
-      const result = await apiClient.getExerciseHistory(
-        args.exercise_id,
-        args.limit || 50
-      );
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
+app.get('/tools', (req, res) => {
+  res.json({
+    tools: TOOLS
+  });
+});
 
 /**
- * Start the server
+ * POST /tools/:toolName
+ * Execute a specific tool
+ */
+app.post('/tools/:toolName', async (req, res) => {
+  const { toolName } = req.params;
+  const args = req.body;
+
+  try {
+    // Find tool definition
+    const tool = TOOLS.find(t => t.name === toolName);
+    if (!tool) {
+      return res.status(404).json({
+        error: 'Tool not found',
+        availableTools: TOOLS.map(t => t.name)
+      });
+    }
+
+    // Execute tool
+    let result;
+
+    switch (toolName) {
+      case 'log_workout':
+        result = await apiClient.logWorkout(args.text, args.date);
+        break;
+
+      case 'get_today_exercises': {
+        const today = new Date().getDay() || 7; // Sunday=7
+        result = await apiClient.getDayExercises(today);
+        break;
+      }
+
+      case 'get_exercises_for_day':
+        result = await apiClient.getDayExercises(args.day_of_week);
+        break;
+
+      case 'get_progress_summary':
+        result = await apiClient.getProgressSummary(args.from, args.to);
+        break;
+
+      case 'get_weekly_summaries':
+        result = await apiClient.getWeeklySummaries(args.limit || 10);
+        break;
+
+      case 'get_workouts_by_date':
+        result = await apiClient.getWorkoutsByDate(args.date);
+        break;
+
+      case 'get_all_exercises':
+        result = await apiClient.getExercises(args.day_of_week);
+        break;
+
+      case 'get_exercise_history':
+        result = await apiClient.getExerciseHistory(args.exercise_id, args.limit || 50);
+        break;
+
+      default:
+        return res.status(400).json({ error: 'Tool handler not implemented' });
+    }
+
+    res.json({ result });
+
+  } catch (error) {
+    console.error(`Error executing tool ${toolName}:`, error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * GET /health
+ * Health check endpoint
+ */
+app.get('/health', async (req, res) => {
+  try {
+    // Check if Thor API is reachable
+    await apiClient.health();
+    res.json({
+      status: 'healthy',
+      service: 'thor-mcp',
+      transport: 'http',
+      apiConnected: true,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      service: 'thor-mcp',
+      transport: 'http',
+      apiConnected: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * Start server
  */
 async function main() {
   // Test API connection silently
   try {
     await apiClient.health();
+    console.log('✅ Thor API connection verified');
   } catch (error) {
-    // API not available - will handle errors in tool calls
+    console.warn('⚠️  Warning: Thor API not available yet. Tool calls will fail until API is running.');
   }
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  app.listen(PORT, () => {
+    console.log(`\n🔧 Thor MCP Server (HTTP) running at: http://localhost:${PORT}`);
+    console.log(`📍 Tools endpoint: GET http://localhost:${PORT}/tools`);
+    console.log(`📍 Execute tool: POST http://localhost:${PORT}/tools/:toolName`);
+    console.log(`📍 Health check: GET http://localhost:${PORT}/health`);
+    console.log(`\n💡 Transport: HTTP REST (multi-agent ready)`);
+    console.log(`💡 Available tools: ${TOOLS.length}`);
+    console.log('');
+  });
 }
 
 main().catch((error) => {
+  console.error('Fatal error:', error);
   process.exit(1);
 });
