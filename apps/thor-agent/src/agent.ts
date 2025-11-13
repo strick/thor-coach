@@ -1,0 +1,268 @@
+/**
+ * Thor Conversational Agent
+ * Uses LLM with tool calling that routes through MCP server
+ */
+
+import OpenAI from 'openai';
+import { MCPClient } from './mcp-client.js';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  tool_call_id?: string;
+  tool_calls?: Array<{
+    id: string;
+    type: 'function';
+    function: {
+      name: string;
+      arguments: string;
+    };
+  }>;
+}
+
+export interface ChatResponse {
+  message: string;
+  toolCalls?: Array<{
+    tool: string;
+    arguments: any;
+    result: any;
+  }>;
+}
+
+export class ThorAgent {
+  private openai: OpenAI | null = null;
+  private useOllama: boolean;
+  private ollamaUrl: string;
+  private ollamaModel: string;
+  private mcpClient: MCPClient;
+  private mcpReady: boolean = false;
+
+  constructor() {
+    this.useOllama = process.env.USE_OLLAMA === 'true';
+    this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
+    this.ollamaModel = process.env.OLLAMA_MODEL || 'llama3.1:8b';
+
+    if (!this.useOllama && process.env.OPENAI_API_KEY) {
+      this.openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY
+      });
+    }
+
+    // Initialize MCP client - point to built MCP server
+    const mcpServerPath = join(__dirname, '../../../mcp/thor-mcp/dist/index.js');
+    this.mcpClient = new MCPClient(mcpServerPath);
+  }
+
+  /**
+   * Start the MCP server
+   */
+  async start(): Promise<void> {
+    await this.mcpClient.start();
+    this.mcpReady = true;
+    console.log('✅ MCP server connected');
+    console.log(`🛠️  Available tools: ${this.mcpClient.getTools().map(t => t.name).join(', ')}`);
+  }
+
+  /**
+   * Stop the MCP server
+   */
+  stop(): void {
+    this.mcpClient.stop();
+    this.mcpReady = false;
+  }
+
+  /**
+   * Get tool definitions for LLM (OpenAI format)
+   */
+  private getToolsForLLM(): any[] {
+    return this.mcpClient.getTools().map(tool => ({
+      type: 'function',
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.inputSchema
+      }
+    }));
+  }
+
+  private getSystemPrompt(): string {
+    return `You are Thor, an AI workout coach and logging assistant. You help users:
+
+1. Log workouts using natural language (use log_workout tool)
+2. View their workout plans and exercises (use get_today_exercises, get_exercises_for_day, get_all_exercises)
+3. Track progress over time (use get_progress_summary, get_weekly_summaries)
+4. Review workout history (use get_workouts_by_date, get_exercise_history)
+
+Be conversational, motivating, and helpful. When users describe workouts, use the log_workout tool to save them. When users ask about their plan or progress, use the appropriate tools to fetch data.
+
+Examples of user requests:
+- "Log today's workout: floor press 4x12 @45, skullcrusher 3x10 @20"
+- "What exercises should I do today?"
+- "Show me my progress for the last 30 days"
+- "What did I lift last Monday?"
+
+Always be encouraging and celebrate their progress!`;
+  }
+
+  async chat(userMessage: string, conversationHistory: ChatMessage[] = []): Promise<ChatResponse> {
+    if (!this.mcpReady) {
+      throw new Error('MCP server not ready. Call start() first.');
+    }
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: this.getSystemPrompt() },
+      ...conversationHistory,
+      { role: 'user', content: userMessage }
+    ];
+
+    if (this.useOllama) {
+      return this.chatWithOllama(messages);
+    } else if (this.openai) {
+      return this.chatWithOpenAI(messages);
+    } else {
+      throw new Error('No LLM configured. Set USE_OLLAMA=true or provide OPENAI_API_KEY');
+    }
+  }
+
+  private async chatWithOpenAI(messages: ChatMessage[]): Promise<ChatResponse> {
+    if (!this.openai) {
+      throw new Error('OpenAI client not initialized');
+    }
+
+    const tools = this.getToolsForLLM();
+
+    // First LLM call - may request tool calls
+    let response = await this.openai.chat.completions.create({
+      model: 'gpt-4-turbo-preview',
+      messages: messages as any,
+      tools: tools as any,
+      tool_choice: 'auto'
+    });
+
+    let message = response.choices[0].message;
+    const toolCallResults: Array<{ tool: string; arguments: any; result: any }> = [];
+
+    // Handle tool calls if requested
+    if (message.tool_calls && message.tool_calls.length > 0) {
+      const toolMessages = [...messages, message as any];
+
+      for (const toolCall of message.tool_calls) {
+        const functionName = toolCall.function.name;
+        const functionArgs = JSON.parse(toolCall.function.arguments);
+
+        // Execute the tool via MCP
+        console.log(`[Agent] Calling MCP tool: ${functionName}`, functionArgs);
+        const result = await this.mcpClient.callTool(functionName, functionArgs);
+
+        toolCallResults.push({
+          tool: functionName,
+          arguments: functionArgs,
+          result
+        });
+
+        // Add tool result to messages
+        toolMessages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(result)
+        } as any);
+      }
+
+      // Second LLM call with tool results
+      const finalResponse = await this.openai.chat.completions.create({
+        model: 'gpt-4-turbo-preview',
+        messages: toolMessages as any
+      });
+
+      return {
+        message: finalResponse.choices[0].message.content || 'No response',
+        toolCalls: toolCallResults
+      };
+    }
+
+    return {
+      message: message.content || 'No response'
+    };
+  }
+
+  private async chatWithOllama(messages: ChatMessage[]): Promise<ChatResponse> {
+    const tools = this.getToolsForLLM();
+
+    const response = await fetch(`${this.ollamaUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: this.ollamaModel,
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        tools: tools.map(t => ({
+          type: 'function',
+          function: {
+            name: t.function.name,
+            description: t.function.description,
+            parameters: t.function.parameters
+          }
+        })),
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const message = data.message;
+
+    // Check if Ollama returned tool calls
+    if (message.tool_calls && message.tool_calls.length > 0) {
+      const toolCallResults: Array<{ tool: string; arguments: any; result: any }> = [];
+      const toolMessages = [...messages, message];
+
+      for (const toolCall of message.tool_calls) {
+        const functionName = toolCall.function.name;
+        const functionArgs = toolCall.function.arguments;
+
+        // Execute the tool via MCP
+        console.log(`[Agent] Calling MCP tool: ${functionName}`, functionArgs);
+        const result = await this.mcpClient.callTool(functionName, functionArgs);
+
+        toolCallResults.push({
+          tool: functionName,
+          arguments: functionArgs,
+          result
+        });
+
+        toolMessages.push({
+          role: 'tool',
+          content: JSON.stringify(result)
+        });
+      }
+
+      // Second call with tool results
+      const finalResponse = await fetch(`${this.ollamaUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.ollamaModel,
+          messages: toolMessages.map(m => ({ role: m.role, content: m.content })),
+          stream: false
+        })
+      });
+
+      const finalData = await finalResponse.json();
+      return {
+        message: finalData.message.content,
+        toolCalls: toolCallResults
+      };
+    }
+
+    return {
+      message: message.content
+    };
+  }
+}

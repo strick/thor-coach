@@ -57,8 +57,15 @@ Return a JSON object exactly like:
 Rules:
 - One item per exercise (no merging).
 - Use the CLOSEST match from the valid list.
-- Handle: "4*12 floor press @45", "4x9 with 35 lbs incline", "3x10 with 30 lbs flys",
-  "3x12 trciep overhead", "11, 8, 5 push ups", "12x 3 leg raises".
+- NOTATION: In "NxM" or "N*M" format, N is SETS and M is REPS_PER_SET.
+  Examples: "3x12" means sets=3, reps_per_set=12
+            "4*10" means sets=4, reps_per_set=10
+- Handle: "4*12 floor press @45" (sets=4, reps=12, weight=45)
+          "4x9 with 35 lbs incline" (sets=4, reps=9, weight=35)
+          "3x10 with 30 lbs flys" (sets=3, reps=10, weight=30)
+          "3x12 tricep overhead" (sets=3, reps=12)
+          "11, 8, 5 push ups" (variable_reps=[11,8,5], reps_per_set=8)
+          "12x 3 leg raises" (sets=12, reps=3)
 - If comma reps given, variable_reps=[...], reps_per_set=rounded average.
 - IMPORTANT: Capture any contextual notes, feelings, or comments following the exercise.
   Examples: "This was brutal", "felt easy", "struggled with form", "personal best!"

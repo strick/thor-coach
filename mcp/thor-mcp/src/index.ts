@@ -77,7 +77,7 @@ server.registerTool(
       date: z
         .string()
         .optional()
-        .describe("Optional date in YYYY-MM-DD format (defaults to today)"),
+        .describe(`Optional date in YYYY-MM-DD format (defaults to today: ${new Date().toISOString().split('T')[0]})`),
     },
   },
   async (args: { text: string; date?: string }) => {
