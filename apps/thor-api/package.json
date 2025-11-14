@@ -32,7 +32,7 @@
     "@vitest/coverage-v8": "^4.0.8",
     "supertest": "^7.1.4",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3",
+    "typescript": "^5.7.3",
     "vitest": "^4.0.8"
   },
   "engines": {
