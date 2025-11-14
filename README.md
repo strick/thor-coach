@@ -164,7 +164,7 @@ The Thor MCP Server exposes workout tools to AI agents via Model Context Protoco
   "mcpServers": {
     "thor": {
       "command": "node",
-      "args": ["/absolute/path/to/thor-stack/mcp/thor-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/thor-stack/apps/thor-mcp/dist/index.js"],
       "env": {
         "THOR_API_URL": "http://localhost:3000"
       }
@@ -183,7 +183,7 @@ The Thor MCP Server exposes workout tools to AI agents via Model Context Protoco
 - `get_all_exercises` - List all exercises in plan
 - `get_exercise_history` - Get historical data for exercise
 
-See `mcp/thor-mcp/README.md` for detailed documentation.
+See `apps/thor-mcp/README.md` for detailed documentation.
 
 ---
 
@@ -304,10 +304,10 @@ Thor Stack is a fully local, privacy-first AI workout companion that integrates 
 
 - **ARCHITECTURE.md** - Complete request flow diagrams and LLM interaction details
 - **CLAUDE.md** - Development guide for working with this codebase
-- **mcp/thor-mcp/README.md** - MCP Server documentation
+- **apps/thor-mcp/README.md** - MCP Server documentation
 - **apps/thor-agent/README.md** - Conversational Agent documentation
 - **pi/README.md** - Raspberry Pi Voice Client deployment guide
-- **mcp/thor-mcp/TESTING.md** - MCP Server testing guide
+- **apps/thor-mcp/TESTING.md** - MCP Server testing guide
 - **MONOREPO_MIGRATION_PLAN.md** - Migration history and decisions
 
 ---

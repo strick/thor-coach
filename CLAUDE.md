@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Monorepo**: npm workspaces with separate apps/, mcp/, and packages/ directories
 - **Backend API**: TypeScript + Express + SQLite (better-sqlite3) in `apps/thor-api/`
 - **Web Frontend**: Static HTML + Tailwind CSS + Chart.js in `apps/thor-web/`
-- **MCP Server**: Model Context Protocol server in `mcp/thor-mcp/`
+- **MCP Server**: Model Context Protocol server in `apps/thor-mcp/`
 - **Shared Package**: Common types/schemas in `packages/shared/`
 - **AI Parsing**: Supports both Ollama (local) and OpenAI (cloud) for parsing natural language
 - **Database**: SQLite with WAL mode (`workout.db` created in `apps/thor-api/`)
@@ -278,7 +278,7 @@ After modifying code:
 5. **Test workout parsing**: `curl -X POST http://localhost:3000/api/ingest -H "Content-Type: application/json" -d '{"text":"floor press 4x12 @45"}'`
 6. **Test weekly summary generation**: `curl -X POST http://localhost:3000/api/weekly-summaries/generate -H "Content-Type: application/json" -d '{}'`
 7. **View weekly summaries**: `curl http://localhost:3000/api/weekly-summaries`
-8. **Test MCP server**: `echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}},"id":1}' | node mcp/thor-mcp/dist/index.js`
+8. **Test MCP server**: `echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}},"id":1}' | node apps/thor-mcp/dist/index.js`
 
 ## Roadmap Context
 
@@ -294,7 +294,7 @@ After modifying code:
 
 ## MCP Integration
 
-The Thor MCP Server (`mcp/thor-mcp/`) exposes workout logging tools to AI agents via Model Context Protocol. See `mcp/thor-mcp/README.md` for:
+The Thor MCP Server (`apps/thor-mcp/`) exposes workout logging tools to AI agents via Model Context Protocol. See `apps/thor-mcp/README.md` for:
 - Configuration instructions for Claude Desktop
 - List of 8 available tools (log_workout, get_today_exercises, etc.)
 - Known Windows/WSL stdio encoding issues and workarounds

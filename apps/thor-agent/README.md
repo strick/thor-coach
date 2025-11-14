@@ -193,7 +193,7 @@ curl -X POST http://localhost:3002/chat \
 
 When the agent starts:
 
-1. Spawns the MCP server process (`mcp/thor-mcp/dist/index.js`)
+1. Spawns the MCP server process (`apps/thor-mcp/dist/index.js`)
 2. Initializes JSON-RPC communication via stdio
 3. Fetches available tools from MCP server
 4. Converts tool schemas to LLM function calling format
@@ -271,7 +271,7 @@ apps/thor-agent/
 
 ### Adding New Features
 
-1. **Add tools** → Update MCP server (mcp/thor-mcp/src/index.ts)
+1. **Add tools** → Update MCP server (apps/thor-mcp/src/index.ts)
 2. **Modify agent personality** → Edit system prompt in `src/agent.ts`
 3. **Add endpoints** → Extend `src/server.ts`
 
@@ -295,7 +295,7 @@ curl -X POST http://localhost:3002/chat \
 ### Agent won't start
 
 - ✅ Check Thor API is running: `curl http://localhost:3000/health`
-- ✅ Check MCP server is built: `ls mcp/thor-mcp/dist/index.js`
+- ✅ Check MCP server is built: `ls apps/thor-mcp/dist/index.js`
 - ✅ Check Node version: `node --version` (should be 22+)
 
 ### LLM not responding
@@ -307,7 +307,7 @@ curl -X POST http://localhost:3002/chat \
 ### MCP server errors
 
 - ✅ Check agent logs for MCP stderr output
-- ✅ Test MCP server directly: `cd mcp/thor-mcp && node test-mcp.js list_tools`
+- ✅ Test MCP server directly: `cd apps/thor-mcp && node test-mcp.js list_tools`
 - ✅ Verify Thor API is accessible from MCP server
 
 ### Tool calls not working
@@ -331,7 +331,7 @@ curl -X POST http://localhost:3002/chat \
 
 ## Related Documentation
 
-- **MCP Server**: See `mcp/thor-mcp/README.md`
-- **MCP Testing**: See `mcp/thor-mcp/TESTING.md`
+- **MCP Server**: See `apps/thor-mcp/README.md`
+- **MCP Testing**: See `apps/thor-mcp/TESTING.md`
 - **Main README**: See root `README.md` for full system overview
 - **Development Guide**: See `CLAUDE.md` for codebase documentation

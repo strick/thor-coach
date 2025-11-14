@@ -181,7 +181,7 @@ JSON-RPC request (sent to MCP server subprocess via stdio):
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │ STEP 7: MCP Server receives request                                │
-│ File: mcp/thor-mcp/src/index.ts:93-111                             │
+│ File: apps/thor-mcp/src/index.ts:93-111                             │
 └─────────────────────────────────────────────────────────────────────┘
 
 MCP Server executes tool handler:
@@ -190,7 +190,7 @@ MCP Server executes tool handler:
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │ STEP 8: MCP Server → Thor API HTTP call                            │
-│ File: mcp/thor-mcp/src/api-client.ts:45-68                         │
+│ File: apps/thor-mcp/src/api-client.ts:45-68                         │
 └─────────────────────────────────────────────────────────────────────┘
 
 HTTP GET request:
@@ -247,7 +247,7 @@ HTTP Response:
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │ STEP 11: MCP Server → Agent (JSON-RPC response)                    │
-│ File: mcp/thor-mcp/src/index.ts:106-107                            │
+│ File: apps/thor-mcp/src/index.ts:106-107                            │
 └─────────────────────────────────────────────────────────────────────┘
 
 JSON-RPC response (via stdio):
@@ -434,7 +434,7 @@ await this.mcpClient.callTool("log_workout", {
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │ STEP 8: MCP Server → Thor API                                      │
-│ File: mcp/thor-mcp/src/api-client.ts:26-43                         │
+│ File: apps/thor-mcp/src/api-client.ts:26-43                         │
 └─────────────────────────────────────────────────────────────────────┘
 
 HTTP POST request:
@@ -1004,8 +1004,8 @@ User Input
 - **Agent Entry**: `apps/thor-agent/src/server.ts`
 - **Agent LLM Logic**: `apps/thor-agent/src/agent.ts`
 - **MCP Client**: `apps/thor-agent/src/mcp-client.ts`
-- **MCP Server**: `mcp/thor-mcp/src/index.ts`
-- **MCP API Client**: `mcp/thor-mcp/src/api-client.ts`
+- **MCP Server**: `apps/thor-mcp/src/index.ts`
+- **MCP API Client**: `apps/thor-mcp/src/api-client.ts`
 - **API Routes**: `apps/thor-api/src/routes/index.ts`
 - **Ingest Service**: `apps/thor-api/src/services/ingest.ts`
 - **Parser Service**: `apps/thor-api/src/services/parser.ts`
