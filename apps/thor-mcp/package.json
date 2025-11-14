@@ -8,9 +8,9 @@
     "thor-mcp": "./dist/index.js"
   },
   "scripts": {
-    "build": "bash -c 'source ~/.nvm/nvm.sh && nvm use 22 && tsc -p tsconfig.json'",
-    "start": "bash -c 'source ~/.nvm/nvm.sh && nvm use 22 && node dist/index.js'",
-    "dev": "bash -c 'source ~/.nvm/nvm.sh && nvm use 22 && tsx watch src/index.ts'"
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.2",
