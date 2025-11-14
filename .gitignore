@@ -45,6 +45,7 @@ pids/
 # OS files
 .DS_Store
 Thumbs.db
+*:Zone.Identifier
 
 # IDEs and editors
 .vscode/

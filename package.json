@@ -6,7 +6,6 @@
   "type": "module",
   "workspaces": [
     "apps/*",
-    "mcp/*",
     "packages/*"
   ],
   "scripts": {
@@ -22,7 +21,7 @@
     "test": "npm run test --workspaces --if-present",
     "test:api": "npm run test --workspace=thor-api",
     "test:watch": "npm run test:watch --workspaces --if-present",
-    "clean": "rm -rf apps/*/dist apps/*/node_modules mcp/*/dist mcp/*/node_modules packages/*/dist packages/*/node_modules node_modules"
+    "clean": "rm -rf apps/*/dist apps/*/node_modules packages/*/dist packages/*/node_modules node_modules"
   },
   "engines": {
     "node": ">=22.0.0",
