@@ -8,8 +8,8 @@
 import express from 'express';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { z } from 'zod';
 import { ThorApiClient } from './api-client.js';
+import { TOOL_DEFINITIONS } from './tool-config.js';
 
 const PORT = process.env.MCP_PORT ? parseInt(process.env.MCP_PORT) : 3003;
 const app = express();
@@ -64,213 +64,27 @@ function createErrorResponse(error: unknown) {
 }
 
 /**
- * Register tools using proper MCP SDK server.registerTool()
+ * Register all tools from shared configuration
+ * Single source of truth - no duplication!
  */
-
-// log_workout tool
-server.registerTool(
-  "log_workout",
-  {
-    title: "Log Workout",
-    description:
-      "Log a workout using natural language. Parse exercises, sets, reps, and weights from text.",
-    inputSchema: {
-      text: z
-        .string()
-        .min(1)
-        .describe(
-          "Natural language workout description (e.g., 'floor press 4x12 @45, dumbbell row 3x8 @35')"
-        ),
-      date: z
-        .string()
-        .optional()
-        .describe(`Optional date in YYYY-MM-DD format (defaults to today: ${new Date().toISOString().split('T')[0]})`),
+TOOL_DEFINITIONS.forEach((toolDef) => {
+  server.registerTool(
+    toolDef.name,
+    {
+      title: toolDef.title,
+      description: toolDef.description,
+      inputSchema: toolDef.zodSchema,
     },
-  },
-  async (args: { text: string; date?: string }) => {
-    try {
-      // Filter out invalid dates (LLM sometimes passes '', 'today', 'Today', 'now', etc.)
-      const invalidDates = ['', 'today', 'now', 'current'];
-      const dateStr = args.date?.trim().toLowerCase() || '';
-      const date = dateStr && !invalidDates.includes(dateStr) ? args.date : undefined;
-      const result = await apiClient.logWorkout(args.text, date);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
+    async (args: any) => {
+      try {
+        const result = await toolDef.handler(apiClient, args);
+        return createToolResponse(result);
+      } catch (err) {
+        return createErrorResponse(err);
+      }
     }
-  }
-);
-
-// get_today_exercises tool
-server.registerTool(
-  "get_today_exercises",
-  {
-    title: "Get Today's Exercises",
-    description:
-      "Get the list of exercises scheduled for today based on the workout plan",
-    inputSchema: {},
-  },
-  async () => {
-    try {
-      const today = new Date().getDay() || 7; // Sunday=7
-      const result = await apiClient.getDayExercises(today);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
-
-// get_exercises_for_day tool
-server.registerTool(
-  "get_exercises_for_day",
-  {
-    title: "Get Exercises for Day",
-    description:
-      "Get exercises for a specific day of the week (1=Monday, 7=Sunday)",
-    inputSchema: {
-      day_of_week: z
-        .number()
-        .int()
-        .min(1)
-        .max(7)
-        .describe("Day of week (1-7, where 1=Monday, 7=Sunday)"),
-    },
-  },
-  async (args: { day_of_week: number }) => {
-    try {
-      const result = await apiClient.getDayExercises(args.day_of_week);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
-
-// get_progress_summary tool
-server.registerTool(
-  "get_progress_summary",
-  {
-    title: "Get Progress Summary",
-    description:
-      "Get workout progress summary for a date range, including sessions count and top lifts",
-    inputSchema: {
-      from: z.string().describe("Start date in YYYY-MM-DD format"),
-      to: z.string().describe("End date in YYYY-MM-DD format"),
-    },
-  },
-  async (args: { from: string; to: string }) => {
-    try {
-      const result = await apiClient.getProgressSummary(args.from, args.to);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
-
-// get_weekly_summaries tool
-server.registerTool(
-  "get_weekly_summaries",
-  {
-    title: "Get Weekly Summaries",
-    description:
-      "Get AI-generated weekly workout summaries with metrics and insights",
-    inputSchema: {
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(100)
-        .optional()
-        .describe("Number of summaries to retrieve (default: 10)"),
-    },
-  },
-  async (args: { limit?: number }) => {
-    try {
-      const result = await apiClient.getWeeklySummaries(args.limit || 10);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
-
-// get_workouts_by_date tool
-server.registerTool(
-  "get_workouts_by_date",
-  {
-    title: "Get Workouts by Date",
-    description: "Get all workouts logged on a specific date",
-    inputSchema: {
-      date: z.string().describe("Date in YYYY-MM-DD format"),
-    },
-  },
-  async (args: { date: string }) => {
-    try {
-      const result = await apiClient.getWorkoutsByDate(args.date);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
-
-// get_all_exercises tool
-server.registerTool(
-  "get_all_exercises",
-  {
-    title: "Get All Exercises",
-    description: "Get list of all exercises in the workout plan",
-    inputSchema: {
-      day_of_week: z
-        .number()
-        .int()
-        .min(1)
-        .max(7)
-        .optional()
-        .describe("Optional: filter by day of week (1-7)"),
-    },
-  },
-  async (args: { day_of_week?: number }) => {
-    try {
-      const result = await apiClient.getExercises(args.day_of_week);
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
-
-// get_exercise_history tool
-server.registerTool(
-  "get_exercise_history",
-  {
-    title: "Get Exercise History",
-    description: "Get historical performance data for a specific exercise",
-    inputSchema: {
-      exercise_id: z.string().uuid().describe("Exercise ID (UUID)"),
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(200)
-        .optional()
-        .describe("Number of sessions to retrieve (default: 50)"),
-    },
-  },
-  async (args: { exercise_id: string; limit?: number }) => {
-    try {
-      const result = await apiClient.getExerciseHistory(
-        args.exercise_id,
-        args.limit || 50
-      );
-      return createToolResponse(result);
-    } catch (err) {
-      return createErrorResponse(err);
-    }
-  }
-);
+  );
+});
 
 /**
  * Health check endpoint
@@ -281,62 +95,34 @@ app.get('/health', (_req, res) => {
 
 /**
  * GET /tools - List all available tools (for HTTP client compatibility)
+ * Generated from shared tool configuration
  */
 app.get('/tools', (_req, res) => {
-  const tools = [
-    { name: 'log_workout', description: 'Log a workout using natural language', inputSchema: { type: 'object', properties: { text: { type: 'string' }, date: { type: 'string' } }, required: ['text'] } },
-    { name: 'get_today_exercises', description: 'Get exercises scheduled for today', inputSchema: { type: 'object', properties: {} } },
-    { name: 'get_exercises_for_day', description: 'Get exercises for a specific day', inputSchema: { type: 'object', properties: { day_of_week: { type: 'number' } }, required: ['day_of_week'] } },
-    { name: 'get_progress_summary', description: 'Get workout progress summary', inputSchema: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' } }, required: ['from', 'to'] } },
-    { name: 'get_weekly_summaries', description: 'Get AI-generated weekly summaries', inputSchema: { type: 'object', properties: { limit: { type: 'number' } } } },
-    { name: 'get_workouts_by_date', description: 'Get workouts for a specific date', inputSchema: { type: 'object', properties: { date: { type: 'string' } }, required: ['date'] } },
-    { name: 'get_all_exercises', description: 'Get all exercises', inputSchema: { type: 'object', properties: { day_of_week: { type: 'number' } } } },
-    { name: 'get_exercise_history', description: 'Get exercise history', inputSchema: { type: 'object', properties: { exercise_id: { type: 'string' }, limit: { type: 'number' } }, required: ['exercise_id'] } }
-  ];
+  const tools = TOOL_DEFINITIONS.map((toolDef) => ({
+    name: toolDef.name,
+    description: toolDef.description,
+    inputSchema: toolDef.jsonSchema,
+  }));
   res.json({ tools });
 });
 
 /**
  * POST /tools/:toolName - Execute a tool (for HTTP client compatibility)
+ * Uses shared tool configuration - no switch statement needed!
  */
 app.post('/tools/:toolName', async (req, res) => {
   const { toolName } = req.params;
   const args = req.body;
 
+  // Find tool definition from shared config
+  const toolDef = TOOL_DEFINITIONS.find((t) => t.name === toolName);
+
+  if (!toolDef) {
+    return res.status(404).json({ error: 'Tool not found' });
+  }
+
   try {
-    let result;
-
-    switch (toolName) {
-      case 'log_workout':
-        result = await apiClient.logWorkout(args.text, args.date);
-        break;
-      case 'get_today_exercises': {
-        const today = new Date().getDay() || 7;
-        result = await apiClient.getDayExercises(today);
-        break;
-      }
-      case 'get_exercises_for_day':
-        result = await apiClient.getDayExercises(args.day_of_week);
-        break;
-      case 'get_progress_summary':
-        result = await apiClient.getProgressSummary(args.from, args.to);
-        break;
-      case 'get_weekly_summaries':
-        result = await apiClient.getWeeklySummaries(args.limit || 10);
-        break;
-      case 'get_workouts_by_date':
-        result = await apiClient.getWorkoutsByDate(args.date);
-        break;
-      case 'get_all_exercises':
-        result = await apiClient.getExercises(args.day_of_week);
-        break;
-      case 'get_exercise_history':
-        result = await apiClient.getExerciseHistory(args.exercise_id, args.limit || 50);
-        break;
-      default:
-        return res.status(404).json({ error: 'Tool not found' });
-    }
-
+    const result = await toolDef.handler(apiClient, args);
     res.json({ result });
   } catch (error) {
     console.error(`Error executing tool ${toolName}:`, error);
