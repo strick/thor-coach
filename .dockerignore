@@ -1,0 +1,70 @@
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Database files (will be in volume)
+*.db
+*.db-shm
+*.db-wal
+workout.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+coverage/
+.nyc_output/
+*.test.ts
+*.spec.ts
+test/
+tests/
+__tests__/
+
+# Documentation
+*.md
+!CLAUDE.md
+docs/
+ARCHITECTURE.md
+ARCHITECTURE-DIAGRAM.md
+architecture-*.mmd
+*.png
+*.svg
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Misc
+*.log
+tmp/
+temp/
+.cache/

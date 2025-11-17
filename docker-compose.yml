@@ -1,0 +1,139 @@
+services:
+  # ==================================
+  # Thor API - REST API + SQLite
+  # ==================================
+  thor-api:
+    build:
+      context: .
+      dockerfile: apps/thor-api/Dockerfile
+    container_name: thor-api
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      # LLM Configuration (choose one)
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+    volumes:
+      # Persist SQLite database
+      - thor-data:/app/data
+      # Mount database to apps/thor-api directory for app to find it
+      - thor-data:/app/apps/thor-api
+    networks:
+      - thor-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  # ==================================
+  # Thor Web - Frontend Dashboard
+  # ==================================
+  thor-web:
+    build:
+      context: .
+      dockerfile: apps/thor-web/Dockerfile
+    container_name: thor-web
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - NODE_ENV=production
+    networks:
+      - thor-network
+    depends_on:
+      thor-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # ==================================
+  # Thor MCP - Model Context Protocol Server
+  # ==================================
+  thor-mcp:
+    build:
+      context: .
+      dockerfile: apps/thor-mcp/Dockerfile
+    container_name: thor-mcp
+    ports:
+      - "3003:3003"
+    environment:
+      - MCP_PORT=3003
+      - NODE_ENV=production
+      - THOR_API_URL=http://thor-api:3000
+    networks:
+      - thor-network
+    depends_on:
+      thor-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3003/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==================================
+  # Thor Agent - Conversational AI
+  # Connects to MCP server via HTTP
+  # ==================================
+  thor-agent:
+    build:
+      context: .
+      dockerfile: apps/thor-agent/Dockerfile
+    container_name: thor-agent
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - NODE_ENV=production
+      - THOR_API_URL=http://thor-api:3000
+      - MCP_SERVER_URL=http://thor-mcp:3003
+      # LLM Configuration for agent
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    networks:
+      - thor-network
+    depends_on:
+      thor-api:
+        condition: service_healthy
+      thor-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3002/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+# ==================================
+# Networks
+# ==================================
+networks:
+  thor-network:
+    driver: bridge
+    name: thor-network
+
+# ==================================
+# Volumes
+# ==================================
+volumes:
+  thor-data:
+    driver: local
+    name: thor-data

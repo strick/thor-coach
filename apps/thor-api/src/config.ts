@@ -12,3 +12,4 @@ export const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 export const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.1:8b";
 
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+export const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";

@@ -1,0 +1,23 @@
+sequenceDiagram
+    participant User
+    participant Agent as Thor Agent<br/>(LLM #1)
+    participant MCP as MCP Server
+    participant API as REST API
+    participant Parser as NLP Parser<br/>(LLM #2)
+    participant DB as SQLite DB
+
+    User->>Agent: "shoulder press 3x12 @45"
+    Agent->>Agent: LLM decides to call log_workout tool
+    Agent->>MCP: JSON-RPC: log_workout(text, date)
+    MCP->>API: POST /api/ingest
+    API->>DB: Query valid exercises for today
+    DB-->>API: Exercise list
+    API->>Parser: Parse natural language
+    Parser->>Parser: LLM extracts: sets=3, reps=12, weight=45
+    Parser-->>API: Structured data
+    API->>DB: Save workout session
+    DB-->>API: Success
+    API-->>MCP: Workout logged
+    MCP-->>Agent: Tool result
+    Agent->>Agent: LLM generates response
+    Agent-->>User: "Logged! 💪 Shoulder Press: 3×12 @45lbs"

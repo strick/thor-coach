@@ -13,13 +13,13 @@ logger = logging.getLogger(__name__)
 class ThorAgentClient:
     """Client for communicating with Thor Agent service"""
 
-    def __init__(self, agent_url: str, timeout: int = 30):
+    def __init__(self, agent_url: str, timeout: int = 90):
         """
         Initialize the agent client
 
         Args:
             agent_url: Base URL of the thor-agent service (e.g., http://localhost:3002)
-            timeout: Request timeout in seconds
+            timeout: Request timeout in seconds (default 90 for Ollama)
         """
         self.agent_url = agent_url.rstrip('/')
         self.timeout = timeout

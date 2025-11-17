@@ -1,6 +1,6 @@
 import { getDayExercises } from "./plans.js";
 import type { ParsedLog } from "../models.js";
-import { USE_LLM, USE_OLLAMA, OLLAMA_MODEL, OLLAMA_URL, OPENAI_API_KEY } from "../config.js";
+import { USE_LLM, USE_OLLAMA, OLLAMA_MODEL, OLLAMA_URL, OPENAI_API_KEY, OPENAI_MODEL } from "../config.js";
 
 async function parseWithOllama(system: string, user: string) {
   const resp = await fetch(`${OLLAMA_URL}/api/chat`, {
@@ -152,11 +152,9 @@ ${normalizedText}
     strict: true
   } as const;
 
-  const openaiModel = "gpt-4o-mini";
-
   try {
     const resp = await client.chat.completions.create({
-      model: openaiModel,
+      model: OPENAI_MODEL,
       response_format: { type: "json_schema", json_schema: schema },
       messages: [{ role: "system", content: sys }, { role: "user", content: user }],
       temperature: 0
@@ -167,11 +165,11 @@ ${normalizedText}
     return {
       items: normalizeItems(parsed.items),
       llm_provider: "openai",
-      llm_model: openaiModel
+      llm_model: OPENAI_MODEL
     };
   } catch {
     const resp2 = await client.chat.completions.create({
-      model: openaiModel,
+      model: OPENAI_MODEL,
       response_format: { type: "json_object" },
       messages: [{ role: "system", content: sys }, { role: "user", content: user }],
       temperature: 0
@@ -182,7 +180,7 @@ ${normalizedText}
     return {
       items: normalizeItems(parsed2.items),
       llm_provider: "openai",
-      llm_model: openaiModel
+      llm_model: OPENAI_MODEL
     };
   }
 }
