@@ -62,33 +62,41 @@ thor-stack/
 │   │   │   ├── services/
 │   │   │   ├── controllers/
 │   │   │   └── middleware/
+│   │   ├── .env.example
+│   │   ├── Dockerfile
 │   │   └── package.json
 │   │
 │   ├── thor-web/          # Web Frontend
 │   │   ├── public/
 │   │   ├── server.js
+│   │   ├── Dockerfile
+│   │   ├── README.md
 │   │   └── package.json
 │   │
-│   └── thor-agent/        # Conversational Agent
-│       ├── src/
-│       ├── README.md
-│       └── package.json
-│
-├── mcp/
+│   ├── thor-agent/        # Conversational Agent
+│   │   ├── src/
+│   │   ├── Dockerfile
+│   │   ├── README.md
+│   │   └── package.json
+│   │
 │   └── thor-mcp/          # MCP Server
 │       ├── src/
 │       ├── dist/
+│       ├── .env.example
+│       ├── Dockerfile
 │       ├── README.md
 │       └── package.json
 │
-├── pi/
-│   └── (Python)           # Raspberry Pi Voice Client
-│       ├── main.py
-│       ├── stt.py
-│       ├── tts.py
-│       ├── client.py
-│       ├── requirements.txt
-│       └── README.md
+├── pi/                    # Raspberry Pi Voice Client (Python)
+│   ├── main.py
+│   ├── stt.py
+│   ├── tts.py
+│   ├── client.py
+│   ├── test-flow.py
+│   ├── .env.example
+│   ├── requirements.txt
+│   ├── README.md
+│   └── QUICKSTART.md
 │
 ├── packages/
 │   └── shared/            # Shared Types & Schemas

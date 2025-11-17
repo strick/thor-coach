@@ -19,9 +19,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
     volumes:
-      # Persist SQLite database
-      - thor-data:/app/data
-      # Mount database to apps/thor-api directory for app to find it
+      # Persist SQLite database (workout.db is created in the working directory)
       - thor-data:/app/apps/thor-api
     networks:
       - thor-network
