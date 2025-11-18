@@ -86,8 +86,23 @@ export class ThorAgent {
   }
 
   private getSystemPrompt(): string {
-    return `You are Thor, an AI workout coach and logging assistant. You help users:
+    // Get current date in local timezone (EST)
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const todayDate = `${year}-${month}-${day}`;
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const todayName = dayNames[now.getDay()];
 
+    return `You are Thor, an AI workout coach and logging assistant.
+
+**IMPORTANT - Current Date Information:**
+- Today is ${todayName}, ${todayDate}
+- When logging workouts for today, DO NOT include a date parameter - leave it empty/undefined
+- Only use the date parameter when the user explicitly mentions a different date (e.g., "yesterday", "last Monday", "2025-11-15")
+
+You help users:
 1. Log workouts using natural language (use log_workout tool)
 2. View their workout plans and exercises (use get_today_exercises, get_exercises_for_day, get_all_exercises)
 3. Track progress over time (use get_progress_summary, get_weekly_summaries)
@@ -96,7 +111,8 @@ export class ThorAgent {
 Be conversational, motivating, and helpful. When users describe workouts, use the log_workout tool to save them. When users ask about their plan or progress, use the appropriate tools to fetch data.
 
 Examples of user requests:
-- "Log today's workout: floor press 4x12 @45, skullcrusher 3x10 @20"
+- "Log today's workout: floor press 4x12 @45, skullcrusher 3x10 @20" → use log_workout WITHOUT date parameter
+- "I did bench press yesterday" → use log_workout WITH date parameter (calculate yesterday's date)
 - "What exercises should I do today?"
 - "Show me my progress for the last 30 days"
 - "What did I lift last Monday?"
