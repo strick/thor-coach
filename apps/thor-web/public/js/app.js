@@ -1,14 +1,16 @@
 
   // ======= Helpers =======
   const $ = (id) => document.getElementById(id);
-  const todayISO = () => {
-    // Get local date instead of UTC
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
+
+  // Convert Date object to YYYY-MM-DD using LOCAL timezone (not UTC)
+  const toLocalDateString = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
+
+  const todayISO = () => toLocalDateString(new Date());
   const toDow = (d) => {
     // Parse date in local timezone to avoid UTC offset issues
     const parts = d.split('-');
@@ -577,7 +579,7 @@ probeBackend();
   let sessionsChart = null;
   async function refreshProgress() {
     const to = todayISO();
-    const from = new Date(Date.now() - 29*24*60*60*1000).toISOString().slice(0,10);
+    const from = toLocalDateString(new Date(Date.now() - 29*24*60*60*1000));
     const res = await fetch(`${apiBase()}/progress/summary?from=${from}&to=${to}`);
     if (!res.ok) return;
     const data = await res.json();
@@ -1330,8 +1332,8 @@ probeBackend();
       const firstDay = new Date(year, month, 1);
       const lastDay = new Date(year, month + 1, 0);
 
-      const fromDate = firstDay.toISOString().slice(0, 10);
-      const toDate = lastDay.toISOString().slice(0, 10);
+      const fromDate = toLocalDateString(firstDay);
+      const toDate = toLocalDateString(lastDay);
 
       // Fetch all sessions for this month
       const res = await fetch(`${apiBase()}/progress/summary?from=${fromDate}&to=${toDate}`);
@@ -1386,12 +1388,12 @@ probeBackend();
 
     // Today's date for highlighting
     const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10);
+    const todayStr = toLocalDateString(today);
 
     // Calendar days
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
-      const dateStr = date.toISOString().slice(0, 10);
+      const dateStr = toLocalDateString(date);
       const hasWorkout = workoutDatesCache.has(dateStr);
       const isToday = dateStr === todayStr;
 
@@ -1688,7 +1690,7 @@ probeBackend();
   function changeDate(days) {
     const currentDate = new Date($("dateInput").value);
     currentDate.setDate(currentDate.getDate() + days);
-    $("dateInput").value = currentDate.toISOString().slice(0, 10);
+    $("dateInput").value = toLocalDateString(currentDate);
     loadWorkoutsByDate();
     fetchDay();  // Update Today's Plan list
     loadTodaysWorkouts();  // Update today's workouts if applicable
