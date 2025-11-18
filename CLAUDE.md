@@ -21,9 +21,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm install
 
 # Development mode (hot reload)
-npm run dev:api      # Start API server (http://localhost:3000)
-npm run dev:web      # Start web server (http://localhost:3001)
-npm run dev:mcp      # Start MCP server (stdio mode)
+npm run dev:api           # Start API server (http://localhost:3000)
+npm run dev:web           # Start web server (http://localhost:3001)
+npm run dev:meta-runner   # Start meta-runner (http://localhost:3001)
+npm run dev:mcp           # Start MCP server (stdio mode)
 
 # Build all workspaces
 npm run build
@@ -31,6 +32,7 @@ npm run build
 # Build specific workspaces
 npm run build:api
 npm run build:web
+npm run build:meta-runner
 npm run build:mcp
 
 # Run tests
@@ -40,6 +42,7 @@ npm run test:api     # API only
 # Production mode
 npm run start --workspace=thor-api
 npm run start --workspace=thor-web
+npm run start --workspace=thor-meta-runner
 
 # Cleanup
 npm run clean        # Remove all dist/ and node_modules/
@@ -61,11 +64,26 @@ OPENAI_API_KEY=sk-xxxxx            # Set this to use OpenAI instead
 PORT=3000                          # API server port
 ```
 
+Create a `.env` file in `apps/thor-meta-runner/`:
+
+```env
+# Same LLM configuration as above
+USE_OLLAMA=true
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1:8b
+
+# Thor API connection
+THOR_API_URL=http://localhost:3000
+
+# Server
+PORT=3001
+```
+
 **Note**: If `USE_OLLAMA=true`, the system uses Ollama. Otherwise, if `OPENAI_API_KEY` is set, it uses OpenAI. If neither is configured, LLM parsing will fail.
 
 **Important**: LLM configuration is read from the `.env` file at server startup. To switch between Ollama and OpenAI:
-1. Edit `apps/thor-api/.env`
-2. Restart the API server (`npm run dev:api`)
+1. Edit `apps/thor-api/.env` (and `apps/thor-meta-runner/.env` if running meta-runner)
+2. Restart the servers
 
 ## Architecture
 
@@ -229,6 +247,64 @@ Single-file SPA that:
   - Shows which AI model parsed each workout (displayed with 🤖 emoji)
   - Instructions for changing LLM settings via `.env` file
   - Configurable API URL (useful for mobile devices connecting to LAN)
+
+### Meta-Runner Service (`apps/thor-meta-runner/`)
+
+The meta-runner is an **agentic health coordinator** that routes natural language queries across multiple health domains. It sits between the user and domain-specific APIs/tools.
+
+**Architecture:**
+```
+User Input (text)
+    ↓
+Router (LLM classification) → WORKOUT | NUTRITION | HEALTH_LOG | OVERVIEW
+    ↓
+Parsers (domain-specific) → structured payloads
+    ↓
+Executor (API calls) → call thor-api endpoints or future nutrition/health endpoints
+    ↓
+Response (natural language + metadata)
+```
+
+**Key Services:**
+
+- **`src/services/router.ts`**: LLM-based query classification
+  - `routeQuery(text, modeOverride?)`: Main routing function
+  - Returns: `{ target, intent, cleaned_text, confidence }`
+  - Supports explicit mode override ("auto" | "thor" | "nutrition" | "health" | "overview")
+  - Fallback heuristic classification if LLM fails
+
+- **`src/services/parsers.ts`**: Domain-specific parsing
+  - `parseWorkout(text, date?)`: Workout data extraction
+  - `parseMeal(text, date?)`: Meal/nutrition data extraction
+  - `parseHealthEvent(text, date?)`: Health event data extraction
+  - Each parser uses LLM to extract structured JSON, with fallback heuristics
+
+- **`src/services/metaRunner.ts`**: Main orchestration service
+  - `MetaRunnerService.chat(request)`: Single entry point for all queries
+  - Handles: WORKOUT → handleWorkout, NUTRITION → handleNutrition, etc.
+  - Returns: `MetaRunnerResponse` with agent, intent, actions, message, and optional rawToolResults
+
+- **`src/clients/thorApiClient.ts`**: HTTP client for thor-api
+  - Methods: `logWorkout()`, `getProgressSummary()`, `logMeal()` (placeholder), `logHealthEvent()` (placeholder)
+  - Can be extended with new endpoints as new tables are added
+
+**API Endpoint:**
+- `POST /chat` - Route natural language health query
+  - Request: `{ text: string, mode?: "auto"|"thor"|"nutrition"|"health"|"overview", periodDays?: 14 }`
+  - Response: `{ agent, intent, actions, message, rawToolResults? }`
+
+**LLM Prompts:**
+
+Each router and parser uses system prompts to guide the LLM. These are defined inline in the respective files:
+- Router: Classifies into domains and infers intent
+- Parsers: Extract structured data (exercises, meals, health events) with fallback heuristics
+
+**Future Extension Points:**
+
+1. **New Domains**: Add to `RouterResult['target']`, add parser function, add handler in `MetaRunnerService`
+2. **New Intents**: Extend classifier prompt and add corresponding parser
+3. **Database Tables**: Extend thor-api schema, then update `thorApiClient` methods
+4. **MCP Tools**: Add new tool definitions to `apps/thor-mcp/src/tool-config.ts` wrapping new endpoints
 
 ## TypeScript Configuration
 

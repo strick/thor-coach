@@ -79,10 +79,25 @@ thor-stack/
 │   │   ├── README.md
 │   │   └── package.json
 │   │
-│   └── thor-mcp/          # MCP Server
+│   ├── thor-mcp/          # MCP Server
+│   │   ├── src/
+│   │   ├── dist/
+│   │   ├── .env.example
+│   │   ├── Dockerfile
+│   │   ├── README.md
+│   │   └── package.json
+│   │
+│   └── thor-meta-runner/  # Agentic Health Coordinator
 │       ├── src/
-│       ├── dist/
-│       ├── .env.example
+│       │   ├── server.ts
+│       │   ├── routes/
+│       │   ├── services/
+│       │   │   ├── router.ts        # LLM-based domain classification
+│       │   │   ├── parsers.ts       # Domain-specific parsing
+│       │   │   └── metaRunner.ts    # Orchestration
+│       │   ├── clients/
+│       │   ├── utils/
+│       │   └── config.ts
 │       ├── Dockerfile
 │       ├── README.md
 │       └── package.json
@@ -281,6 +296,17 @@ GET http://localhost:3000/api/weekly-summaries?limit=10
 - [x] Build with npm workspaces
 - [x] Separate API, Web, and MCP concerns
 
+### **Phase 3.5 — Agentic Health Layer / Meta-Runner (In Progress 🚀)**
+- [x] New `thor-meta-runner` service with LLM-based query routing
+- [x] Multi-domain support: WORKOUT | NUTRITION | HEALTH_LOG | OVERVIEW
+- [x] Unified `/chat` endpoint for natural language health queries
+- [x] Router service with fallback heuristic classification
+- [x] Domain-specific parsers (workout, meal, health event)
+- [ ] Database schema extensions (meals, health_events tables)
+- [ ] MCP tool extensions (log_meal, log_health_event, get_health_summary)
+- [ ] Web UI integration for meta-runner queries
+- [ ] Documentation updates
+
 ### **Phase 4 — Voice & Dictation (Planned 🎤)**
 - [ ] Add speech-to-text (Web Speech API or Whisper.cpp)
 - [ ] Support real-time dictation input
@@ -312,6 +338,8 @@ Thor Stack is a fully local, privacy-first AI workout companion that integrates 
 
 - **ARCHITECTURE.md** - Complete request flow diagrams and LLM interaction details
 - **CLAUDE.md** - Development guide for working with this codebase
+- **apps/thor-api/README.md** - REST API endpoints and services
+- **apps/thor-meta-runner/README.md** - Meta-runner agentic health coordinator
 - **apps/thor-mcp/README.md** - MCP Server documentation
 - **apps/thor-agent/README.md** - Conversational Agent documentation
 - **pi/README.md** - Raspberry Pi Voice Client deployment guide

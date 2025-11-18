@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Thor AI Chat — Health Assistant</title>
+  <!-- Tailwind (CDN for quick MVP) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white min-h-screen">
+  <div class="max-w-4xl mx-auto h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-black/30 backdrop-blur border-b border-purple-500/20">
+      <div class="px-4 sm:px-6 py-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-3xl font-bold tracking-tight bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+              🤖 Thor AI
+            </h1>
+            <p class="text-xs text-purple-300/60 mt-0.5">Your personal health & fitness coach</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button id="modeBtn" class="px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 text-xs font-medium transition-colors">
+              Mode: Auto
+            </button>
+            <button id="settingsBtn" class="p-2 rounded-lg hover:bg-purple-600/20 transition-colors" title="Settings">
+              ⚙️
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Chat Container -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4" id="chatContainer">
+      <!-- Messages will be inserted here -->
+      <div class="flex justify-center items-center h-full">
+        <div class="text-center">
+          <div class="text-6xl mb-4">🤖</div>
+          <h2 class="text-2xl font-bold mb-2">Welcome to Thor AI</h2>
+          <p class="text-purple-300/60 max-w-sm">
+            Your intelligent health & fitness coach. Ask me about your workouts, nutrition, health, or get an overview of your progress.
+          </p>
+          <div class="mt-6 text-sm text-purple-300/40 space-y-1">
+            <p>💪 "Log floor press 4x8 at 45"</p>
+            <p>🥗 "I had chicken for lunch"</p>
+            <p>❤️ "Had a migraine today"</p>
+            <p>📊 "How am I doing?"</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Input Area -->
+    <div class="bg-black/30 backdrop-blur border-t border-purple-500/20 p-4 sm:p-6">
+      <div class="flex gap-3">
+        <div class="flex-1 relative">
+          <input
+            type="text"
+            id="messageInput"
+            class="w-full px-4 py-3 rounded-lg bg-slate-800 border border-purple-500/30 focus:border-purple-500 focus:outline-none text-white placeholder-purple-300/40 transition-colors"
+            placeholder="Ask me anything... (or type your query)"
+          />
+          <button
+            id="micBtn"
+            class="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg hover:bg-purple-600/20 transition-colors"
+            title="Voice input"
+          >
+            🎤
+          </button>
+        </div>
+        <button
+          id="sendBtn"
+          class="px-6 py-3 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Send
+        </button>
+      </div>
+      <p id="micStatus" class="text-xs text-purple-300/40 mt-2"></p>
+    </div>
+  </div>
+
+  <!-- Mode Selector Modal -->
+  <div id="modeModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center">
+    <div class="bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full mx-4 border border-purple-500/20">
+      <div class="p-6">
+        <h3 class="text-lg font-semibold mb-4">Select Mode</h3>
+        <div class="space-y-2">
+          <button class="mode-option w-full text-left px-4 py-3 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 transition-colors" data-mode="auto">
+            <div class="font-medium">Auto</div>
+            <div class="text-xs text-purple-300/60">Automatically detect what you need</div>
+          </button>
+          <button class="mode-option w-full text-left px-4 py-3 rounded-lg hover:bg-purple-600/20 border border-transparent hover:border-purple-500/30 transition-colors" data-mode="thor">
+            <div class="font-medium">💪 Workouts</div>
+            <div class="text-xs text-purple-300/60">Log exercises and track progress</div>
+          </button>
+          <button class="mode-option w-full text-left px-4 py-3 rounded-lg hover:bg-purple-600/20 border border-transparent hover:border-purple-500/30 transition-colors" data-mode="nutrition">
+            <div class="font-medium">🥗 Nutrition</div>
+            <div class="text-xs text-purple-300/60">Track meals and macros</div>
+          </button>
+          <button class="mode-option w-full text-left px-4 py-3 rounded-lg hover:bg-purple-600/20 border border-transparent hover:border-purple-500/30 transition-colors" data-mode="health">
+            <div class="font-medium">❤️ Health</div>
+            <div class="text-xs text-purple-300/60">Log symptoms and health events</div>
+          </button>
+          <button class="mode-option w-full text-left px-4 py-3 rounded-lg hover:bg-purple-600/20 border border-transparent hover:border-purple-500/30 transition-colors" data-mode="overview">
+            <div class="font-medium">📊 Overview</div>
+            <div class="text-xs text-purple-300/60">Get summary of your progress</div>
+          </button>
+        </div>
+        <button id="modeCloseBtn" class="mt-4 w-full px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+
+  <script>
+    const META_RUNNER_URL = 'http://localhost:3004';
+    const chatContainer = document.getElementById('chatContainer');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const modeBtn = document.getElementById('modeBtn');
+    const modeModal = document.getElementById('modeModal');
+    const micBtn = document.getElementById('micBtn');
+    const micStatus = document.getElementById('micStatus');
+    const toastContainer = document.getElementById('toastContainer');
+
+    let currentMode = 'auto';
+    let isLoading = false;
+
+    // Initialize chat
+    function initChat() {
+      messageInput.focus();
+    }
+
+    // Send message
+    async function sendMessage() {
+      const text = messageInput.value.trim();
+      if (!text || isLoading) return;
+
+      isLoading = true;
+      sendBtn.disabled = true;
+
+      // Show user message
+      addMessage(text, 'user');
+      messageInput.value = '';
+
+      try {
+        const response = await fetch(`${META_RUNNER_URL}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text,
+            mode: currentMode === 'auto' ? undefined : currentMode
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || `Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Show agent response
+        addMessage(data.message, 'assistant', {
+          agent: data.agent,
+          intent: data.intent,
+          actions: data.actions
+        });
+
+        // Show actions as info
+        if (data.actions && data.actions.length > 0) {
+          const actionsText = `Actions: ${data.actions.join(', ')}`;
+          addMessage(actionsText, 'info');
+        }
+      } catch (error) {
+        addMessage(`Error: ${error.message}`, 'error');
+        showToast(`Failed to send message: ${error.message}`, 'error');
+      } finally {
+        isLoading = false;
+        sendBtn.disabled = false;
+        messageInput.focus();
+      }
+    }
+
+    // Add message to chat
+    function addMessage(text, role, metadata = {}) {
+      if (chatContainer.querySelector('.flex.justify-center')) {
+        chatContainer.innerHTML = '';
+      }
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+
+      let bgClass, textClass;
+      if (role === 'user') {
+        bgClass = 'bg-purple-600';
+        textClass = 'text-white';
+      } else if (role === 'error') {
+        bgClass = 'bg-red-600/20 border border-red-500/30';
+        textClass = 'text-red-200';
+      } else if (role === 'info') {
+        bgClass = 'bg-slate-700/50 border border-slate-600/30';
+        textClass = 'text-slate-300';
+      } else {
+        bgClass = 'bg-slate-800 border border-purple-500/20';
+        textClass = 'text-white';
+      }
+
+      const content = document.createElement('div');
+      content.className = `max-w-2xl px-4 py-3 rounded-lg ${bgClass} ${textClass} text-sm`;
+
+      let html = text;
+      if (metadata.agent) {
+        html += `<div class="text-xs opacity-70 mt-2">Agent: ${metadata.agent} | Intent: ${metadata.intent}</div>`;
+      }
+      content.innerHTML = html;
+
+      messageDiv.appendChild(content);
+      chatContainer.appendChild(messageDiv);
+
+      // Scroll to bottom
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    // Show toast notification
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `px-4 py-3 rounded-lg text-sm font-medium ${
+        type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-emerald-600' : 'bg-purple-600'
+      }`;
+      toast.textContent = message;
+      toastContainer.appendChild(toast);
+
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // Event listeners
+    sendBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Mode selector
+    modeBtn.addEventListener('click', () => {
+      modeModal.classList.remove('hidden');
+      modeModal.classList.add('flex');
+    });
+
+    document.getElementById('modeCloseBtn').addEventListener('click', () => {
+      modeModal.classList.add('hidden');
+      modeModal.classList.remove('flex');
+    });
+
+    document.querySelectorAll('.mode-option').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentMode = btn.dataset.mode;
+        const modeLabel = {
+          'auto': 'Auto',
+          'thor': '💪 Workouts',
+          'nutrition': '🥗 Nutrition',
+          'health': '❤️ Health',
+          'overview': '📊 Overview'
+        }[currentMode];
+        modeBtn.textContent = `Mode: ${modeLabel}`;
+        modeModal.classList.add('hidden');
+        modeModal.classList.remove('flex');
+      });
+    });
+
+    // Voice input (placeholder - would need speech recognition API)
+    micBtn.addEventListener('click', () => {
+      showToast('Voice input coming soon!');
+    });
+
+    initChat();
+  </script>
+</body>
+</html>

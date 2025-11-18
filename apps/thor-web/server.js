@@ -11,8 +11,12 @@ const PORT = process.env.PORT || 3001;
 // Serve static files from public directory
 app.use(express.static(join(__dirname, 'public')));
 
-// Fallback to index.html for SPA routing
+// Fallback to index.html for SPA routing (but only for non-file requests)
 app.get('*', (req, res) => {
+  // Don't redirect if the request looks like it's for a specific file
+  if (req.path.includes('.')) {
+    return res.status(404).send('Not found');
+  }
   res.sendFile(join(__dirname, 'public', 'index.html'));
 });
 
