@@ -43,6 +43,9 @@
           <button data-tab="progress" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
             📊 Progress
           </button>
+          <button data-tab="health" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            ❤️ Health
+          </button>
         </div>
       </nav>
     </header>
@@ -246,6 +249,170 @@
               </thead>
               <tbody id="recentTable" class="divide-y divide-neutral-200 dark:divide-neutral-700"></tbody>
             </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- HEALTH TAB -->
+      <div id="tab-health" class="tab-content hidden">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-2xl font-bold">❤️ Health Dashboard</h2>
+          <button id="refreshHealthBtn" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm transition-colors">
+            Refresh
+          </button>
+        </div>
+
+        <!-- Feature 1: Health Entry Form -->
+        <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
+          <h3 class="text-lg font-semibold mb-4">Log Health Event</h3>
+          <form id="healthEventForm" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium mb-2">Date</label>
+                <input id="healthDate" type="date" class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" required />
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-2">Category</label>
+                <select id="healthCategory" class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" required>
+                  <option value="">Choose category...</option>
+                  <option value="migraine">🤕 Migraine</option>
+                  <option value="sleep">😴 Sleep</option>
+                  <option value="yardwork">🌱 Yardwork</option>
+                  <option value="run">🏃 Run</option>
+                  <option value="other">📝 Other</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium mb-2">Intensity (1-10)</label>
+                <div class="flex items-center gap-3">
+                  <input id="healthIntensity" type="range" min="1" max="10" value="5" class="flex-1" />
+                  <span id="intensityValue" class="text-sm font-medium w-8 text-center">5</span>
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-2">Duration (minutes)</label>
+                <input id="healthDuration" type="number" min="0" step="1" placeholder="e.g., 480 for 8 hours sleep" class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium mb-2">Notes</label>
+              <textarea id="healthNotes" rows="3" class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" placeholder="Optional notes about this health event..."></textarea>
+            </div>
+
+            <div class="flex gap-3">
+              <button type="submit" class="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 font-medium transition-colors">
+                Log Event
+              </button>
+              <button type="button" id="clearHealthBtn" class="px-4 py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors">
+                Clear
+              </button>
+            </div>
+          </form>
+          <div id="healthEventResult" class="mt-4 text-sm"></div>
+        </section>
+
+        <!-- Feature 5: Health Summary -->
+        <section class="bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-950/30 dark:to-pink-950/30 rounded-xl border border-rose-200 dark:border-rose-800 p-6 mb-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-rose-900 dark:text-rose-100">Weekly Health Summary</h3>
+            <div class="flex gap-2">
+              <button id="prevWeekBtn" class="px-3 py-1.5 rounded-lg bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 text-sm transition-colors">
+                ← Previous
+              </button>
+              <button id="nextWeekBtn" class="px-3 py-1.5 rounded-lg bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 text-sm transition-colors">
+                Next →
+              </button>
+            </div>
+          </div>
+          <div id="healthSummary">
+            <p class="text-sm text-neutral-500 dark:text-neutral-400">Loading health summary...</p>
+          </div>
+        </section>
+
+        <!-- Feature 2: Health Visualization Charts -->
+        <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold">Health Trends</h3>
+            <select id="healthChartRange" class="px-3 py-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm">
+              <option value="7">Last 7 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4">
+              <h4 class="text-sm font-medium mb-3 text-neutral-700 dark:text-neutral-300">😴 Sleep Hours</h4>
+              <div style="height: 200px;">
+                <canvas id="sleepChart"></canvas>
+              </div>
+            </div>
+            <div class="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4">
+              <h4 class="text-sm font-medium mb-3 text-neutral-700 dark:text-neutral-300">🤕 Migraine Frequency</h4>
+              <div style="height: 200px;">
+                <canvas id="migraineChart"></canvas>
+              </div>
+            </div>
+            <div class="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-4">
+              <h4 class="text-sm font-medium mb-3 text-neutral-700 dark:text-neutral-300">🏃 Activity Duration</h4>
+              <div style="height: 200px;">
+                <canvas id="activityChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Feature 4: Correlations Analysis -->
+        <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
+          <h3 class="text-lg font-semibold mb-4">Workout & Health Correlations</h3>
+          <div id="correlations" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <p class="text-sm text-neutral-500 dark:text-neutral-400 col-span-full">Loading correlations...</p>
+          </div>
+        </section>
+
+        <!-- Feature 3: Calendar View Integration -->
+        <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold">Health Calendar</h3>
+            <div class="flex items-center gap-2">
+              <button id="prevHealthMonthBtn" class="px-2 py-1 rounded bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors text-sm">
+                ←
+              </button>
+              <span id="healthCalendarMonthLabel" class="text-sm font-medium"></span>
+              <button id="nextHealthMonthBtn" class="px-2 py-1 rounded bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors text-sm">
+                →
+              </button>
+            </div>
+          </div>
+          <div id="healthCalendar" class="grid grid-cols-7 gap-2 mb-4 max-w-md mx-auto">
+            <!-- Calendar will be rendered here -->
+          </div>
+          <div class="flex flex-wrap gap-3 text-xs text-neutral-600 dark:text-neutral-400">
+            <div class="flex items-center gap-1">
+              <span class="w-3 h-3 rounded-full bg-red-500"></span>
+              <span>Migraine</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+              <span>Sleep</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="w-3 h-3 rounded-full bg-green-500"></span>
+              <span>Activity</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="w-3 h-3 rounded-full bg-purple-500"></span>
+              <span>Multiple Events</span>
+            </div>
+          </div>
+
+          <!-- Selected Date Health Events -->
+          <div id="selectedDateEvents" class="mt-4 hidden">
+            <h4 class="text-sm font-semibold mb-2">Events on <span id="selectedDateLabel"></span>:</h4>
+            <div id="selectedDateEventsList" class="space-y-2"></div>
           </div>
         </section>
       </div>

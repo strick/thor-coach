@@ -53,6 +53,23 @@
       </div>
     </main>
 
+    <!-- Terminal-Style History Area (always visible) -->
+    <div id="statusArea" class="bg-black/60 border-t border-purple-500/20 px-4 sm:px-6 py-4 flex flex-col max-h-64">
+      <div class="text-xs text-purple-400/80 font-mono mb-2 flex items-center gap-2 justify-between">
+        <div class="flex items-center gap-2">
+          <span>⚙️</span>
+          <span>Terminal</span>
+        </div>
+        <div class="flex gap-2">
+          <button id="clearTerminalBtn" class="text-xs px-2 py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 transition-colors" title="Clear terminal history">Clear</button>
+          <button id="toggleTerminalBtn" class="text-xs px-2 py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 transition-colors" title="Hide terminal">Hide</button>
+        </div>
+      </div>
+      <div id="terminalLog" class="flex-1 overflow-y-auto text-xs font-mono text-green-400/80 space-y-0.5 bg-black/80 rounded px-3 py-2 border border-purple-500/10">
+        <div class="text-purple-400/60">▶ Starting request...</div>
+      </div>
+    </div>
+
     <!-- Input Area -->
     <div class="bg-black/30 backdrop-blur border-t border-purple-500/20 p-4 sm:p-6">
       <div class="flex gap-3">
@@ -120,7 +137,8 @@
   <div id="toastContainer" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
 
   <script>
-    const META_RUNNER_URL = 'http://localhost:3004';
+    // Use current hostname so it works from any device (localhost or LAN IP)
+    const META_RUNNER_URL = `http://${window.location.hostname}:3004`;
     const chatContainer = document.getElementById('chatContainer');
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
@@ -129,19 +147,86 @@
     const micBtn = document.getElementById('micBtn');
     const micStatus = document.getElementById('micStatus');
     const toastContainer = document.getElementById('toastContainer');
+    const statusArea = document.getElementById('statusArea');
+    const terminalLog = document.getElementById('terminalLog');
+    const clearTerminalBtn = document.getElementById('clearTerminalBtn');
+    const toggleTerminalBtn = document.getElementById('toggleTerminalBtn');
 
     let currentMode = 'auto';
     let isLoading = false;
+    let terminalHidden = false;
+    let activeRequest = null;
+
+    // Ensure terminal is always visible on load
+    statusArea.classList.remove('hidden');
+    statusArea.style.display = 'flex';
+
+    // Clear terminal history
+    clearTerminalBtn.addEventListener('click', () => {
+      terminalLog.innerHTML = '<div class="text-purple-400/60">▶ Terminal cleared</div>';
+    });
+
+    // Toggle terminal visibility
+    toggleTerminalBtn.addEventListener('click', () => {
+      terminalHidden = !terminalHidden;
+      if (terminalHidden) {
+        statusArea.classList.add('hidden');
+        toggleTerminalBtn.textContent = 'Show';
+      } else {
+        statusArea.classList.remove('hidden');
+        statusArea.style.display = 'flex';
+        toggleTerminalBtn.textContent = 'Hide';
+      }
+    });
+
+    // Terminal-style logging
+    function addTerminalLine(text, type = 'normal') {
+      const line = document.createElement('div');
+      const timestamp = new Date().toLocaleTimeString();
+      
+      if (type === 'command') {
+        line.textContent = `$ ${text}`;
+        line.className = 'text-cyan-400/80';
+      } else if (type === 'success') {
+        line.textContent = `✓ ${text}`;
+        line.className = 'text-green-400/80';
+      } else if (type === 'info') {
+        line.textContent = `→ ${text}`;
+        line.className = 'text-blue-400/80';
+      } else if (type === 'agent') {
+        line.textContent = `🤖 [${timestamp}] ${text}`;
+        line.className = 'text-purple-400/80 font-semibold';
+      } else if (type === 'error') {
+        line.textContent = `✗ ERROR: ${text}`;
+        line.className = 'text-red-400/80';
+      } else {
+        line.textContent = `[${timestamp}] ${text}`;
+        line.className = 'text-green-400/80';
+      }
+      
+      terminalLog.appendChild(line);
+      terminalLog.scrollTop = terminalLog.scrollHeight;
+    }
+
+    // Show status updates
+    function showStatus(message) {
+      // Terminal is always visible now
+    }
 
     // Initialize chat
     function initChat() {
       messageInput.focus();
     }
 
-    // Send message
+    // Helper to delay for status visibility
+    function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // Send message using SSE
     async function sendMessage() {
       const text = messageInput.value.trim();
-      if (!text || isLoading) return;
+      if (!text || isLoading || activeRequest) return;
 
       isLoading = true;
       sendBtn.disabled = true;
@@ -151,39 +236,100 @@
       messageInput.value = '';
 
       try {
-        const response = await fetch(`${META_RUNNER_URL}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text,
-            mode: currentMode === 'auto' ? undefined : currentMode
-          })
+        // Add separator in terminal
+        const separator = document.createElement('div');
+        separator.className = 'text-purple-500/40 my-1';
+        separator.textContent = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+        terminalLog.appendChild(separator);
+
+        // Log to terminal
+        addTerminalLine(`Sending query: "${text}"`, 'command');
+        showStatus('Processing...');
+
+        // Build SSE URL with query params
+        const params = new URLSearchParams({
+          text,
+          ...(currentMode !== 'auto' && { mode: currentMode })
+        });
+        const sseUrl = `${META_RUNNER_URL}/chat/stream?${params.toString()}`;
+
+        // Open SSE connection
+        const eventSource = new EventSource(sseUrl);
+        activeRequest = eventSource;
+
+        eventSource.addEventListener('message', (event) => {
+          try {
+            const parsed = JSON.parse(event.data);
+
+            if (parsed.type === 'status') {
+              // Log history entries from server
+              if (parsed.history && parsed.history.length > 0) {
+                // Get the latest entry
+                const latestEntry = parsed.history[parsed.history.length - 1];
+                
+                // Determine log type based on step
+                let logType = 'info';
+                if (latestEntry.step === 'Received') logType = 'command';
+                else if (latestEntry.step === 'Agent') logType = 'agent';
+                else if (latestEntry.step === 'Complete') logType = 'success';
+                
+                addTerminalLine(`${latestEntry.step}: ${latestEntry.detail}`, logType);
+              }
+            } else if (parsed.type === 'progress') {
+              // Show progress bar during agent execution
+              addTerminalLine(parsed.message, 'info');
+            } else if (parsed.type === 'response') {
+              // Final response received
+              const data = parsed.data;
+              
+              addTerminalLine(`Agent: ${data.agent.toUpperCase()} | Intent: ${data.intent}`, 'agent');
+              if (data.actions && data.actions.length > 0) {
+                addTerminalLine(`Actions: ${data.actions.join(', ')}`, 'success');
+              }
+              addTerminalLine('✓ Request completed successfully', 'success');
+              
+              // Show agent response
+              addMessage(data.message, 'assistant', {
+                agent: data.agent,
+                intent: data.intent,
+                actions: data.actions
+              });
+
+              // Show actions as info
+              if (data.actions && data.actions.length > 0) {
+                const actionsText = `Actions: ${data.actions.join(', ')}`;
+                addMessage(actionsText, 'info');
+              }
+
+              activeRequest = null;
+              eventSource.close();
+            } else if (parsed.type === 'error') {
+              addTerminalLine(parsed.message, 'error');
+              addMessage(`Error: ${parsed.message}`, 'error');
+              showToast(`Failed: ${parsed.message}`, 'error');
+              activeRequest = null;
+              eventSource.close();
+            }
+          } catch (err) {
+            console.error('Failed to parse SSE event:', err);
+          }
         });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || `Server error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        // Show agent response
-        addMessage(data.message, 'assistant', {
-          agent: data.agent,
-          intent: data.intent,
-          actions: data.actions
+        eventSource.addEventListener('error', (error) => {
+          addTerminalLine('Connection error during request', 'error');
+          console.error('SSE error:', error);
+          addMessage('Connection error while processing request', 'error');
+          showToast('Connection error', 'error');
+          activeRequest = null;
+          eventSource.close();
         });
-
-        // Show actions as info
-        if (data.actions && data.actions.length > 0) {
-          const actionsText = `Actions: ${data.actions.join(', ')}`;
-          addMessage(actionsText, 'info');
-        }
       } catch (error) {
+        addTerminalLine(error.message, 'error');
         addMessage(`Error: ${error.message}`, 'error');
         showToast(`Failed to send message: ${error.message}`, 'error');
       } finally {
         isLoading = false;
+        activeRequest = null;
         sendBtn.disabled = false;
         messageInput.focus();
       }

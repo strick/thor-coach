@@ -16,7 +16,7 @@ services:
       # LLM Configuration (choose one)
       - USE_OLLAMA=${USE_OLLAMA:-true}
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.3:latest}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
     volumes:
@@ -60,13 +60,13 @@ services:
     restart: unless-stopped
 
   # ==================================
-  # Thor MCP - Model Context Protocol Server
+  # Unified MCP - All Tools (workout + health)
   # ==================================
-  thor-mcp:
+  health-mcp:
     build:
       context: .
-      dockerfile: apps/thor-mcp/Dockerfile
-    container_name: thor-mcp
+      dockerfile: mcp/health/Dockerfile
+    container_name: health-mcp
     ports:
       - "3003:3003"
     environment:
@@ -94,7 +94,7 @@ services:
   thor-meta-runner:
     build:
       context: .
-      dockerfile: apps/thor-meta-runner/Dockerfile
+      dockerfile: agents/thor-meta-runner/Dockerfile
     container_name: thor-meta-runner
     ports:
       - "3004:3001"
@@ -103,16 +103,21 @@ services:
       - NODE_ENV=production
       - THOR_API_URL=http://thor-api:3000
       - THOR_AGENT_URL=http://thor-agent:3002
+      - HEALTH_AGENT_URL=http://health-agent:3006
       # LLM Configuration (shared with other services)
       - USE_OLLAMA=${USE_OLLAMA:-true}
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.3:latest}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
     networks:
       - thor-network
     depends_on:
       thor-api:
+        condition: service_healthy
+      thor-agent:
+        condition: service_healthy
+      health-agent:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
@@ -123,13 +128,13 @@ services:
     restart: unless-stopped
 
   # ==================================
-  # Thor Agent - Conversational AI
-  # Connects to MCP server via HTTP
+  # Thor Agent - Workout Conversational AI
+  # Connects to thor-mcp server via HTTP
   # ==================================
   thor-agent:
     build:
       context: .
-      dockerfile: apps/thor-agent/Dockerfile
+      dockerfile: agents/thor/Dockerfile
     container_name: thor-agent
     ports:
       - "3002:3002"
@@ -138,21 +143,58 @@ services:
       - NODE_ENV=production
       - TZ=America/New_York
       - THOR_API_URL=http://thor-api:3000
-      - MCP_SERVER_URL=http://thor-mcp:3003
+      - MCP_SERVER_URL=http://health-mcp:3003
       # LLM Configuration for agent
       - USE_OLLAMA=${USE_OLLAMA:-true}
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.3:latest}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     networks:
       - thor-network
     depends_on:
       thor-api:
         condition: service_healthy
-      thor-mcp:
+      health-mcp:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3002/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==================================
+  # Health Agent - Health Events Conversational AI
+  # Connects to health-mcp server via HTTP
+  # ==================================
+  health-agent:
+    build:
+      context: .
+      dockerfile: agents/health/Dockerfile
+    container_name: health-agent
+    ports:
+      - "3006:3006"
+    environment:
+      - PORT=3006
+      - NODE_ENV=production
+      - TZ=America/New_York
+      - THOR_API_URL=http://thor-api:3000
+      - MCP_SERVER_URL=http://health-mcp:3003
+      # LLM Configuration for agent
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.3:latest}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    networks:
+      - thor-network
+    depends_on:
+      thor-api:
+        condition: service_healthy
+      health-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3006/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 3s
       retries: 3

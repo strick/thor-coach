@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Thor — Health Dashboard</title>
+  <link rel="stylesheet" href="/css/health.css" />
+ </head>
+<body>
+  <main class="container">
+    <h1>Health Dashboard</h1>
+
+    <section class="card">
+      <h2>Log a Health Event</h2>
+      <form id="health-form">
+        <label>Date: <input type="date" id="event-date" required /></label>
+        <label>Category:
+          <select id="category" required>
+            <option value="sleep">sleep</option>
+            <option value="migraine">migraine</option>
+            <option value="run">run</option>
+            <option value="yardwork">yardwork</option>
+            <option value="other">other</option>
+          </select>
+        </label>
+        <label>Intensity (1-10): <input type="number" id="intensity" min="1" max="10" /></label>
+        <label>Duration (minutes): <input type="number" id="duration" min="1" /></label>
+        <label>Notes:<textarea id="notes"></textarea></label>
+        <div class="actions">
+          <button type="submit">Log Event</button>
+          <button type="button" id="refresh">Refresh</button>
+        </div>
+      </form>
+      <div id="form-msg" class="muted"></div>
+    </section>
+
+    <section class="card">
+      <h2>Recent Events</h2>
+      <div id="events-count" class="muted"></div>
+      <canvas id="sparkline" width="600" height="80"></canvas>
+      <ul id="events-list" class="events"></ul>
+    </section>
+  </main>
+
+  <script src="/js/health.js"></script>
+</body>
+</html>

@@ -6,22 +6,28 @@
   "type": "module",
   "workspaces": [
     "apps/*",
+    "agents/*",
+    "mcp/*",
     "packages/*"
   ],
   "scripts": {
     "dev:api": "npm run dev --workspace=thor-api",
     "dev:web": "npm run start --workspace=thor-web",
-    "dev:agent": "npm run dev --workspace=thor-agent",
-    "dev:mcp": "npm run start --workspace=thor-mcp",
+    "dev:thor-agent": "npm run dev --workspace=thor-agent",
+    "dev:health-agent": "npm run dev --workspace=health-agent",
+    "dev:thor-mcp": "npm run start --workspace=thor-mcp",
+    "dev:health-mcp": "npm run start --workspace=health-mcp",
     "build": "npm run build --workspaces --if-present",
     "build:api": "npm run build --workspace=thor-api",
     "build:web": "npm run build --workspace=thor-web --if-present",
-    "build:agent": "npm run build --workspace=thor-agent --if-present",
-    "build:mcp": "npm run build --workspace=thor-mcp --if-present",
+    "build:thor-agent": "npm run build --workspace=thor-agent --if-present",
+    "build:health-agent": "npm run build --workspace=health-agent --if-present",
+    "build:thor-mcp": "npm run build --workspace=thor-mcp --if-present",
+    "build:health-mcp": "npm run build --workspace=health-mcp --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:api": "npm run test --workspace=thor-api",
     "test:watch": "npm run test:watch --workspaces --if-present",
-    "clean": "rm -rf apps/*/dist apps/*/node_modules packages/*/dist packages/*/node_modules node_modules"
+    "clean": "rm -rf apps/*/dist apps/*/node_modules agents/*/dist agents/*/node_modules mcp/*/dist mcp/*/node_modules packages/*/dist packages/*/node_modules node_modules"
   },
   "engines": {
     "node": ">=22.0.0",

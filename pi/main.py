@@ -260,8 +260,8 @@ def main():
     # Agent configuration
     parser.add_argument(
         "--agent-url",
-        default=os.getenv("THOR_AGENT_URL", "http://localhost:3002"),
-        help="Thor agent URL (default: http://localhost:3002)"
+        default=os.getenv("META_RUNNER_URL", "http://localhost:3001"),
+        help="Meta-runner URL (default: http://localhost:3001)"
     )
 
     # STT configuration

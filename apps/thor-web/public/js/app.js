@@ -193,7 +193,8 @@ function saveStoredCfg(obj) {
 
 // Default API base: port 3000 for separate API server (if not stored)
 const stored = loadStoredCfg();
-const defaultApi = stored.apiBase || "http://localhost:3000";
+// Use current hostname so it works from any device (localhost or LAN IP)
+const defaultApi = stored.apiBase || `http://${window.location.hostname}:3000`;
 
 // Show active backend status
 function setCfgPill(state, detail) {
@@ -875,7 +876,8 @@ probeBackend();
 
   // Load and display today's workouts in the Today tab
   async function loadTodaysWorkouts() {
-    const date = todayISO();
+    // Use the selected date from the Today tab's date input
+    const date = $("dateInput").value || todayISO();
 
     try {
       const res = await fetch(`${apiBase()}/workouts?date=${date}`);
@@ -884,7 +886,7 @@ probeBackend();
       const data = await res.json();
       renderTodaysWorkouts(data.workouts || []);
     } catch (e) {
-      console.error('Failed to load today\'s workouts:', e);
+      console.error('Failed to load workouts for selected date:', e);
       $("todaysWorkoutsSection").classList.add('hidden');
     }
   }
@@ -1688,12 +1690,16 @@ probeBackend();
 
   // ======= Date Navigation =======
   function changeDate(days) {
-    const currentDate = new Date($("dateInput").value);
+    // Parse date string in local timezone to avoid UTC offset issues
+    const dateStr = $("dateInput").value;
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const currentDate = new Date(year, month - 1, day); // month is 0-indexed
+
     currentDate.setDate(currentDate.getDate() + days);
-    $("dateInput").value = toLocalDateString(currentDate);
-    loadWorkoutsByDate();
-    fetchDay();  // Update Today's Plan list
-    loadTodaysWorkouts();  // Update today's workouts if applicable
+    const newValue = toLocalDateString(currentDate);
+    $("dateInput").value = newValue;
+    // Manually trigger change event (programmatic value changes don't auto-trigger)
+    $("dateInput").dispatchEvent(new Event('change'));
   }
 
   function setToday() {
@@ -1738,6 +1744,12 @@ probeBackend();
       }
       // Set default date for workout management
       $("mgmtDateInput").value = todayISO();
+    } else if (tabName === 'health') {
+      // Initialize health dashboard on first visit
+      if (!healthCalendarInitialized) {
+        loadHealthDashboard();
+        healthCalendarInitialized = true;
+      }
     }
   }
 
@@ -1904,13 +1916,663 @@ OLLAMA_MODEL=llama3.1:8b
   $("prevDayBtn").addEventListener('click', () => changeDate(-1));
   $("nextDayBtn").addEventListener('click', () => changeDate(1));
   $("dateInput").addEventListener('change', () => {
-    loadWorkoutsByDate();
     fetchDay();  // Update Today's Plan list
-    loadTodaysWorkouts();  // Update today's workouts
+    loadTodaysWorkouts();  // Update selected date's workouts
   });
 
   // Export button
   $("exportDataBtn").addEventListener('click', exportData);
+
+  // ======= Health Dashboard =======
+  let sleepChartInstance = null;
+  let migraineChartInstance = null;
+  let activityChartInstance = null;
+  let currentHealthMonth = new Date();
+  let currentHealthWeek = new Date();
+  let healthEventsCache = [];
+  let healthCalendarInitialized = false;
+
+  // Feature 1: Submit Health Event
+  async function submitHealthEvent(e) {
+    if (e) e.preventDefault();
+
+    const date = $("healthDate").value;
+    const category = $("healthCategory").value;
+    const intensity = parseInt($("healthIntensity").value);
+    const duration = $("healthDuration").value ? parseInt($("healthDuration").value) : null;
+    const notes = $("healthNotes").value.trim();
+
+    if (!date || !category) {
+      showToast('Please fill in all required fields', 'warning');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${apiBase()}/health-events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, category, intensity, duration, notes })
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || 'Failed to log health event');
+      }
+
+      const data = await res.json();
+      showToast('Health event logged successfully!', 'success');
+
+      // Clear form
+      $("healthEventForm").reset();
+      $("healthDate").value = todayISO();
+      $("intensityValue").textContent = '5';
+
+      // Refresh dashboard
+      loadHealthDashboard();
+    } catch (e) {
+      console.error('Failed to submit health event:', e);
+      showToast('Failed to log health event: ' + e.message, 'error');
+    }
+  }
+
+  // Feature 2: Load Health Charts
+  async function loadHealthCharts(days = 30) {
+    const to = todayISO();
+    const fromDate = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000);
+    const from = toLocalDateString(fromDate);
+
+    try {
+      const res = await fetch(`${apiBase()}/health-events?from=${from}&to=${to}`);
+      if (!res.ok) throw new Error('Failed to load health events');
+
+      const data = await res.json();
+      const events = data.events || [];
+
+      // Group events by date and category
+      const dateMap = {};
+      for (let i = 0; i < days; i++) {
+        const d = new Date(fromDate);
+        d.setDate(d.getDate() + i);
+        const dateStr = toLocalDateString(d);
+        dateMap[dateStr] = { sleep: 0, migraine: 0, activity: 0 };
+      }
+
+      events.forEach(event => {
+        if (dateMap[event.date]) {
+          if (event.category === 'sleep' && event.duration) {
+            dateMap[event.date].sleep = event.duration / 60; // Convert to hours
+          } else if (event.category === 'migraine') {
+            dateMap[event.date].migraine += 1;
+          } else if (['yardwork', 'run'].includes(event.category) && event.duration) {
+            dateMap[event.date].activity += event.duration;
+          }
+        }
+      });
+
+      const dates = Object.keys(dateMap).sort();
+      const sleepData = dates.map(d => dateMap[d].sleep);
+      const migraineData = dates.map(d => dateMap[d].migraine);
+      const activityData = dates.map(d => dateMap[d].activity);
+
+      // Sleep Chart
+      const sleepCtx = $("sleepChart");
+      if (sleepChartInstance) sleepChartInstance.destroy();
+      sleepChartInstance = new Chart(sleepCtx, {
+        type: 'line',
+        data: {
+          labels: dates.map(d => d.slice(5)), // MM-DD format
+          datasets: [{
+            label: 'Hours',
+            data: sleepData,
+            borderColor: 'rgb(59, 130, 246)',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 1 } } }
+        }
+      });
+
+      // Migraine Chart (weekly bars)
+      const weeks = {};
+      dates.forEach((date, idx) => {
+        const weekStart = getWeekStart(new Date(date));
+        const weekKey = toLocalDateString(weekStart);
+        if (!weeks[weekKey]) weeks[weekKey] = 0;
+        weeks[weekKey] += migraineData[idx];
+      });
+
+      const weekLabels = Object.keys(weeks).sort();
+      const weekValues = weekLabels.map(w => weeks[w]);
+
+      const migraineCtx = $("migraineChart");
+      if (migraineChartInstance) migraineChartInstance.destroy();
+      migraineChartInstance = new Chart(migraineCtx, {
+        type: 'bar',
+        data: {
+          labels: weekLabels.map(w => w.slice(5)), // MM-DD format
+          datasets: [{
+            label: 'Count',
+            data: weekValues,
+            backgroundColor: 'rgba(239, 68, 68, 0.6)',
+            borderColor: 'rgb(239, 68, 68)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+        }
+      });
+
+      // Activity Chart (stacked bar)
+      const activityCtx = $("activityChart");
+      if (activityChartInstance) activityChartInstance.destroy();
+      activityChartInstance = new Chart(activityCtx, {
+        type: 'bar',
+        data: {
+          labels: dates.map(d => d.slice(5)), // MM-DD format
+          datasets: [{
+            label: 'Minutes',
+            data: activityData,
+            backgroundColor: 'rgba(34, 197, 94, 0.6)',
+            borderColor: 'rgb(34, 197, 94)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, stacked: true } }
+        }
+      });
+
+    } catch (e) {
+      console.error('Failed to load health charts:', e);
+      showToast('Failed to load health charts', 'error');
+    }
+  }
+
+  // Feature 3: Health Calendar
+  function getWeekStart(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day; // Sunday as start of week
+    return new Date(d.setDate(diff));
+  }
+
+  async function loadHealthCalendar(month, year) {
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    const fromDate = toLocalDateString(firstDay);
+    const toDate = toLocalDateString(lastDay);
+
+    try {
+      const res = await fetch(`${apiBase()}/health-events?from=${fromDate}&to=${toDate}`);
+      if (!res.ok) throw new Error('Failed to load health events');
+
+      const data = await res.json();
+      healthEventsCache = data.events || [];
+
+      renderHealthCalendar(month, year);
+    } catch (e) {
+      console.error('Failed to load health calendar:', e);
+    }
+  }
+
+  function renderHealthCalendar(month, year) {
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    $("healthCalendarMonthLabel").textContent = `${monthNames[month]} ${year}`;
+
+    const calendarGrid = $("healthCalendar");
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    let calendarHTML = '';
+
+    // Day headers
+    const dayHeaders = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    dayHeaders.forEach(day => {
+      calendarHTML += `<div class="text-center text-xs font-medium text-neutral-500 dark:text-neutral-400 pb-1">${day}</div>`;
+    });
+
+    // Empty cells before first day
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      calendarHTML += '<div class="h-12 w-full"></div>';
+    }
+
+    const today = new Date();
+    const todayStr = toLocalDateString(today);
+
+    // Calendar days
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      const dateStr = toLocalDateString(date);
+      const dayEvents = healthEventsCache.filter(e => e.date === dateStr);
+      const isToday = dateStr === todayStr;
+
+      // Determine dot color based on events
+      let dotColor = 'bg-neutral-300 dark:bg-neutral-700';
+      let bgClass = 'bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-800';
+
+      if (dayEvents.length > 1) {
+        dotColor = 'bg-purple-500';
+        bgClass = 'bg-purple-50 dark:bg-purple-950/30 hover:bg-purple-100 dark:hover:bg-purple-950/50';
+      } else if (dayEvents.length === 1) {
+        const category = dayEvents[0].category;
+        if (category === 'migraine') {
+          dotColor = 'bg-red-500';
+          bgClass = 'bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50';
+        } else if (category === 'sleep') {
+          dotColor = 'bg-blue-500';
+          bgClass = 'bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-950/50';
+        } else if (['yardwork', 'run'].includes(category)) {
+          dotColor = 'bg-green-500';
+          bgClass = 'bg-green-50 dark:bg-green-950/30 hover:bg-green-100 dark:hover:bg-green-950/50';
+        }
+      }
+
+      const borderClass = isToday ? 'ring-1 ring-indigo-500' : '';
+
+      calendarHTML += `
+        <button
+          onclick="showHealthEventsForDate('${dateStr}')"
+          class="h-12 w-full rounded ${bgClass} ${borderClass} transition-all flex flex-col items-center justify-center cursor-pointer text-xs"
+          title="${dateStr}${dayEvents.length > 0 ? ' - ' + dayEvents.length + ' event(s)' : ''}"
+        >
+          <span class="font-medium text-neutral-700 dark:text-neutral-300">${day}</span>
+          <span class="w-2 h-2 rounded-full ${dotColor} mt-0.5"></span>
+        </button>
+      `;
+    }
+
+    calendarGrid.innerHTML = calendarHTML;
+  }
+
+  async function showHealthEventsForDate(dateStr) {
+    const events = healthEventsCache.filter(e => e.date === dateStr);
+
+    if (events.length === 0) {
+      $("selectedDateEvents").classList.add('hidden');
+      showToast(`No health events on ${dateStr}`, 'info');
+      return;
+    }
+
+    $("selectedDateLabel").textContent = dateStr;
+    $("selectedDateEvents").classList.remove('hidden');
+
+    const categoryEmojis = {
+      migraine: '🤕',
+      sleep: '😴',
+      yardwork: '🌱',
+      run: '🏃',
+      other: '📝'
+    };
+
+    $("selectedDateEventsList").innerHTML = events.map(event => `
+      <div class="bg-neutral-50 dark:bg-neutral-900 rounded-lg p-3 flex items-start justify-between">
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-lg">${categoryEmojis[event.category] || '📝'}</span>
+            <span class="font-medium text-sm">${event.category.charAt(0).toUpperCase() + event.category.slice(1)}</span>
+          </div>
+          <div class="text-xs text-neutral-600 dark:text-neutral-400">
+            Intensity: ${event.intensity}/10
+            ${event.duration ? ` • Duration: ${event.duration} min` : ''}
+          </div>
+          ${event.notes ? `<div class="text-xs text-neutral-500 dark:text-neutral-400 italic mt-1">${event.notes}</div>` : ''}
+        </div>
+        <button onclick="deleteHealthEvent('${event.id}')" class="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-xs">
+          Delete
+        </button>
+      </div>
+    `).join('');
+  }
+
+  async function deleteHealthEvent(eventId) {
+    const confirmed = await showConfirm({
+      title: 'Delete Health Event?',
+      message: 'This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger',
+      icon: '🗑️'
+    });
+
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`${apiBase()}/health-events/${eventId}`, {
+        method: 'DELETE'
+      });
+
+      if (!res.ok) throw new Error('Failed to delete');
+
+      showToast('Health event deleted!', 'success');
+      loadHealthDashboard();
+    } catch (e) {
+      console.error('Failed to delete health event:', e);
+      showToast('Failed to delete health event', 'error');
+    }
+  }
+
+  async function changeHealthMonth(offset) {
+    currentHealthMonth = new Date(
+      currentHealthMonth.getFullYear(),
+      currentHealthMonth.getMonth() + offset,
+      1
+    );
+
+    await loadHealthCalendar(
+      currentHealthMonth.getMonth(),
+      currentHealthMonth.getFullYear()
+    );
+  }
+
+  // Feature 4: Calculate Correlations
+  async function calculateCorrelations() {
+    const to = todayISO();
+    const from = new Date(Date.now() - 89 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    try {
+      const [healthRes, workoutRes] = await Promise.all([
+        fetch(`${apiBase()}/health-events?from=${from}&to=${to}`),
+        fetch(`${apiBase()}/progress/summary?from=${from}&to=${to}`)
+      ]);
+
+      if (!healthRes.ok || !workoutRes.ok) throw new Error('Failed to load data');
+
+      const healthData = await healthRes.json();
+      const workoutData = await workoutRes.json();
+
+      const healthEvents = healthData.events || [];
+      const workoutSessions = workoutData.sessions || [];
+
+      // Group by week
+      const weeks = {};
+
+      // Process workouts
+      workoutSessions.forEach(session => {
+        const weekStart = getWeekStart(new Date(session.session_date));
+        const weekKey = toLocalDateString(weekStart);
+        if (!weeks[weekKey]) weeks[weekKey] = { workouts: 0, migraines: 0, sleepHours: 0, sleepCount: 0 };
+        weeks[weekKey].workouts += 1;
+      });
+
+      // Process health events
+      healthEvents.forEach(event => {
+        const weekStart = getWeekStart(new Date(event.date));
+        const weekKey = toLocalDateString(weekStart);
+        if (!weeks[weekKey]) weeks[weekKey] = { workouts: 0, migraines: 0, sleepHours: 0, sleepCount: 0 };
+
+        if (event.category === 'migraine') {
+          weeks[weekKey].migraines += 1;
+        } else if (event.category === 'sleep' && event.duration) {
+          weeks[weekKey].sleepHours += event.duration / 60;
+          weeks[weekKey].sleepCount += 1;
+        }
+      });
+
+      // Calculate correlations
+      const weeksWithWorkouts = Object.values(weeks).filter(w => w.workouts >= 3);
+      const weeksWithoutWorkouts = Object.values(weeks).filter(w => w.workouts < 3);
+
+      const avgMigrainesWithWorkouts = weeksWithWorkouts.length > 0
+        ? weeksWithWorkouts.reduce((sum, w) => sum + w.migraines, 0) / weeksWithWorkouts.length
+        : 0;
+
+      const avgMigrainesWithoutWorkouts = weeksWithoutWorkouts.length > 0
+        ? weeksWithoutWorkouts.reduce((sum, w) => sum + w.migraines, 0) / weeksWithoutWorkouts.length
+        : 0;
+
+      const migraineReduction = avgMigrainesWithoutWorkouts > 0
+        ? ((avgMigrainesWithoutWorkouts - avgMigrainesWithWorkouts) / avgMigrainesWithoutWorkouts * 100)
+        : 0;
+
+      // Calculate average sleep on workout days vs rest days
+      const workoutDates = new Set(workoutSessions.map(s => s.session_date));
+      const sleepOnWorkoutDays = healthEvents.filter(e =>
+        e.category === 'sleep' && workoutDates.has(e.date) && e.duration
+      );
+      const sleepOnRestDays = healthEvents.filter(e =>
+        e.category === 'sleep' && !workoutDates.has(e.date) && e.duration
+      );
+
+      const avgSleepWorkoutDays = sleepOnWorkoutDays.length > 0
+        ? sleepOnWorkoutDays.reduce((sum, e) => sum + e.duration, 0) / sleepOnWorkoutDays.length / 60
+        : 0;
+
+      const avgSleepRestDays = sleepOnRestDays.length > 0
+        ? sleepOnRestDays.reduce((sum, e) => sum + e.duration, 0) / sleepOnRestDays.length / 60
+        : 0;
+
+      // Render correlations
+      const correlationsHTML = [];
+
+      if (weeksWithWorkouts.length > 0 && avgMigrainesWithoutWorkouts > 0) {
+        correlationsHTML.push(`
+          <div class="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800">
+            <div class="text-2xl mb-2">📉</div>
+            <div class="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Migraine Reduction</div>
+            <div class="text-xs text-neutral-600 dark:text-neutral-400">
+              Weeks with 3+ workouts: ${migraineReduction.toFixed(0)}% fewer migraines
+            </div>
+          </div>
+        `);
+      }
+
+      if (sleepOnWorkoutDays.length > 0 && sleepOnRestDays.length > 0) {
+        const sleepDiff = avgSleepWorkoutDays - avgSleepRestDays;
+        const sleepColor = sleepDiff > 0 ? 'from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-200 dark:border-blue-800' : 'from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30 border-amber-200 dark:border-amber-800';
+        correlationsHTML.push(`
+          <div class="bg-gradient-to-br ${sleepColor} rounded-lg p-4 border">
+            <div class="text-2xl mb-2">😴</div>
+            <div class="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Sleep Quality</div>
+            <div class="text-xs text-neutral-600 dark:text-neutral-400">
+              Avg sleep on workout days: ${avgSleepWorkoutDays.toFixed(1)}h vs ${avgSleepRestDays.toFixed(1)}h on rest days
+            </div>
+          </div>
+        `);
+      }
+
+      if (weeksWithWorkouts.length > 0) {
+        const avgWorkoutsPerWeek = weeksWithWorkouts.reduce((sum, w) => sum + w.workouts, 0) / weeksWithWorkouts.length;
+        correlationsHTML.push(`
+          <div class="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 rounded-lg p-4 border border-purple-200 dark:border-purple-800">
+            <div class="text-2xl mb-2">💪</div>
+            <div class="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Consistency</div>
+            <div class="text-xs text-neutral-600 dark:text-neutral-400">
+              Average ${avgWorkoutsPerWeek.toFixed(1)} workouts per week
+            </div>
+          </div>
+        `);
+      }
+
+      if (correlationsHTML.length === 0) {
+        correlationsHTML.push(`
+          <div class="col-span-full text-center py-6">
+            <p class="text-sm text-neutral-500 dark:text-neutral-400">Not enough data yet to calculate correlations</p>
+            <p class="text-xs text-neutral-400 dark:text-neutral-500 mt-1">Keep logging workouts and health events!</p>
+          </div>
+        `);
+      }
+
+      $("correlations").innerHTML = correlationsHTML.join('');
+
+    } catch (e) {
+      console.error('Failed to calculate correlations:', e);
+      $("correlations").innerHTML = '<p class="text-sm text-red-600 dark:text-red-400 col-span-full">Failed to load correlations</p>';
+    }
+  }
+
+  // Feature 5: Load Health Summary
+  async function loadHealthSummary(weekStart) {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+
+    const from = toLocalDateString(weekStart);
+    const to = toLocalDateString(weekEnd);
+
+    try {
+      const res = await fetch(`${apiBase()}/health-events?from=${from}&to=${to}`);
+      if (!res.ok) throw new Error('Failed to load health events');
+
+      const data = await res.json();
+      const events = data.events || [];
+
+      // Calculate weekly stats
+      const sleepEvents = events.filter(e => e.category === 'sleep');
+      const totalSleepHours = sleepEvents.reduce((sum, e) => sum + (e.duration || 0), 0) / 60;
+      const migraineCount = events.filter(e => e.category === 'migraine').length;
+      const activityEvents = events.filter(e => ['yardwork', 'run'].includes(e.category));
+      const totalActivityMinutes = activityEvents.reduce((sum, e) => sum + (e.duration || 0), 0);
+
+      // Compare with previous week
+      const prevWeekStart = new Date(weekStart);
+      prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+      const prevWeekEnd = new Date(prevWeekStart);
+      prevWeekEnd.setDate(prevWeekEnd.getDate() + 6);
+
+      const prevRes = await fetch(`${apiBase()}/health-events?from=${toLocalDateString(prevWeekStart)}&to=${toLocalDateString(prevWeekEnd)}`);
+      let prevWeekData = { events: [] };
+      if (prevRes.ok) {
+        prevWeekData = await prevRes.json();
+      }
+
+      const prevSleepHours = prevWeekData.events.filter(e => e.category === 'sleep').reduce((sum, e) => sum + (e.duration || 0), 0) / 60;
+      const prevMigraines = prevWeekData.events.filter(e => e.category === 'migraine').length;
+
+      const sleepChange = prevSleepHours > 0 ? ((totalSleepHours - prevSleepHours) / prevSleepHours * 100) : 0;
+      const migraineChange = prevMigraines > 0 ? ((migraineCount - prevMigraines) / prevMigraines * 100) : 0;
+
+      const sleepIcon = sleepChange > 0 ? '📈' : sleepChange < 0 ? '📉' : '➡️';
+      const migraineIcon = migraineChange < 0 ? '📈' : migraineChange > 0 ? '📉' : '➡️';
+
+      $("healthSummary").innerHTML = `
+        <div class="bg-white dark:bg-neutral-800 rounded-xl p-4 shadow-sm border border-neutral-200 dark:border-neutral-700">
+          <div class="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide mb-2">
+            Week of ${from} → ${to}
+          </div>
+
+          <div class="grid grid-cols-3 gap-3 mb-4">
+            <div class="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3">
+              <div class="text-2xl font-bold text-blue-900 dark:text-blue-100">${totalSleepHours.toFixed(1)}h</div>
+              <div class="text-xs text-blue-700 dark:text-blue-300 mt-1">Total Sleep</div>
+              <div class="text-xs text-neutral-600 dark:text-neutral-400 mt-1">${sleepIcon} ${sleepChange !== 0 ? (sleepChange > 0 ? '+' : '') + sleepChange.toFixed(1) + '%' : 'No change'}</div>
+            </div>
+            <div class="bg-red-50 dark:bg-red-950/30 rounded-lg p-3">
+              <div class="text-2xl font-bold text-red-900 dark:text-red-100">${migraineCount}</div>
+              <div class="text-xs text-red-700 dark:text-red-300 mt-1">Migraines</div>
+              <div class="text-xs text-neutral-600 dark:text-neutral-400 mt-1">${migraineIcon} ${migraineChange !== 0 ? (migraineChange > 0 ? '+' : '') + migraineChange.toFixed(0) + '%' : 'No change'}</div>
+            </div>
+            <div class="bg-green-50 dark:bg-green-950/30 rounded-lg p-3">
+              <div class="text-2xl font-bold text-green-900 dark:text-green-100">${totalActivityMinutes}</div>
+              <div class="text-xs text-green-700 dark:text-green-300 mt-1">Activity (min)</div>
+            </div>
+          </div>
+
+          ${events.length > 0 ? `
+            <div class="bg-neutral-50 dark:bg-neutral-900/50 rounded-lg p-3">
+              <div class="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Recent Events:</div>
+              <div class="space-y-1">
+                ${events.slice(0, 3).map(e => `
+                  <div class="text-xs text-neutral-700 dark:text-neutral-300">
+                    ${e.date}: ${e.category} (intensity: ${e.intensity}/10)
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : '<p class="text-xs text-neutral-500 dark:text-neutral-400">No events logged this week</p>'}
+        </div>
+      `;
+
+    } catch (e) {
+      console.error('Failed to load health summary:', e);
+      $("healthSummary").innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">Failed to load health summary</p>';
+    }
+  }
+
+  function changeHealthWeek(offset) {
+    currentHealthWeek = new Date(currentHealthWeek);
+    currentHealthWeek.setDate(currentHealthWeek.getDate() + (offset * 7));
+    const weekStart = getWeekStart(currentHealthWeek);
+    loadHealthSummary(weekStart);
+  }
+
+  // Main dashboard loader
+  async function loadHealthDashboard() {
+    const weekStart = getWeekStart(currentHealthWeek);
+    await Promise.all([
+      loadHealthSummary(weekStart),
+      loadHealthCharts(parseInt($("healthChartRange").value || 30)),
+      loadHealthCalendar(currentHealthMonth.getMonth(), currentHealthMonth.getFullYear()),
+      calculateCorrelations()
+    ]);
+  }
+
+  // Make functions globally available
+  window.showHealthEventsForDate = showHealthEventsForDate;
+  window.deleteHealthEvent = deleteHealthEvent;
+
+  // Event listeners for Health Dashboard
+  if ($("healthEventForm")) {
+    $("healthEventForm").addEventListener('submit', submitHealthEvent);
+  }
+
+  if ($("clearHealthBtn")) {
+    $("clearHealthBtn").addEventListener('click', () => {
+      $("healthEventForm").reset();
+      $("healthDate").value = todayISO();
+      $("intensityValue").textContent = '5';
+    });
+  }
+
+  if ($("healthIntensity")) {
+    $("healthIntensity").addEventListener('input', (e) => {
+      $("intensityValue").textContent = e.target.value;
+    });
+  }
+
+  if ($("healthChartRange")) {
+    $("healthChartRange").addEventListener('change', (e) => {
+      loadHealthCharts(parseInt(e.target.value));
+    });
+  }
+
+  if ($("prevHealthMonthBtn")) {
+    $("prevHealthMonthBtn").addEventListener('click', () => changeHealthMonth(-1));
+  }
+
+  if ($("nextHealthMonthBtn")) {
+    $("nextHealthMonthBtn").addEventListener('click', () => changeHealthMonth(1));
+  }
+
+  if ($("prevWeekBtn")) {
+    $("prevWeekBtn").addEventListener('click', () => changeHealthWeek(-1));
+  }
+
+  if ($("nextWeekBtn")) {
+    $("nextWeekBtn").addEventListener('click', () => changeHealthWeek(1));
+  }
+
+  if ($("refreshHealthBtn")) {
+    $("refreshHealthBtn").addEventListener('click', loadHealthDashboard);
+  }
+
+  // Initialize health date input to today
+  if ($("healthDate")) {
+    $("healthDate").value = todayISO();
+  }
 
   // Auto-load
   fetchDay();
