@@ -1,27 +1,35 @@
 {
   "name": "meta-runner",
   "version": "1.0.0",
-  "description": "Meta-runner router that classifies queries and routes to specialized agents",
+  "description": "Thor agentic health meta-runner - routes and coordinates multi-domain health queries",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
-    "start": "node dist/server.js"
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@thor/shared": "*",
+    "axios": "^1.7.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
-    "openai": "^4.77.3",
+    "openai": "^4.56.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
     "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^4.0.8",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^4.0.8"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

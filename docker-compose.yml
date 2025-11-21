@@ -88,14 +88,14 @@ services:
     restart: unless-stopped
 
   # ==================================
-  # Thor Meta-Runner - Agentic Health Coordinator
+  # Meta-Runner - Agentic Health Coordinator
   # Routes queries across domains (workout, nutrition, health, overview)
   # ==================================
-  thor-meta-runner:
+  meta-runner:
     build:
       context: .
-      dockerfile: agents/thor-meta-runner/Dockerfile
-    container_name: thor-meta-runner
+      dockerfile: agents/meta-runner/Dockerfile
+    container_name: meta-runner
     ports:
       - "3004:3001"
     environment:
