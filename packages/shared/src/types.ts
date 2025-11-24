@@ -4,7 +4,7 @@
 export type ParsedLog = {
   exercise: string;
   sets?: number;
-  reps?: number;
+  reps?: number | number[];  // Single value (12) or array per set ([25, 20, 15])
   weight_lbs?: number;
   notes?: string;
 };

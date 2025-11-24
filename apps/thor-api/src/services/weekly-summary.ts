@@ -2,6 +2,41 @@ import { randomUUID } from "node:crypto";
 import { db } from "../db.js";
 import { USE_LLM, USE_OLLAMA, OLLAMA_MODEL, OLLAMA_URL, OPENAI_API_KEY } from "../config.js";
 
+/**
+ * Deserialize reps from database TEXT column
+ */
+function deserializeReps(repsValue: any): number | number[] | null {
+  if (repsValue == null) return null;
+  const str = String(repsValue).trim();
+  if (!str) return null;
+  if (str.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+  const num = Number(str);
+  return isNaN(num) ? null : num;
+}
+
+/**
+ * Calculate volume for a single exercise log
+ */
+function calculateVolume(sets: number | null, reps: number | number[] | null, weight: number | null): number {
+  if (!weight) return 0;
+  if (!sets && !Array.isArray(reps)) return 0;
+
+  if (Array.isArray(reps)) {
+    // For arrays, sum all reps and multiply by weight
+    const totalReps = reps.reduce((sum, r) => sum + r, 0);
+    return totalReps * weight;
+  } else if (typeof reps === 'number' && sets) {
+    // For single numbers, multiply sets * reps * weight
+    return sets * reps * weight;
+  }
+  return 0;
+}
+
 type WeeklyMetrics = {
   week_start: string;
   week_end: string;

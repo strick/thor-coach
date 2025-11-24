@@ -64,9 +64,15 @@ Rules:
           "4x9 with 35 lbs incline" (sets=4, reps=9, weight=35)
           "3x10 with 30 lbs flys" (sets=3, reps=10, weight=30)
           "3x12 tricep overhead" (sets=3, reps=12)
-          "11, 8, 5 push ups" (variable_reps=[11,8,5], reps_per_set=8)
+          "11, 8, 5 push ups" (variable_reps=[11,8,5], reps_per_set=null)
+          "3x 25, 20, 15 pushups" (sets=3, variable_reps=[25,20,15], reps_per_set=null)
           "12x 3 leg raises" (sets=12, reps=3)
-- If comma reps given, variable_reps=[...], reps_per_set=rounded average.
+- BODYWEIGHT EXERCISES (Push-ups, Leg Raises): ALWAYS use variable_reps array (even if all same), NEVER include weight_lbs.
+  Examples: "3x12 pushups" → variable_reps=[12,12,12], weight_lbs=null
+            "25, 20, 15 push ups" → variable_reps=[25,20,15], weight_lbs=null
+            "4x10 leg raises" → variable_reps=[10,10,10,10], weight_lbs=null
+- WEIGHTED EXERCISES: Use reps_per_set for consistent reps, variable_reps for varying reps, always include weight_lbs if mentioned.
+- If comma reps given for weighted exercises, variable_reps=[...], reps_per_set=null.
 - IMPORTANT: Capture any contextual notes, feelings, or comments following the exercise.
   Examples: "This was brutal", "felt easy", "struggled with form", "personal best!"
 - Put exercise-specific comments in the "notes" field for that exercise.
@@ -82,17 +88,13 @@ ${normalizedText}
 
   function normalizeItems(items: any[]): ParsedLog[] {
     return (items || []).map((i: any) => {
-      let reps = i?.reps_per_set;
-      if ((reps == null) && Array.isArray(i?.variable_reps) && i.variable_reps.length) {
-        const sum = i.variable_reps.reduce((a: number, b: number) => a + b, 0);
-        reps = Math.round(sum / i.variable_reps.length);
-      }
-
-      // Build notes: combine user notes + variable reps info if present
-      let notes = i.notes ?? undefined;
+      // If variable_reps array exists, use it directly as reps
+      // Otherwise, use reps_per_set as a single number
+      let reps: number | number[] | undefined;
       if (Array.isArray(i?.variable_reps) && i.variable_reps.length) {
-        const repsInfo = `reps_per_set=${JSON.stringify(i.variable_reps)}`;
-        notes = notes ? `${notes} [${repsInfo}]` : repsInfo;
+        reps = i.variable_reps;  // Store as array for bodyweight exercises
+      } else if (i?.reps_per_set != null) {
+        reps = i.reps_per_set;  // Store as single number for weighted exercises
       }
 
       return {
@@ -100,7 +102,7 @@ ${normalizedText}
         sets: i.sets ?? undefined,
         reps: reps ?? undefined,
         weight_lbs: i.weight_lbs ?? undefined,
-        notes: notes,
+        notes: i.notes ?? undefined,
       } as ParsedLog;
     });
   }

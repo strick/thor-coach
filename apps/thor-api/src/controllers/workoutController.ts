@@ -7,6 +7,31 @@ import { handleIngest } from "../services/ingest.js";
 import { db } from "../db.js";
 import { asyncHandler, ApiError } from "../middleware/errorHandler.js";
 
+/**
+ * Deserialize reps from database TEXT column
+ * Handles both JSON arrays (bodyweight exercises) and single numbers (weighted exercises)
+ */
+function deserializeReps(repsValue: any): number | number[] | null {
+  if (repsValue == null) return null;
+
+  const str = String(repsValue).trim();
+  if (!str) return null;
+
+  // Try to parse as JSON array first
+  if (str.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // Not valid JSON, fall through
+    }
+  }
+
+  // Parse as single number
+  const num = Number(str);
+  return isNaN(num) ? null : num;
+}
+
 export const ingestWorkout = asyncHandler(async (req: Request, res: Response) => {
   const parsed = IngestReq.safeParse(req.body);
 
@@ -43,7 +68,13 @@ export const getWorkouts = asyncHandler(async (req: Request, res: Response) => {
         WHERE l.session_id = ?
       `).all(session.id);
 
-      return { ...session, exercises: logs };
+      // Deserialize reps for each log
+      const deserializedLogs = logs.map((log: any) => ({
+        ...log,
+        reps_per_set: deserializeReps(log.reps_per_set)
+      }));
+
+      return { ...session, exercises: deserializedLogs };
     });
 
     res.json({ date, workouts });
@@ -135,7 +166,7 @@ export const getProgressSummary = asyncHandler(async (req: Request, res: Respons
     LIMIT 10
   `).all(from, to);
 
-  const recent = db.prepare(`
+  const recentRaw = db.prepare(`
     SELECT s.session_date, e.name, l.sets, l.reps_per_set, l.weight_lbs
     FROM exercise_logs l
     JOIN workout_sessions s ON s.id = l.session_id
@@ -144,6 +175,12 @@ export const getProgressSummary = asyncHandler(async (req: Request, res: Respons
     ORDER BY s.session_date DESC
     LIMIT 50
   `).all(from, to);
+
+  // Deserialize reps for recent workouts
+  const recent = recentRaw.map((row: any) => ({
+    ...row,
+    reps_per_set: deserializeReps(row.reps_per_set)
+  }));
 
   res.json({ sessions, topLifts, recent });
 });

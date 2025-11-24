@@ -63,12 +63,18 @@ export async function handleIngest(text: string, dateISO?: string, planId = THOR
         continue;
       }
 
+      // Serialize reps: array → JSON string, number → string, undefined → null
+      let repsValue: string | null = null;
+      if (item.reps !== undefined && item.reps !== null) {
+        repsValue = Array.isArray(item.reps) ? JSON.stringify(item.reps) : String(item.reps);
+      }
+
       const row = {
         id: randomUUID(),
         session_id: sessionId,
         exercise_id: match.id,
         sets: item.sets ?? null,
-        reps_per_set: item.reps ?? null,
+        reps_per_set: repsValue,
         weight_lbs: item.weight_lbs ?? null,
         notes: item.notes ?? null
       };
