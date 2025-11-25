@@ -1,0 +1,235 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e1f5fe', 'primaryTextColor': '#01579b', 'primaryBorderColor': '#0288d1', 'lineColor': '#0288d1', 'secondaryColor': '#f3e5f5', 'tertiaryColor': '#e8f5e9'}}}%%
+
+classDiagram
+    direction TB
+
+    %% ==========================================
+    %% Entry Layer - User Request
+    %% ==========================================
+    class HTTPRequest {
+        +POST /chat
+        +text: string
+        +mode?: string
+    }
+
+    %% ==========================================
+    %% Meta-Runner Layer (Orchestrator)
+    %% ==========================================
+    class MetaRunnerService {
+        -thorAgentClient: ThorAgentClient
+        -healthAgentClient: HealthAgentClient
+        -sessionId?: string
+        +chat(request: MetaRunnerRequest) MetaRunnerResponse
+        -handleWorkout(text, intent) Promise
+        -handleNutrition(text) Promise
+        -handleHealthLog(text) Promise
+        -handleOverview(periodDays) Promise
+        -targetToAgent(target) string
+    }
+
+    class Router {
+        +routeQuery(text, mode?) RouterResult
+        -classifyWithMode(text, mode) RouterResult
+        -classifyWithLLM(text) RouterResult
+        -fallbackClassify(text) RouterResult
+    }
+
+    class RouterResult {
+        +target: WORKOUT|NUTRITION|HEALTH_LOG|OVERVIEW
+        +intent: string
+        +cleaned_text: string
+        +confidence: number
+    }
+
+    %% ==========================================
+    %% Agent Clients (HTTP Callers)
+    %% ==========================================
+    class ThorAgentClient {
+        -baseURL: string
+        -client: AxiosInstance
+        +sendMessage(message, sessionId?) Promise
+        +logWorkout(text) Promise
+        +logMeal(description) Promise
+        +getProgressSummary(periodDays?) Promise
+        +getWorkoutsByDate(dateQuery) Promise
+    }
+
+    class HealthAgentClient {
+        -baseURL: string
+        -client: AxiosInstance
+        +sendMessage(message, sessionId?) Promise
+        +logHealthEvent(description) Promise
+    }
+
+    %% ==========================================
+    %% Agent Layer (LLM + Tool Orchestration)
+    %% ==========================================
+    class BaseAgent {
+        <<abstract>>
+        #openai: OpenAI
+        #useOllama: boolean
+        #ollamaUrl: string
+        #ollamaModel: string
+        #mcpClient: MCPClientHTTP
+        #mcpReady: boolean
+        +start() Promise~void~
+        +stop() void
+        +isReady() boolean
+        +chat(userMessage, history) Promise~ChatResponse~
+        #getToolsForLLM() any[]
+        #getDateContext() object
+        #chatWithOpenAI(messages) Promise~ChatResponse~
+        #chatWithOllama(messages) Promise~ChatResponse~
+        #getSystemPrompt()* string
+        #agentName* string
+    }
+
+    class ThorAgent {
+        #agentName: "Thor"
+        #getSystemPrompt() string
+    }
+
+    class HealthAgent {
+        #agentName: "Health"
+        #getSystemPrompt() string
+    }
+
+    %% ==========================================
+    %% Server Factory
+    %% ==========================================
+    class ServerFactory {
+        <<utility>>
+        +createAgentServer(agent, config) Express
+        +startAgentServer(agent, config) Promise~void~
+    }
+
+    %% ==========================================
+    %% MCP Client (HTTP Transport)
+    %% ==========================================
+    class MCPClientHTTP {
+        -mcpServerUrl: string
+        -tools: Tool[]
+        +start() Promise~void~
+        +stop() void
+        +getTools() Tool[]
+        +callTool(toolName, args) Promise~any~
+        +healthCheck() Promise~boolean~
+    }
+
+    class Tool {
+        +name: string
+        +description: string
+        +inputSchema: object
+    }
+
+    %% ==========================================
+    %% MCP Server Layer
+    %% ==========================================
+    class MCPServer {
+        -server: McpServer
+        -apiClient: HealthApiClient
+        +registerTool(name, schema, handler)
+        +GET /tools
+        +POST /tools/:name
+    }
+
+    class ToolDefinition {
+        +name: string
+        +title: string
+        +description: string
+        +zodSchema: ZodSchema
+        +handler(apiClient, args) Promise
+    }
+
+    %% ==========================================
+    %% API Client (Backend Communication)
+    %% ==========================================
+    class HealthApiClient {
+        -baseUrl: string
+        +ingestWorkout(text, date?, planId?) Promise
+        +getWorkoutsByDate(date) Promise
+        +getTodayExercises(planId?) Promise
+        +getExercisesForDay(planId, day) Promise
+        +getAllExercises(planId?) Promise
+        +getProgressSummary(from, to) Promise
+        +logHealthEvent(event) Promise
+        +getHealthEvents(params) Promise
+        +deleteHealthEvent(id) Promise
+    }
+
+    %% ==========================================
+    %% Backend API (thor-api)
+    %% ==========================================
+    class ThorAPI {
+        <<service>>
+        +POST /api/ingest
+        +GET /api/workouts
+        +GET /api/day/:dow
+        +GET /api/exercises
+        +GET /api/progress/summary
+        +POST /api/health-events
+        +GET /api/health-events
+        +DELETE /api/health-events/:id
+    }
+
+    class Database {
+        <<SQLite>>
+        +workout_sessions
+        +exercise_logs
+        +exercises
+        +health_events
+    }
+
+    %% ==========================================
+    %% LLM Providers
+    %% ==========================================
+    class OpenAI {
+        <<external>>
+        +chat.completions.create()
+    }
+
+    class Ollama {
+        <<external>>
+        +POST /api/chat
+    }
+
+    %% ==========================================
+    %% Relationships
+    %% ==========================================
+
+    %% Entry flow
+    HTTPRequest --> MetaRunnerService : POST /chat
+
+    %% Meta-Runner orchestration
+    MetaRunnerService --> Router : routeQuery()
+    Router --> RouterResult : returns
+    MetaRunnerService --> ThorAgentClient : handleWorkout/Nutrition/Overview
+    MetaRunnerService --> HealthAgentClient : handleHealthLog
+
+    %% Agent client to agent communication
+    ThorAgentClient --> ThorAgent : HTTP POST /chat
+    HealthAgentClient --> HealthAgent : HTTP POST /chat
+
+    %% Agent inheritance
+    BaseAgent <|-- ThorAgent : extends
+    BaseAgent <|-- HealthAgent : extends
+
+    %% Agent dependencies
+    BaseAgent --> MCPClientHTTP : uses
+    BaseAgent --> OpenAI : chatWithOpenAI()
+    BaseAgent --> Ollama : chatWithOllama()
+
+    %% Server factory
+    ServerFactory --> BaseAgent : creates server for
+
+    %% MCP communication
+    MCPClientHTTP --> MCPServer : HTTP /tools
+    MCPClientHTTP --> Tool : contains
+
+    %% MCP Server internals
+    MCPServer --> ToolDefinition : registers
+    MCPServer --> HealthApiClient : uses for tool execution
+
+    %% Backend communication
+    HealthApiClient --> ThorAPI : HTTP calls
+    ThorAPI --> Database : SQL queries

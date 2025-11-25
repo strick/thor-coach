@@ -1,0 +1,67 @@
+sequenceDiagram
+    autonumber
+    participant User
+    participant MetaRunner as MetaRunner<br/>:3004
+    participant Router
+    participant ThorClient as ThorAgentClient
+    participant ThorAgent as ThorAgent<br/>:3002
+    participant Ollama as Ollama LLM
+    participant MCPClient as MCPClientHTTP
+    participant MCPServer as MCP Server<br/>:3003
+    participant ThorAPI as thor-api<br/>:3000
+    participant DB as SQLite
+
+    User->>MetaRunner: POST /chat<br/>{"text": "What did I do for my workout yesterday?"}
+
+    Note over MetaRunner: MetaRunnerService.chat()
+
+    MetaRunner->>Router: routeQuery(text, mode)
+    Note over Router: fallbackClassify()<br/>detects "workout" + "yesterday"
+    Router-->>MetaRunner: {target: "WORKOUT",<br/>intent: "get_workouts",<br/>confidence: 0.8}
+
+    Note over MetaRunner: handleWorkout(text, "get_workouts")
+
+    MetaRunner->>ThorClient: getWorkoutsByDate(text)
+    Note over ThorClient: Formats message:<br/>"What workouts did I do yesterday?<br/>Use get_workouts_by_date tool"
+
+    ThorClient->>ThorAgent: POST /chat<br/>{message: "..."}
+
+    Note over ThorAgent: ThorAgent.chat()
+
+    ThorAgent->>ThorAgent: getSystemPrompt()<br/>includes today's date
+
+    ThorAgent->>Ollama: POST /api/chat<br/>{messages, tools}
+    Note over Ollama: LLM analyzes request<br/>decides to call tool
+    Ollama-->>ThorAgent: {tool_calls: [{<br/>name: "get_workouts_by_date",<br/>args: {date: "2025-11-20"}}]}
+
+    ThorAgent->>MCPClient: callTool("get_workouts_by_date",<br/>{date: "2025-11-20"})
+
+    MCPClient->>MCPServer: POST /tools/get_workouts_by_date<br/>{date: "2025-11-20"}
+
+    Note over MCPServer: ToolDefinition.handler()
+
+    MCPServer->>ThorAPI: GET /api/workouts?date=2025-11-20
+
+    ThorAPI->>DB: SELECT * FROM workout_sessions<br/>WHERE session_date = '2025-11-20'
+    DB-->>ThorAPI: [workout rows]
+
+    ThorAPI->>DB: SELECT * FROM exercise_logs<br/>WHERE session_id IN (...)
+    DB-->>ThorAPI: [exercise rows]
+
+    ThorAPI-->>MCPServer: {date, workouts: [{id, exercises: [...]}]}
+
+    MCPServer-->>MCPClient: {result: {date, workouts}}
+
+    MCPClient-->>ThorAgent: {date: "2025-11-20",<br/>workouts: [...]}
+
+    Note over ThorAgent: Add tool result to messages
+
+    ThorAgent->>Ollama: POST /api/chat<br/>{messages + tool_result}
+    Note over Ollama: Generate natural<br/>language response
+    Ollama-->>ThorAgent: "Yesterday you did<br/>Dumbbell Shoulder Press..."
+
+    ThorAgent-->>ThorClient: {reply: "Yesterday...",<br/>toolCalls: [{tool, args, result}]}
+
+    ThorClient-->>MetaRunner: {reply, sessionId, toolCalls}
+
+    MetaRunner-->>User: {agent: "thor",<br/>intent: "get_workouts",<br/>message: "Yesterday you did...",<br/>rawToolResults: {...}}
