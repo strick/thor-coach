@@ -219,16 +219,61 @@ function fallbackClassify(text: string): RouterResult {
     };
   }
 
-  // Check for overview patterns
+  // Check for workout PLAN queries (what should I do today?)
+  // "what is my workout today?", "what should I do today?", "what exercises today?", "what are todays workouts"
+  const hasWorkoutKeyword = lowerText.includes('workout') || lowerText.includes('exercise') || lowerText.includes('lift');
+  const hasTodayKeyword = lowerText.includes('today') || lowerText.includes('todays');
+  const hasWhatKeyword = lowerText.includes('what');
+  const hasPlanKeyword = lowerText.includes('supposed to') || lowerText.includes('should') ||
+                         lowerText.includes('plan') || lowerText.includes('scheduled');
+
+  const isPlanQuery = hasWorkoutKeyword && (
+    (hasPlanKeyword) ||  // "what should I do today"
+    (hasWhatKeyword && hasTodayKeyword)  // "what are todays workouts", "what exercises today"
+  );
+
+  if (isPlanQuery) {
+    return {
+      target: 'WORKOUT',
+      intent: 'get_plan',  // New intent for plan queries
+      cleaned_text: text,
+      confidence: 0.8
+    };
+  }
+
+  // Check for workout HISTORY queries (what did I do yesterday?)
+  // "what did I do yesterday", "what workout did I do today", "show my workout from monday"
+  const isWorkoutQuery =
+    lowerText.includes('workout') || lowerText.includes('exercise') || lowerText.includes('lift');
+  const isDateQuery =
+    lowerText.includes('yesterday') || lowerText.includes('today') ||
+    lowerText.includes('monday') || lowerText.includes('tuesday') || lowerText.includes('wednesday') ||
+    lowerText.includes('thursday') || lowerText.includes('friday') || lowerText.includes('saturday') ||
+    lowerText.includes('sunday') || lowerText.includes('last');
+  const isHistoryPhrase =
+    lowerText.includes('did i') || lowerText.includes('what did') ||
+    lowerText.includes('logged') || lowerText.includes('completed');
+
+  // Route to WORKOUT with get_workouts intent ONLY for history queries
+  if (
+    (isWorkoutQuery && isDateQuery && isHistoryPhrase) ||
+    (isHistoryPhrase && isDateQuery && !lowerText.includes('migraine') && !lowerText.includes('sleep') && !lowerText.includes('health'))
+  ) {
+    return {
+      target: 'WORKOUT',
+      intent: 'get_workouts',
+      cleaned_text: text,
+      confidence: 0.8
+    };
+  }
+
+  // Check for overview patterns (general progress, not specific date queries)
   if (
     lowerText.includes('how am i doing') ||
     lowerText.includes('summary') ||
     lowerText.includes('progress') ||
     lowerText.includes("what's my") ||
     lowerText.includes("how's my") ||
-    lowerText.includes('yesterday') ||
-    lowerText.includes('last week') ||
-    lowerText.includes('did i work') ||
     lowerText.includes('need to log')
   ) {
     return {

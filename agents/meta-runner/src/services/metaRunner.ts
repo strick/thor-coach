@@ -32,7 +32,7 @@ export class MetaRunnerService {
 
       switch (routing.target) {
         case 'WORKOUT':
-          ({ actions, rawToolResults, message } = await this.handleWorkout(routing.cleaned_text));
+          ({ actions, rawToolResults, message } = await this.handleWorkout(routing.cleaned_text, routing.intent));
           break;
 
         case 'NUTRITION':
@@ -65,18 +65,33 @@ export class MetaRunnerService {
   }
 
   /**
-   * Handle WORKOUT domain - send to thor-agent which uses log_workout MCP tool
+   * Handle WORKOUT domain - send to thor-agent
+   * Routes to different MCP tools based on intent
    */
-  private async handleWorkout(text: string): Promise<{
+  private async handleWorkout(text: string, intent: string): Promise<{
     actions: string[];
     message: string;
     rawToolResults?: any;
   }> {
     try {
-      const result = await this.thorAgentClient.logWorkout(text);
+      let result;
+      let actions: string[];
 
-      const actions = ['delegated to thor-agent', 'used log_workout MCP tool'];
-      const message = result.reply || 'Logged workout via agent.';
+      if (intent === 'get_workouts') {
+        // Query workout history
+        result = await this.thorAgentClient.getWorkoutsByDate(text);
+        actions = ['delegated to thor-agent', 'used get_workouts_by_date MCP tool'];
+      } else if (intent === 'get_plan') {
+        // Query today's workout plan
+        result = await this.thorAgentClient.getTodayPlan(text);
+        actions = ['delegated to thor-agent', 'used get_today_exercises MCP tool'];
+      } else {
+        // Default: log workout
+        result = await this.thorAgentClient.logWorkout(text);
+        actions = ['delegated to thor-agent', 'used log_workout MCP tool'];
+      }
+
+      const message = result.reply || 'Processed workout request via agent.';
 
       return {
         actions,
@@ -85,8 +100,8 @@ export class MetaRunnerService {
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('logWorkout error:', { error, errorMsg });
-      throw new Error(`Failed to log workout via agent: ${errorMsg}`);
+      console.error('handleWorkout error:', { error, errorMsg });
+      throw new Error(`Failed to process workout via agent: ${errorMsg}`);
     }
   }
 

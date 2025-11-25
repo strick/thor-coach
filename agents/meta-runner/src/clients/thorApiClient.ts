@@ -105,4 +105,20 @@ export class ThorAgentClient {
     const message = `Get my health summary for the last ${periodDays || 14} days`;
     return this.sendMessage(message);
   }
+
+  /**
+   * Get workouts by date via agent (uses get_workouts_by_date MCP tool)
+   */
+  async getWorkoutsByDate(dateQuery: string) {
+    const message = `What workouts did I do ${dateQuery}? Use the get_workouts_by_date tool to look up my workout history.`;
+    return this.sendMessage(message);
+  }
+
+  /**
+   * Get today's workout plan via agent (uses get_today_exercises MCP tool)
+   */
+  async getTodayPlan(query: string) {
+    const message = `${query}`;
+    return this.sendMessage(message);
+  }
 }
