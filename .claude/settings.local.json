@@ -49,7 +49,8 @@
       "Bash(npm run build:api:*)",
       "Bash(docker inspect:*)",
       "Bash(npm run build:health-mcp:*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(nvidia-smi:*)"
     ],
     "deny": [],
     "ask": []
