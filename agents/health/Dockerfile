@@ -13,21 +13,22 @@ COPY package*.json ./
 
 # Copy workspace package files
 COPY packages/shared/package*.json ./packages/shared/
+COPY packages/agent-core/package*.json ./packages/agent-core/
 COPY agents/health/package*.json ./agents/health/
 
 # Install all dependencies
 RUN npm ci --workspaces
 
-# Copy shared package source
+# Copy shared package source and build
 COPY packages/shared/ ./packages/shared/
-
-# Build shared package directly (skip bash/nvm wrapper)
 RUN cd packages/shared && npx tsc -p tsconfig.json
 
-# Copy thor-agent source
-COPY agents/health/ ./agents/health/
+# Copy agent-core source and build
+COPY packages/agent-core/ ./packages/agent-core/
+RUN cd packages/agent-core && npx tsc -p tsconfig.json
 
-# Build thor-agent directly (skip bash/nvm wrapper)
+# Copy health agent source and build
+COPY agents/health/ ./agents/health/
 RUN cd agents/health && npx tsc -p tsconfig.json
 
 # ============================================
@@ -42,6 +43,7 @@ COPY package*.json ./
 
 # Copy workspace package files
 COPY packages/shared/package*.json ./packages/shared/
+COPY packages/agent-core/package*.json ./packages/agent-core/
 COPY agents/health/package*.json ./agents/health/
 
 # Install only production dependencies
@@ -49,20 +51,22 @@ RUN npm ci --workspaces --omit=dev
 
 # Copy built files from builder
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/agent-core/dist ./packages/agent-core/dist
 COPY --from=builder /app/agents/health/dist ./agents/health/dist
 
-# Copy shared package.json (needed for module resolution)
+# Copy package.json files (needed for module resolution)
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/agent-core/package.json ./packages/agent-core/
 
-# Set working directory to thor-agent
+# Set working directory to health-agent
 WORKDIR /app/agents/health
 
 # Expose agent port
-EXPOSE 3002
+EXPOSE 3006
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://localhost:3002/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+  CMD node -e "fetch('http://localhost:3006/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
 # Start the agent server
 CMD ["node", "dist/server.js"]

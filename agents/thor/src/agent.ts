@@ -1,99 +1,17 @@
 /**
- * Thor Conversational Agent
- * Uses LLM with tool calling that routes through MCP server
+ * Thor Workout Agent
+ * Extends BaseAgent with workout-specific system prompt
  */
 
-import OpenAI from 'openai';
-import { MCPClientHTTP as MCPClient } from './mcp-client-http.js';
+import { BaseAgent } from '@thor/agent-core';
 
-export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
-  tool_call_id?: string;
-  tool_calls?: Array<{
-    id: string;
-    type: 'function';
-    function: {
-      name: string;
-      arguments: string;
-    };
-  }>;
-}
-
-export interface ChatResponse {
-  message: string;
-  toolCalls?: Array<{
-    tool: string;
-    arguments: any;
-    result: any;
-  }>;
-}
-
-export class ThorAgent {
-  private openai: OpenAI | null = null;
-  private useOllama: boolean;
-  private ollamaUrl: string;
-  private ollamaModel: string;
-  private mcpClient: MCPClient;
-  private mcpReady: boolean = false;
-
-  constructor() {
-    this.useOllama = process.env.USE_OLLAMA === 'true';
-    this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
-    this.ollamaModel = process.env.OLLAMA_MODEL || 'llama3.1:8b';
-
-    if (!this.useOllama && process.env.OPENAI_API_KEY) {
-      this.openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY
-      });
-    }
-
-    // Initialize MCP client - connect to thor-mcp server
-    const mcpServerUrl = process.env.MCP_SERVER_URL || 'http://localhost:3003';
-    this.mcpClient = new MCPClient(mcpServerUrl);
+export class ThorAgent extends BaseAgent {
+  protected get agentName(): string {
+    return 'Thor';
   }
 
-  /**
-   * Connect to the MCP server via HTTP
-   */
-  async start(): Promise<void> {
-    await this.mcpClient.start();
-    this.mcpReady = true;
-    console.log('✅ Thor MCP server connected');
-    console.log(`🛠️  Available tools: ${this.mcpClient.getTools().map(t => t.name).join(', ')}`);
-  }
-
-  /**
-   * Disconnect from the MCP server
-   */
-  stop(): void {
-    this.mcpClient.stop();
-    this.mcpReady = false;
-  }
-
-  /**
-   * Get tool definitions for LLM (OpenAI format)
-   */
-  private getToolsForLLM(): any[] {
-    return this.mcpClient.getTools().map(tool => ({
-      type: 'function',
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.inputSchema
-      }
-    }));
-  }
-
-  private getSystemPrompt(): string {
-    // Get current date in local timezone (EST)
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const todayDate = `${year}-${month}-${day}`;
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const todayName = dayNames[now.getDay()];
+  protected getSystemPrompt(): string {
+    const { todayDate, todayName } = this.getDateContext();
 
     return `You are Thor, an AI workout coach and logging assistant.
 
@@ -118,9 +36,12 @@ Be conversational, motivating, and helpful.
 - "Floor press 4x12, skullcrusher 3x15" → log_workout (assume today)
 
 **QUERYING WORKOUT PLAN (use get_today_exercises, get_exercises_for_day):**
-- "What exercises should I do today?" → get_today_exercises
+- "What exercises should I do today?" → get_today_exercises (NOT get_workouts_by_date!)
+- "What is my workout today?" → get_today_exercises
+- "What should I do today?" → get_today_exercises
 - "What's on the plan for Monday?" → get_exercises_for_day (day: Monday/1)
 - "Show me all exercises in my plan" → get_all_exercises
+- IMPORTANT: Use get_today_exercises for PLAN queries, use get_workouts_by_date for HISTORY queries
 
 **QUERYING WORKOUT HISTORY (use get_workouts_by_date, get_exercise_history):**
 - "What workouts did I do yesterday?" → get_workouts_by_date (date: yesterday)
@@ -132,163 +53,20 @@ Be conversational, motivating, and helpful.
 - "Show me my progress for the last 30 days" → get_progress_summary (from/to dates)
 - "How did I do this week?" → get_weekly_summaries (limit: 1)
 
-Always be encouraging and celebrate their progress!`;
-  }
+**OUTPUT FORMATTING:**
+- ALWAYS use bullet lists (•) for exercises, NEVER numbered lists
+- Keep responses concise - no excessive motivational text
+- For workout plans, format as:
+  • Exercise Name
+  • Exercise Name
+- For workout history, format as:
+  • Exercise Name: SetsxReps @Weight
+- ONLY answer what was asked - don't add extra information about other days
+- Avoid emoji unless the user seems to want them
 
-  async chat(userMessage: string, conversationHistory: ChatMessage[] = []): Promise<ChatResponse> {
-    if (!this.mcpReady) {
-      throw new Error('MCP server not ready. Call start() first.');
-    }
-
-    const messages: ChatMessage[] = [
-      { role: 'system', content: this.getSystemPrompt() },
-      ...conversationHistory,
-      { role: 'user', content: userMessage }
-    ];
-
-    if (this.useOllama) {
-      return this.chatWithOllama(messages);
-    } else if (this.openai) {
-      return this.chatWithOpenAI(messages);
-    } else {
-      throw new Error('No LLM configured. Set USE_OLLAMA=true or provide OPENAI_API_KEY');
-    }
-  }
-
-  private async chatWithOpenAI(messages: ChatMessage[]): Promise<ChatResponse> {
-    if (!this.openai) {
-      throw new Error('OpenAI client not initialized');
-    }
-
-    const tools = this.getToolsForLLM();
-
-    // First LLM call - may request tool calls
-    let response = await this.openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: messages as any,
-      tools: tools as any,
-      tool_choice: 'auto'
-    });
-
-    let message = response.choices[0].message;
-    const toolCallResults: Array<{ tool: string; arguments: any; result: any }> = [];
-
-    // Handle tool calls if requested
-    if (message.tool_calls && message.tool_calls.length > 0) {
-      const toolMessages = [...messages, message as any];
-
-      for (const toolCall of message.tool_calls) {
-        const functionName = toolCall.function.name;
-        const functionArgs = JSON.parse(toolCall.function.arguments);
-
-        // Execute the tool via MCP
-        console.log(`[Agent] Calling MCP tool: ${functionName}`, functionArgs);
-        const result = await this.mcpClient.callTool(functionName, functionArgs);
-
-        toolCallResults.push({
-          tool: functionName,
-          arguments: functionArgs,
-          result
-        });
-
-        // Add tool result to messages
-        toolMessages.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(result)
-        } as any);
-      }
-
-      // Second LLM call with tool results
-      const finalResponse = await this.openai.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
-        messages: toolMessages as any
-      });
-
-      return {
-        message: finalResponse.choices[0].message.content || 'No response',
-        toolCalls: toolCallResults
-      };
-    }
-
-    return {
-      message: message.content || 'No response'
-    };
-  }
-
-  private async chatWithOllama(messages: ChatMessage[]): Promise<ChatResponse> {
-    const tools = this.getToolsForLLM();
-
-    const response = await fetch(`${this.ollamaUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: this.ollamaModel,
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        tools: tools.map(t => ({
-          type: 'function',
-          function: {
-            name: t.function.name,
-            description: t.function.description,
-            parameters: t.function.parameters
-          }
-        })),
-        stream: false
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Ollama error: ${response.statusText}`);
-    }
-
-    const data = await response.json() as { message: any };
-    const message = data.message;
-
-    // Check if Ollama returned tool calls
-    if (message.tool_calls && message.tool_calls.length > 0) {
-      const toolCallResults: Array<{ tool: string; arguments: any; result: any }> = [];
-      const toolMessages = [...messages, message];
-
-      for (const toolCall of message.tool_calls) {
-        const functionName = toolCall.function.name;
-        const functionArgs = toolCall.function.arguments;
-
-        // Execute the tool via MCP
-        console.log(`[Agent] Calling MCP tool: ${functionName}`, functionArgs);
-        const result = await this.mcpClient.callTool(functionName, functionArgs);
-
-        toolCallResults.push({
-          tool: functionName,
-          arguments: functionArgs,
-          result
-        });
-
-        toolMessages.push({
-          role: 'tool',
-          content: JSON.stringify(result)
-        });
-      }
-
-      // Second call with tool results
-      const finalResponse = await fetch(`${this.ollamaUrl}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: this.ollamaModel,
-          messages: toolMessages.map(m => ({ role: m.role, content: m.content })),
-          stream: false
-        })
-      });
-
-      const finalData = await finalResponse.json() as { message: { content: string } };
-      return {
-        message: finalData.message.content,
-        toolCalls: toolCallResults
-      };
-    }
-
-    return {
-      message: message.content
-    };
+Be helpful and encouraging, but keep it brief.`;
   }
 }
+
+// Re-export types for convenience
+export type { ChatMessage, ChatResponse } from '@thor/agent-core';

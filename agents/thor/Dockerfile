@@ -1,5 +1,5 @@
 # Thor Agent Dockerfile
-# Conversational agent with MCP client (spawns MCP server as subprocess)
+# Workout conversational agent with MCP client
 
 # ============================================
 # Stage 1: Build stage
@@ -13,21 +13,22 @@ COPY package*.json ./
 
 # Copy workspace package files
 COPY packages/shared/package*.json ./packages/shared/
+COPY packages/agent-core/package*.json ./packages/agent-core/
 COPY agents/thor/package*.json ./agents/thor/
 
 # Install all dependencies
 RUN npm ci --workspaces
 
-# Copy shared package source
+# Copy shared package source and build
 COPY packages/shared/ ./packages/shared/
-
-# Build shared package directly (skip bash/nvm wrapper)
 RUN cd packages/shared && npx tsc -p tsconfig.json
 
-# Copy thor-agent source
-COPY agents/thor/ ./agents/thor/
+# Copy agent-core source and build
+COPY packages/agent-core/ ./packages/agent-core/
+RUN cd packages/agent-core && npx tsc -p tsconfig.json
 
-# Build thor-agent directly (skip bash/nvm wrapper)
+# Copy thor agent source and build
+COPY agents/thor/ ./agents/thor/
 RUN cd agents/thor && npx tsc -p tsconfig.json
 
 # ============================================
@@ -42,6 +43,7 @@ COPY package*.json ./
 
 # Copy workspace package files
 COPY packages/shared/package*.json ./packages/shared/
+COPY packages/agent-core/package*.json ./packages/agent-core/
 COPY agents/thor/package*.json ./agents/thor/
 
 # Install only production dependencies
@@ -49,10 +51,12 @@ RUN npm ci --workspaces --omit=dev
 
 # Copy built files from builder
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/agent-core/dist ./packages/agent-core/dist
 COPY --from=builder /app/agents/thor/dist ./agents/thor/dist
 
-# Copy shared package.json (needed for module resolution)
+# Copy package.json files (needed for module resolution)
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/agent-core/package.json ./packages/agent-core/
 
 # Set working directory to thor-agent
 WORKDIR /app/agents/thor

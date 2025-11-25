@@ -1,6 +1,6 @@
 /**
  * HTTP-based MCP Client
- * Connects to Thor MCP Server via HTTP REST API
+ * Connects to MCP Server via HTTP REST API
  */
 
 import { EventEmitter } from 'events';
@@ -21,7 +21,7 @@ export class MCPClientHTTP extends EventEmitter {
 
   constructor(mcpServerUrl: string = 'http://localhost:3003') {
     super();
-    this.mcpServerUrl = mcpServerUrl.replace(/\/$/, ''); // Remove trailing slash
+    this.mcpServerUrl = mcpServerUrl.replace(/\/$/, '');
   }
 
   /**
@@ -29,7 +29,6 @@ export class MCPClientHTTP extends EventEmitter {
    */
   async start(): Promise<void> {
     try {
-      // Fetch available tools
       const response = await fetch(`${this.mcpServerUrl}/tools`);
 
       if (!response.ok) {
@@ -52,11 +51,10 @@ export class MCPClientHTTP extends EventEmitter {
   }
 
   /**
-   * Stop the MCP client (no-op for HTTP)
+   * Stop the MCP client
    */
   stop(): void {
     console.log('[MCP Client] Disconnecting from MCP server');
-    // HTTP doesn't need cleanup
   }
 
   /**
