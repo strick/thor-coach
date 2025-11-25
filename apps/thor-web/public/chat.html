@@ -335,6 +335,54 @@
       }
     }
 
+    // Format message text (convert bullets to HTML lists)
+    function formatMessage(text) {
+      // Escape HTML to prevent XSS
+      const escapeHtml = (str) => {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      };
+
+      const lines = text.split('\n');
+      let formatted = [];
+      let inList = false;
+      let listItems = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        // Check if line starts with bullet (• or -)
+        if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
+          const content = trimmed.substring(1).trim();
+          listItems.push(`<li>${escapeHtml(content)}</li>`);
+          inList = true;
+        } else {
+          // Not a bullet line
+          if (inList && listItems.length > 0) {
+            // Close the list
+            formatted.push(`<ul class="list-disc list-inside space-y-1 my-2">${listItems.join('')}</ul>`);
+            listItems = [];
+            inList = false;
+          }
+
+          if (trimmed) {
+            formatted.push(escapeHtml(line));
+          } else {
+            formatted.push('<br>');
+          }
+        }
+      }
+
+      // Close any remaining list
+      if (inList && listItems.length > 0) {
+        formatted.push(`<ul class="list-disc list-inside space-y-1 my-2">${listItems.join('')}</ul>`);
+      }
+
+      return formatted.join('');
+    }
+
     // Add message to chat
     function addMessage(text, role, metadata = {}) {
       if (chatContainer.querySelector('.flex.justify-center')) {
@@ -362,7 +410,7 @@
       const content = document.createElement('div');
       content.className = `max-w-2xl px-4 py-3 rounded-lg ${bgClass} ${textClass} text-sm`;
 
-      let html = text;
+      let html = formatMessage(text);
       if (metadata.agent) {
         html += `<div class="text-xs opacity-70 mt-2">Agent: ${metadata.agent} | Intent: ${metadata.intent}</div>`;
       }
