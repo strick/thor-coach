@@ -320,14 +320,14 @@
         return;
       }
 
-      // Destroy existing chart if it exists
-      if (window.nutritionChartHistory) {
-        window.nutritionChartHistory.destroy();
-      }
-
       if (!dailyData || dailyData.length === 0) {
         console.warn('[History] No daily data to chart');
         return;
+      }
+
+      // Destroy existing chart if it exists and is a valid Chart instance
+      if (window.nutritionChartHistory && typeof window.nutritionChartHistory.destroy === 'function') {
+        window.nutritionChartHistory.destroy();
       }
 
       // Filter and prepare data

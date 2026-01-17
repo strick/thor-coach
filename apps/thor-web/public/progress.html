@@ -357,8 +357,8 @@
         return;
       }
 
-      // Destroy existing chart if it exists
-      if (window.nutritionChart) {
+      // Destroy existing chart if it exists and is a valid Chart instance
+      if (window.nutritionChart && typeof window.nutritionChart.destroy === 'function') {
         window.nutritionChart.destroy();
       }
 
