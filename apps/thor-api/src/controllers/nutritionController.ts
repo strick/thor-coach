@@ -17,7 +17,8 @@ import {
   getNutritionDay,
   parseNutritionText,
   deleteItemFromMeal,
-  deleteMealFromDay
+  deleteMealFromDay,
+  updateItemInMeal
 } from "../services/nutrition.js";
 
 /**
@@ -322,4 +323,23 @@ export const deleteMeal = asyncHandler(async (req: Request, res: Response) => {
   }
 
   res.json({ success: true, message: "Meal deleted successfully" });
+});
+
+export const updateItem = asyncHandler(async (req: Request, res: Response) => {
+  const { itemId, ...updates } = req.body;
+
+  console.log('[Controller] updateItem called with itemId:', itemId, 'updates:', updates);
+
+  if (!itemId) {
+    throw new ApiError(400, "Missing itemId");
+  }
+
+  const updated = updateItemInMeal(itemId, updates);
+  
+  if (!updated) {
+    throw new ApiError(404, "Item not found");
+  }
+
+  console.log('[Controller] updateItem succeeded, returning:', updated);
+  res.json({ success: true, item: updated });
 });

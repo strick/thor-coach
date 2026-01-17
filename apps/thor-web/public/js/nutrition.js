@@ -311,6 +311,144 @@ async function deleteMeal(mealId) {
 }
 
 /**
+ * Auto-scale macros when serving quantity changes
+ */
+function handleServingQuantityChange() {
+  const editModal = document.getElementById('editItemModal');
+  const newQuantity = parseFloat(document.getElementById('editServingQuantity').value) || 0;
+  const originalQuantity = parseFloat(editModal.dataset.originalServingQuantity) || 0;
+
+  if (originalQuantity === 0 || newQuantity === 0) {
+    return;
+  }
+
+  // Calculate the scaling ratio
+  const ratio = newQuantity / originalQuantity;
+  console.log(`[Nutrition] Scaling macros by ratio: ${ratio} (${originalQuantity}g → ${newQuantity}g)`);
+
+  // Scale all macro values
+  const fields = {
+    'editCalories': 'originalCalories',
+    'editProtein': 'originalProtein',
+    'editCarbs': 'originalCarbs',
+    'editFat': 'originalFat',
+    'editFiber': 'originalFiber',
+    'editSodium': 'originalSodium'
+  };
+
+  for (const [fieldId, dataAttr] of Object.entries(fields)) {
+    const originalValue = parseFloat(editModal.dataset[dataAttr]) || 0;
+    const scaledValue = originalValue * ratio;
+    document.getElementById(fieldId).value = scaledValue.toFixed(1);
+    console.log(`[Nutrition] ${fieldId}: ${originalValue} → ${scaledValue.toFixed(1)}`);
+  }
+}
+
+/**
+ * Open edit item modal
+ */
+function openEditItemModal(itemId, day) {
+  // Find the item in the day's meals
+  let item = null;
+  for (const meal of day.meals) {
+    for (const mealItem of meal.items) {
+      if (mealItem.id === itemId) {
+        item = mealItem;
+        break;
+      }
+    }
+    if (item) break;
+  }
+
+  if (!item) {
+    showError('Item not found');
+    return;
+  }
+
+  // Store item ID in a data attribute for saving later
+  const editModal = document.getElementById('editItemModal');
+  editModal.dataset.itemId = itemId;
+
+  // Store original values for macro scaling calculations
+  editModal.dataset.originalServingQuantity = item.serving_quantity || '';
+  editModal.dataset.originalCalories = item.calories_kcal || '';
+  editModal.dataset.originalProtein = item.protein_g || '';
+  editModal.dataset.originalCarbs = item.carbs_g || '';
+  editModal.dataset.originalFat = item.fat_g || '';
+  editModal.dataset.originalFiber = item.fiber_g || '';
+  editModal.dataset.originalSodium = item.sodium_mg || '';
+
+  // Populate form with current values
+  document.getElementById('editFoodName').value = item.food_name || '';
+  document.getElementById('editServingQuantity').value = item.serving_quantity || '';
+  document.getElementById('editServingUnit').value = item.serving_unit || '';
+  document.getElementById('editCalories').value = item.calories_kcal || '';
+  document.getElementById('editProtein').value = item.protein_g || '';
+  document.getElementById('editCarbs').value = item.carbs_g || '';
+  document.getElementById('editFat').value = item.fat_g || '';
+  document.getElementById('editFiber').value = item.fiber_g || '';
+  document.getElementById('editSodium').value = item.sodium_mg || '';
+
+  // Show modal
+  editModal.classList.remove('hidden');
+}
+
+/**
+ * Save edited item
+ */
+async function saveEditedItem(event) {
+  event.preventDefault();
+
+  const editModal = document.getElementById('editItemModal');
+  const itemId = editModal.dataset.itemId;
+
+  if (!itemId) {
+    showError('Item ID not found');
+    return;
+  }
+
+  // Collect form data
+  const updates = {
+    itemId,
+    food_name: document.getElementById('editFoodName').value,
+    serving_quantity: parseFloat(document.getElementById('editServingQuantity').value) || 0,
+    serving_unit: document.getElementById('editServingUnit').value,
+    serving_display: `${parseFloat(document.getElementById('editServingQuantity').value) || 0} ${document.getElementById('editServingUnit').value}`,
+    calories_kcal: parseFloat(document.getElementById('editCalories').value) || 0,
+    protein_g: parseFloat(document.getElementById('editProtein').value) || 0,
+    carbs_g: parseFloat(document.getElementById('editCarbs').value) || 0,
+    fat_g: parseFloat(document.getElementById('editFat').value) || 0,
+    fiber_g: parseFloat(document.getElementById('editFiber').value) || 0,
+    sodium_mg: parseFloat(document.getElementById('editSodium').value) || 0
+  };
+
+  console.log('[Nutrition] Saving item edits:', updates);
+
+  try {
+    const response = await fetch(`${API_BASE}/nutrition/item`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+
+    console.log('[Nutrition] Response status:', response.status);
+    const responseData = await response.json();
+    console.log('[Nutrition] Response data:', responseData);
+
+    if (response.ok) {
+      showSuccess('Item updated!');
+      editModal.classList.add('hidden');
+      await loadNutritionDay();
+    } else {
+      showError('Failed to update item');
+    }
+  } catch (error) {
+    console.error('Error updating item:', error);
+    showError('Failed to update item');
+  }
+}
+
+/**
  * Load nutrition day
  */
 async function loadNutritionDay() {
@@ -447,6 +585,15 @@ function displayNutritionDay(day) {
     });
   });
 
+  // Attach event listeners for edit buttons
+  document.querySelectorAll('.edit-item-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const itemId = btn.getAttribute('data-item-id');
+      openEditItemModal(itemId, day);
+    });
+  });
+
   document.querySelectorAll('.delete-meal-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
@@ -486,6 +633,9 @@ function renderMealCard(meal) {
                 <div class="text-neutral-600 dark:text-neutral-300">${Math.round(item.calories_kcal || 0)} cal</div>
                 <div class="text-neutral-500 dark:text-neutral-400">${Math.round(item.protein_g || 0)}g protein</div>
               </div>
+              <button class="edit-item-btn text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-400 p-1" data-item-id="${item.id}" title="Edit item">
+                ✏️
+              </button>
               <button class="delete-item-btn text-red-500 hover:text-red-700 dark:hover:text-red-400 p-1" data-item-id="${item.id}" title="Delete item">
                 ✕
               </button>
@@ -728,6 +878,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
   closeAddMealBtn.addEventListener('click', () => {
     addMealModal.classList.add('hidden');
+  });
+
+  // Edit item modal
+  const editItemModal = document.getElementById('editItemModal');
+  const editItemForm = document.getElementById('editItemForm');
+  const closeEditItemBtn = document.getElementById('closeEditItemBtn');
+  const editServingQuantity = document.getElementById('editServingQuantity');
+
+  if (!editItemForm) {
+    console.error('[Nutrition] Edit item form not found!');
+  } else {
+    console.log('[Nutrition] Attaching edit form submit listener');
+    editItemForm.addEventListener('submit', saveEditedItem);
+  }
+
+  // Attach serving quantity change listener for macro auto-scaling
+  if (editServingQuantity) {
+    editServingQuantity.addEventListener('change', handleServingQuantityChange);
+    editServingQuantity.addEventListener('input', handleServingQuantityChange);
+    console.log('[Nutrition] Attached serving quantity change listener');
+  }
+
+  closeEditItemBtn.addEventListener('click', () => {
+    editItemModal.classList.add('hidden');
+  });
+
+  // Close edit modal when clicking outside
+  editItemModal.addEventListener('click', (e) => {
+    if (e.target === editItemModal) {
+      editItemModal.classList.add('hidden');
+    }
   });
 
   goalsForm.addEventListener('submit', saveGoals);

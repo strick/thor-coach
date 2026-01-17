@@ -26,5 +26,6 @@ nutritionRoutes.get("/nutrition/day", nutritionController.getDayNutrition);
 nutritionRoutes.get("/nutrition/day/totals", nutritionController.getDayTotals);
 nutritionRoutes.post("/nutrition/meal", nutritionController.addMeal);
 nutritionRoutes.post("/nutrition/item", nutritionController.addItem);
+nutritionRoutes.put("/nutrition/item", nutritionController.updateItem);
 nutritionRoutes.delete("/nutrition/item", nutritionController.deleteItem);
 nutritionRoutes.delete("/nutrition/meal", nutritionController.deleteMeal);

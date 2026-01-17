@@ -750,6 +750,94 @@ export function deleteItemFromMeal(itemId: string): boolean {
 }
 
 /**
+ * Update a nutrition meal item
+ */
+export function updateItemInMeal(
+  itemId: string,
+  updates: {
+    food_name?: string;
+    serving_quantity?: number;
+    serving_unit?: string;
+    serving_display?: string;
+    calories_kcal?: number;
+    protein_g?: number;
+    carbs_g?: number;
+    fat_g?: number;
+    fiber_g?: number;
+    sugar_g?: number;
+    added_sugar_g?: number;
+    sodium_mg?: number;
+    sat_fat_g?: number;
+    cholesterol_mg?: number;
+    potassium_mg?: number;
+    calcium_mg?: number;
+  }
+): any {
+  console.log('[Nutrition] updateItemInMeal called with itemId:', itemId, 'updates:', updates);
+  
+  // Get the item with its meal and day info
+  const item = db
+    .prepare(
+      `SELECT nmi.*, nm.nutrition_day_id 
+       FROM nutrition_meal_items nmi
+       JOIN nutrition_meals nm ON nmi.meal_id = nm.id
+       WHERE nmi.id = ?`
+    )
+    .get(itemId) as any;
+
+  if (!item) {
+    console.log('[Nutrition] Item not found:', itemId);
+    return null;
+  }
+
+  console.log('[Nutrition] Found item to update:', item);
+
+  // Build update query dynamically based on provided fields
+  const fields: string[] = [];
+  const values: any[] = [];
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (value !== undefined && value !== null) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+  }
+
+  if (fields.length === 0) {
+    console.log('[Nutrition] No fields to update');
+    return item; // No updates provided
+  }
+
+  values.push(itemId);
+
+  const query = `UPDATE nutrition_meal_items SET ${fields.join(', ')} WHERE id = ?`;
+  console.log('[Nutrition] Executing update query:', query, 'with values:', values);
+  
+  try {
+    db.prepare(query).run(...values);
+    console.log('[Nutrition] Update successful');
+  } catch (error) {
+    console.error('[Nutrition] Update error:', error);
+    throw error;
+  }
+
+  // Recompute meal and day totals
+  const dayRecord = db
+    .prepare(`SELECT date_local FROM nutrition_days WHERE id = ?`)
+    .get(item.nutrition_day_id) as { date_local: string } | undefined;
+
+  if (dayRecord) {
+    console.log('[Nutrition] Recomputing totals for date:', dayRecord.date_local);
+    computeTotals(dayRecord.date_local);
+  }
+
+  // Return updated item
+  const updated = db.prepare(`SELECT * FROM nutrition_meal_items WHERE id = ?`).get(itemId);
+  console.log('[Nutrition] Returning updated item:', updated);
+  return updated;
+}
+
+/**
  * Delete a meal from a day
  */
 export function deleteMealFromDay(mealId: string): boolean {
