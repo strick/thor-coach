@@ -332,27 +332,7 @@ export function getNutritionRangeFromDays(from: string, to: string) {
   totals.days_logged = daysWithData;
 
   // Get nutrition goals
-  const goals = db.prepare<[], {
-    daily_protein_target_g: number | null;
-    max_daily_sodium_mg: number | null;
-    max_daily_saturated_fat_g: number | null;
-    min_daily_fiber_g: number | null;
-    max_daily_cholesterol_mg: number | null;
-    max_daily_added_sugar_g: number | null;
-    diet_style: string | null;
-  }>(`
-    SELECT
-      daily_protein_target_g,
-      max_daily_sodium_mg,
-      max_daily_saturated_fat_g,
-      min_daily_fiber_g,
-      max_daily_cholesterol_mg,
-      max_daily_added_sugar_g,
-      diet_style
-    FROM nutrition_goals
-    ORDER BY created_at DESC
-    LIMIT 1
-  `).get();
+  const goals = getNutritionGoals();
 
   return {
     from,
