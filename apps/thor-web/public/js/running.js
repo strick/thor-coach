@@ -233,7 +233,7 @@ async function loadNutritionStats() {
     const fromStr = from.toISOString().split('T')[0];
     const toStr = to.toISOString().split('T')[0];
     
-    const response = await fetch(`http://${window.location.hostname}:3000/api/nutrition/summary?from=${fromStr}&to=${toStr}`);
+    const response = await fetch(`http://${window.location.hostname}:3000/api/nutrition/summary?from=${fromStr}&to=${toStr}&t=${Date.now()}`);
     const data = await response.json();
     
     const container = document.getElementById('nutritionStats');
