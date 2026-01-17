@@ -77,40 +77,13 @@
         </div>
       </div>
 
-      <!-- Workouts Section -->
-      <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
-        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <span>💪</span> Workout History
-        </h2>
-        <div id="workoutsList" class="space-y-3"></div>
-        <div id="noWorkouts" class="text-sm text-neutral-600 dark:text-neutral-400 text-center py-4">No workouts found</div>
-      </section>
-
-      <!-- Running Sessions Section -->
-      <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
-        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <span>🏃</span> Running Sessions
-        </h2>
-        <div id="runningList" class="space-y-3"></div>
-        <div id="noRunning" class="text-sm text-neutral-600 dark:text-neutral-400 text-center py-4">No running sessions found</div>
-      </section>
-
-      <!-- Nutrition Section -->
-      <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
-        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <span>🍎</span> Nutrition History
-        </h2>
-        <div id="nutritionList" class="space-y-3"></div>
-        <div id="noNutrition" class="text-sm text-neutral-600 dark:text-neutral-400 text-center py-4">No nutrition entries found</div>
-      </section>
-
-      <!-- Health Events Section -->
+      <!-- Events by Date -->
       <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
         <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <span>❤️</span> Health Events
+          <span>📅</span> All Events
         </h2>
-        <div id="healthList" class="space-y-3"></div>
-        <div id="noHealth" class="text-sm text-neutral-600 dark:text-neutral-400 text-center py-4">No health events found</div>
+        <div id="eventsByDate" class="space-y-6"></div>
+        <div id="noEvents" class="text-sm text-neutral-600 dark:text-neutral-400 text-center py-4">No events found</div>
       </section>
     </main>
   </div>
@@ -153,100 +126,115 @@
           fetch(`${API_BASE}/api/health-events?from=${from}&to=${to}`).then(r => r.json()).catch(() => ({ events: [] }))
         ]);
 
-        displayWorkouts(workoutsRes.sessions || []);
-        displayRunning(runningRes.sessions || []);
-        displayHealth(healthRes.events || []);
+        displayEventsByDate(
+          workoutsRes.sessions || [],
+          runningRes.sessions || [],
+          healthRes.events || []
+        );
       } catch (error) {
         console.error('Error loading history:', error);
       }
     }
 
-    function displayWorkouts(workouts) {
-      const container = document.getElementById('workoutsList');
-      const noData = document.getElementById('noWorkouts');
+    function displayEventsByDate(workouts, running, health) {
+      const container = document.getElementById('eventsByDate');
+      const noEvents = document.getElementById('noEvents');
       
       container.innerHTML = '';
-      if (!workouts || workouts.length === 0) {
-        noData.classList.remove('hidden');
+      
+      // Combine all events with a type property for sorting/grouping
+      const allEvents = [
+        ...workouts.map(w => ({ type: 'workout', date: w.session_date, data: w })),
+        ...running.map(r => ({ type: 'running', date: r.session_date, data: r })),
+        ...health.map(h => ({ type: 'health', date: h.event_date, data: h }))
+      ];
+
+      if (allEvents.length === 0) {
+        noEvents.classList.remove('hidden');
         return;
       }
-      noData.classList.add('hidden');
+      noEvents.classList.add('hidden');
 
-      workouts.forEach(w => {
-        const div = document.createElement('div');
-        div.className = 'p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900';
-        div.innerHTML = `
-          <div class="flex justify-between items-start">
-            <div>
-              <p class="font-medium">${w.session_date || 'Unknown date'}</p>
-              <p class="text-sm text-neutral-600 dark:text-neutral-400 mt-1">${w.day_of_week || ''}</p>
-              <p class="text-xs text-neutral-500 dark:text-neutral-500 mt-1">Exercises logged</p>
-            </div>
-          </div>
-        `;
-        container.appendChild(div);
+      // Group by date
+      const eventsByDate = {};
+      allEvents.forEach(event => {
+        if (!eventsByDate[event.date]) {
+          eventsByDate[event.date] = [];
+        }
+        eventsByDate[event.date].push(event);
       });
+
+      // Sort dates in descending order
+      const sortedDates = Object.keys(eventsByDate).sort().reverse();
+
+      sortedDates.forEach(date => {
+        const dateSection = document.createElement('div');
+        dateSection.className = 'border-b border-neutral-200 dark:border-neutral-700 pb-6';
+        
+        const dateHeader = document.createElement('h3');
+        dateHeader.className = 'text-base font-semibold mb-4 flex items-center gap-2';
+        const dateObj = new Date(date + 'T00:00:00');
+        const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        dateHeader.innerHTML = `<span>📅</span> ${dateStr}`;
+        dateSection.appendChild(dateHeader);
+
+        const eventsList = document.createElement('div');
+        eventsList.className = 'space-y-3';
+
+        eventsByDate[date].forEach(event => {
+          const eventDiv = document.createElement('div');
+          eventDiv.className = 'p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900';
+          
+          let icon, content;
+          
+          if (event.type === 'workout') {
+            icon = '💪';
+            content = `
+              <p class="font-medium">${icon} Workout</p>
+              <p class="text-xs text-neutral-500 dark:text-neutral-500 mt-1">${event.data.day_of_week || ''}</p>
+            `;
+          } else if (event.type === 'running') {
+            const distance = event.data.distance_miles ? (event.data.distance_miles * 1.60934).toFixed(2) : 0;
+            icon = '🏃';
+            content = `
+              <p class="font-medium">${icon} Running</p>
+              <div class="grid grid-cols-3 gap-3 mt-2 text-xs">
+                <div><span class="text-neutral-600 dark:text-neutral-400">Distance:</span> <span class="font-medium text-emerald-600 dark:text-emerald-400">${distance} km</span></div>
+                <div><span class="text-neutral-600 dark:text-neutral-400">Duration:</span> <span class="font-medium text-blue-600 dark:text-blue-400">${event.data.duration_minutes || 0} min</span></div>
+                <div><span class="text-neutral-600 dark:text-neutral-400">Pace:</span> <span class="font-medium text-orange-600 dark:text-orange-400">${event.data.pace_min_per_mile || 'N/A'}</span></div>
+              </div>
+            `;
+          } else if (event.type === 'health') {
+            icon = '❤️';
+            content = `
+              <p class="font-medium">${icon} ${event.data.category || 'Health Event'}</p>
+              <div class="grid grid-cols-3 gap-3 mt-2 text-xs">
+                <div><span class="text-neutral-600 dark:text-neutral-400">Intensity:</span> <span class="font-medium">${event.data.intensity || 'N/A'}/10</span></div>
+                <div><span class="text-neutral-600 dark:text-neutral-400">Duration:</span> <span class="font-medium">${event.data.duration_minutes || 0} min</span></div>
+                ${event.data.notes ? `<div><span class="text-neutral-600 dark:text-neutral-400">Notes:</span> <span class="font-medium">${event.data.notes}</span></div>` : ''}
+              </div>
+            `;
+          }
+          
+          eventDiv.innerHTML = content;
+          eventsList.appendChild(eventDiv);
+        });
+
+        dateSection.appendChild(eventsList);
+        container.appendChild(dateSection);
+      });
+    }
+
+    function displayWorkouts(workouts) {
+      // This function is no longer used but kept as fallback
     }
 
     function displayRunning(sessions) {
-      const container = document.getElementById('runningList');
-      const noData = document.getElementById('noRunning');
-      
-      container.innerHTML = '';
-      if (!sessions || sessions.length === 0) {
-        noData.classList.remove('hidden');
-        return;
-      }
-      noData.classList.add('hidden');
-
-      sessions.forEach(s => {
-        const div = document.createElement('div');
-        div.className = 'p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900';
-        const distance = s.distance_miles ? (s.distance_miles * 1.60934).toFixed(2) : 0;
-        div.innerHTML = `
-          <div class="flex justify-between items-start">
-            <div class="flex-1">
-              <p class="font-medium">${s.session_date || 'Unknown date'}</p>
-              <div class="grid grid-cols-3 gap-4 mt-2 text-sm">
-                <div><span class="text-neutral-600 dark:text-neutral-400">Distance:</span> <span class="font-medium text-emerald-600 dark:text-emerald-400">${distance} km</span></div>
-                <div><span class="text-neutral-600 dark:text-neutral-400">Duration:</span> <span class="font-medium text-blue-600 dark:text-blue-400">${s.duration_minutes || 0} min</span></div>
-                <div><span class="text-neutral-600 dark:text-neutral-400">Pace:</span> <span class="font-medium text-orange-600 dark:text-orange-400">${s.pace_min_per_mile || 'N/A'}</span></div>
-              </div>
-            </div>
-          </div>
-        `;
-        container.appendChild(div);
-      });
+      // This function is no longer used but kept as fallback
     }
 
     function displayHealth(events) {
-      const container = document.getElementById('healthList');
-      const noData = document.getElementById('noHealth');
-      
-      container.innerHTML = '';
-      if (!events || events.length === 0) {
-        noData.classList.remove('hidden');
-        return;
-      }
-      noData.classList.add('hidden');
-
-      events.forEach(e => {
-        const div = document.createElement('div');
-        div.className = 'p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900';
-        div.innerHTML = `
-          <div class="flex justify-between items-start">
-            <div class="flex-1">
-              <p class="font-medium">${e.event_date || 'Unknown date'} - ${e.category || 'Unknown'}</p>
-              <div class="grid grid-cols-3 gap-4 mt-2 text-sm">
-                <div><span class="text-neutral-600 dark:text-neutral-400">Intensity:</span> <span class="font-medium">${e.intensity || 'N/A'}/10</span></div>
-                <div><span class="text-neutral-600 dark:text-neutral-400">Duration:</span> <span class="font-medium">${e.duration_minutes || 0} min</span></div>
-                ${e.notes ? `<div><span class="text-neutral-600 dark:text-neutral-400">Notes:</span> <span class="font-medium text-xs">${e.notes}</span></div>` : ''}
-              </div>
-            </div>
-          </div>
-        `;
-        container.appendChild(div);
-      });
+      // This function is no longer used but kept as fallback
     }
   </script>
 </body>
