@@ -6,6 +6,7 @@ import { systemRoutes } from "./system.js";
 import { testRoutes } from "./tests.js";
 import { healthRoutes } from "./health.js";
 import { nutritionRoutes } from "./nutrition.js";
+import { runningRouter } from "./running.js";
 
 export const router = express.Router();
 
@@ -17,3 +18,4 @@ router.use("/api", systemRoutes);
 router.use("/api", testRoutes);
 router.use("/api", healthRoutes);
 router.use("/api", nutritionRoutes);
+router.use("/api/running", runningRouter);

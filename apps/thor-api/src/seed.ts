@@ -336,6 +336,31 @@ export function ensureSchemaAndSeed() {
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_food_logs_date ON food_logs(log_date);
+
+  CREATE TABLE IF NOT EXISTS running_sessions (
+    id TEXT PRIMARY KEY,
+    session_date TEXT NOT NULL,
+    start_time TEXT,
+    end_time TEXT,
+    distance_miles REAL NOT NULL,
+    duration_minutes INTEGER NOT NULL,
+    pace_min_per_mile REAL,
+    elevation_gain_ft INTEGER,
+    elevation_loss_ft INTEGER,
+    avg_heart_rate INTEGER,
+    max_heart_rate INTEGER,
+    calories_burned INTEGER,
+    weather TEXT,
+    surface TEXT CHECK(surface IN ('road', 'trail', 'track', 'treadmill', 'mixed')),
+    effort_level TEXT CHECK(effort_level IN ('easy', 'moderate', 'hard', 'tempo')),
+    notes TEXT,
+    location TEXT,
+    gps_file_url TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_running_sessions_date ON running_sessions(session_date);
+  CREATE INDEX IF NOT EXISTS idx_running_sessions_created ON running_sessions(created_at);
   `);
 
   // Migration: Add LLM tracking columns if they don't exist

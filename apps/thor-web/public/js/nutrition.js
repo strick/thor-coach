@@ -457,6 +457,25 @@ async function loadNutritionDay() {
     const response = await fetch(`${API_BASE}/nutrition/day?date=${currentDate}`);
     const day = await response.json();
     console.log('[Nutrition] Received day data:', day);
+    
+    // Load running calories for this date
+    try {
+      const runningResponse = await fetch(`${API_BASE}/running/sessions`);
+      const runningData = await runningResponse.json();
+      const sessions = runningData.sessions || [];
+      
+      // Filter sessions for today
+      const todaySessions = sessions.filter(s => s.session_date === currentDate);
+      const runningCalories = todaySessions.reduce((sum, s) => sum + (s.calories_burned || 0), 0);
+      
+      // Add running calories to day data
+      day.runningCalories = runningCalories;
+      console.log('[Nutrition] Running calories for', currentDate, ':', runningCalories);
+    } catch (error) {
+      console.error('[Nutrition] Error loading running sessions:', error);
+      day.runningCalories = 0;
+    }
+    
     displayNutritionDay(day);
   } catch (error) {
     console.error('Error loading nutrition day:', error);
@@ -559,7 +578,7 @@ function displayNutritionDay(day) {
 
   // Update progress cards
   updateNutrientCard('protein', totals.protein_g || 0, targets.protein_g, 'gte');
-  updateCaloriesCard(totals.calories_kcal || 0);
+  updateCaloriesCard(totals.calories_kcal || 0, day.runningCalories || 0);
   updateNutrientCard('sodium', totals.sodium_mg || 0, targets.sodium_mg_max, 'lte');
   updateNutrientCard('fiber', totals.fiber_g || 0, targets.fiber_g, 'gte');
   updateNutrientCard('satFat', totals.sat_fat_g || 0, targets.sat_fat_g_max, 'lte');
@@ -706,26 +725,40 @@ function updateNutrientCard(nutrient, actual, target, comparison) {
 /**
  * Update calories card
  */
-function updateCaloriesCard(calories) {
+function updateCaloriesCard(calories, runningCalories = 0) {
   const actualElement = document.getElementById('caloriesActual');
   const barElement = document.getElementById('caloriesBar');
   const statusElement = document.getElementById('caloriesStatus');
+  const runningCaloriesElement = document.getElementById('runningCalories');
+  const netCaloriesElement = document.getElementById('netCalories');
 
   if (!actualElement) return;
 
-  actualElement.textContent = Math.round(calories);
+  // Calculate net calories (food - running)
+  const netCalories = Math.round(calories - runningCalories);
+  
+  // Display net calories as the main number
+  actualElement.textContent = netCalories;
+  
+  // Update running calories and net calories details
+  if (runningCaloriesElement) {
+    runningCaloriesElement.textContent = Math.round(runningCalories);
+  }
+  if (netCaloriesElement) {
+    netCaloriesElement.textContent = netCalories;
+  }
 
-  // Estimate daily calorie needs (2000 kcal average, 2500 for active people)
+  // Use net calories for the progress bar
   const estimatedDailyNeed = 2000;
-  const percentage = Math.min((calories / estimatedDailyNeed) * 100, 100);
+  const percentage = Math.min((netCalories / estimatedDailyNeed) * 100, 100);
   barElement.style.width = percentage + '%';
 
-  // Update status
-  if (calories < 1500) {
+  // Update status based on net calories
+  if (netCalories < 1500) {
     statusElement.textContent = 'Low intake';
-  } else if (calories < 2000) {
+  } else if (netCalories < 2000) {
     statusElement.textContent = 'Good pace';
-  } else if (calories < 2500) {
+  } else if (netCalories < 2500) {
     statusElement.textContent = '✓ Meeting needs';
   } else {
     statusElement.textContent = '⚠️ High intake';
