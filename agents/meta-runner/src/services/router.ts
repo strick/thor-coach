@@ -221,15 +221,21 @@ function fallbackClassify(text: string): RouterResult {
 
   // Check for workout PLAN queries (what should I do today?)
   // "what is my workout today?", "what should I do today?", "what exercises today?", "what are todays workouts"
+  // "what is mondays workout?", "what exercises on tuesday?"
   const hasWorkoutKeyword = lowerText.includes('workout') || lowerText.includes('exercise') || lowerText.includes('lift');
   const hasTodayKeyword = lowerText.includes('today') || lowerText.includes('todays');
-  const hasWhatKeyword = lowerText.includes('what');
+  const hasDayKeyword = lowerText.includes('monday') || lowerText.includes('tuesday') ||
+                        lowerText.includes('wednesday') || lowerText.includes('thursday') ||
+                        lowerText.includes('friday') || lowerText.includes('saturday') ||
+                        lowerText.includes('sunday');
+  const hasWhatKeyword = lowerText.includes('what') || lowerText.includes('show');
   const hasPlanKeyword = lowerText.includes('supposed to') || lowerText.includes('should') ||
                          lowerText.includes('plan') || lowerText.includes('scheduled');
 
   const isPlanQuery = hasWorkoutKeyword && (
     (hasPlanKeyword) ||  // "what should I do today"
-    (hasWhatKeyword && hasTodayKeyword)  // "what are todays workouts", "what exercises today"
+    (hasWhatKeyword && hasTodayKeyword) ||  // "what are todays workouts", "what exercises today"
+    (hasWhatKeyword && hasDayKeyword)  // "what is mondays workout", "what exercises on tuesday"
   );
 
   if (isPlanQuery) {

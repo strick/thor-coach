@@ -23,10 +23,14 @@ export interface ChatResponse {
     arguments: any;
     result: any;
   }>;
+  model?: string; // LLM model used (e.g., "llama3.1:8b", "gpt-4-turbo-preview", "none")
+  provider?: 'ollama' | 'openai' | 'heuristic'; // LLM provider used ('heuristic' = no LLM, direct MCP call)
 }
 
 export interface AgentConfig {
   mcpServerUrl?: string;
+  apiUrl?: string; // Thor API URL for fetching runtime LLM config
+  // Legacy fields kept for backwards compatibility (fallback only)
   useOllama?: boolean;
   ollamaUrl?: string;
   ollamaModel?: string;

@@ -77,5 +77,7 @@ export type MetaRunnerResponse = {
   intent: string;        // e.g. "log_workout", "log_meal", "log_event", "get_summary"
   actions: string[];     // human-readable description of what was done
   message: string;       // natural-language reply for the user
+  model?: string;        // LLM model used (e.g., "llama3.1:8b", "gpt-4-turbo-preview")
+  provider?: "ollama" | "openai"; // LLM provider used
   rawToolResults?: any;  // optional debug data
 };

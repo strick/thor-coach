@@ -56,6 +56,8 @@ export class MetaRunnerService {
         intent: routing.intent,
         actions,
         message,
+        model: rawToolResults?.model,
+        provider: rawToolResults?.provider,
         rawToolResults
       };
     } catch (error) {

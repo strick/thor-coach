@@ -41,9 +41,9 @@ services:
       dockerfile: apps/thor-web/Dockerfile
     container_name: thor-web
     ports:
-      - "3001:3001"
+      - "3008:3008"
     environment:
-      - PORT=3001
+      - PORT=3008
       - NODE_ENV=production
       - TZ=America/New_York
     networks:
@@ -52,7 +52,7 @@ services:
       thor-api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3001').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3008').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -97,9 +97,9 @@ services:
       dockerfile: agents/meta-runner/Dockerfile
     container_name: meta-runner
     ports:
-      - "3004:3001"
+      - "3004:3008"
     environment:
-      - PORT=3001
+      - PORT=3008
       - NODE_ENV=production
       - THOR_API_URL=http://thor-api:3000
       - THOR_AGENT_URL=http://thor-agent:3002
@@ -120,7 +120,7 @@ services:
       health-agent:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3008/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 3s
       retries: 3

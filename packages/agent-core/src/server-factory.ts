@@ -57,7 +57,9 @@ export function createAgentServer(agent: BaseAgent, config: ServerConfig): Expre
       res.json({
         reply: response.message,
         sessionId: currentSessionId,
-        toolCalls: response.toolCalls
+        toolCalls: response.toolCalls,
+        model: response.model,
+        provider: response.provider
       });
     } catch (error) {
       console.error('Chat error:', error);

@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nutrition Tracker — Thor</title>
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-h-screen">
+  <div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <header class="bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700">
+      <div class="px-4 sm:px-6 py-4 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">🍎 Nutrition Tracker</h1>
+          <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">DASH Diet • High Protein • Low Cholesterol</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="cfgPill" class="text-xs px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Connected</span>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <nav class="px-4 sm:px-6">
+        <div class="flex gap-1 border-b border-neutral-200 dark:border-neutral-700 flex-wrap">
+          <a href="/index.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            💪 Workouts
+          </a>
+          <a href="/chat.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            🤖 AI Chat
+          </a>
+          <a href="/health.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            ❤️ Health
+          </a>
+          <span class="px-4 py-3 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400">
+            🍎 Nutrition
+          </span>
+          <a href="/tests.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            🧪 Tests
+          </a>
+        </div>
+      </nav>
+    </header>
+
+    <!-- Main content -->
+    <main class="p-4 sm:p-6">
+      <!-- Date selector & tabs -->
+      <div class="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <label class="text-sm font-medium">Date:</label>
+          <input type="date" id="dateInput" class="px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800" />
+        </div>
+        <div class="flex gap-2">
+          <button id="settingsBtn" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-colors">
+            ⚙️ Goals
+          </button>
+          <button id="addMealBtn" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors">
+            + Add Meal
+          </button>
+        </div>
+      </div>
+
+      <!-- Daily Summary Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <!-- Protein Card -->
+        <div class="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-neutral-700 dark:text-neutral-300">Protein</h3>
+            <span class="text-2xl">🥚</span>
+          </div>
+          <div class="flex items-baseline gap-1 mb-2">
+            <span id="proteinActual" class="text-3xl font-bold text-indigo-600 dark:text-indigo-400">0</span>
+            <span class="text-lg text-neutral-500">/ <span id="proteinTarget">200</span>g</span>
+          </div>
+          <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+            <div id="proteinBar" class="bg-indigo-600 h-2 rounded-full" style="width: 0%"></div>
+          </div>
+          <p id="proteinStatus" class="text-xs text-neutral-500 dark:text-neutral-400 mt-2">Below target</p>
+        </div>
+
+        <!-- Calories Card -->
+        <div class="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-neutral-700 dark:text-neutral-300">Calories</h3>
+            <span class="text-2xl">🔥</span>
+          </div>
+          <div class="flex items-baseline gap-1 mb-2">
+            <span id="caloriesActual" class="text-3xl font-bold text-amber-600 dark:text-amber-400">0</span>
+            <span class="text-lg text-neutral-500">kcal</span>
+          </div>
+          <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+            <div id="caloriesBar" class="bg-amber-600 h-2 rounded-full" style="width: 0%"></div>
+          </div>
+          <p id="caloriesStatus" class="text-xs text-neutral-500 dark:text-neutral-400 mt-2">—</p>
+        </div>
+
+        <!-- Sodium Card -->
+        <div class="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-neutral-700 dark:text-neutral-300">Sodium</h3>
+            <span class="text-2xl">🧂</span>
+          </div>
+          <div class="flex items-baseline gap-1 mb-2">
+            <span id="sodiumActual" class="text-3xl font-bold text-blue-600 dark:text-blue-400">0</span>
+            <span class="text-lg text-neutral-500">/ <span id="sodiumTarget">2300</span>mg</span>
+          </div>
+          <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+            <div id="sodiumBar" class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+          </div>
+          <p id="sodiumStatus" class="text-xs text-neutral-500 dark:text-neutral-400 mt-2">Within target</p>
+        </div>
+
+        <!-- Fiber Card -->
+        <div class="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-neutral-700 dark:text-neutral-300">Fiber</h3>
+            <span class="text-2xl">🥬</span>
+          </div>
+          <div class="flex items-baseline gap-1 mb-2">
+            <span id="fiberActual" class="text-3xl font-bold text-green-600 dark:text-green-400">0</span>
+            <span class="text-lg text-neutral-500">/ <span id="fiberTarget">30</span>g</span>
+          </div>
+          <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+            <div id="fiberBar" class="bg-green-600 h-2 rounded-full" style="width: 0%"></div>
+          </div>
+          <p id="fiberStatus" class="text-xs text-neutral-500 dark:text-neutral-400 mt-2">Below target</p>
+        </div>
+
+        <!-- Saturated Fat Card -->
+        <div class="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-neutral-700 dark:text-neutral-300">Sat. Fat</h3>
+            <span class="text-2xl">⚠️</span>
+          </div>
+          <div class="flex items-baseline gap-1 mb-2">
+            <span id="satFatActual" class="text-3xl font-bold text-orange-600 dark:text-orange-400">0</span>
+            <span class="text-lg text-neutral-500">/ <span id="satFatTarget">20</span>g</span>
+          </div>
+          <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+            <div id="satFatBar" class="bg-orange-600 h-2 rounded-full" style="width: 0%"></div>
+          </div>
+          <p id="satFatStatus" class="text-xs text-neutral-500 dark:text-neutral-400 mt-2">Within target</p>
+        </div>
+
+        <!-- Cholesterol Card (excludes eggs) -->
+        <div class="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-neutral-700 dark:text-neutral-300">Cholesterol (no eggs)</h3>
+            <span class="text-2xl">❤️</span>
+          </div>
+          <div class="flex items-baseline gap-1 mb-2">
+            <span id="cholesterolActual" class="text-3xl font-bold text-red-600 dark:text-red-400">0</span>
+            <span class="text-lg text-neutral-500">/ <span id="cholesterolTarget">200</span>mg</span>
+          </div>
+          <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+            <div id="cholesterolBar" class="bg-red-600 h-2 rounded-full" style="width: 0%"></div>
+          </div>
+          <p id="cholesterolStatus" class="text-xs text-neutral-500 dark:text-neutral-400 mt-2">Within target</p>
+          
+          <!-- Egg Cholesterol Tracker -->
+          <div class="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+            <p class="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Cholesterol from eggs (not counted):</p>
+            <div class="flex items-baseline gap-1 mb-2">
+              <span id="eggCholesterolActual" class="text-lg font-semibold text-amber-600 dark:text-amber-400">0</span>
+              <span class="text-sm text-neutral-500">mg</span>
+            </div>
+            <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-1.5">
+              <div id="eggCholesterolBar" class="bg-amber-500 h-1.5 rounded-full" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Added Sugar Card -->
+        <div class="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-neutral-700 dark:text-neutral-300">Added Sugar</h3>
+            <span class="text-2xl">🍬</span>
+          </div>
+          <div class="flex items-baseline gap-1 mb-2">
+            <span id="sugarActual" class="text-3xl font-bold text-pink-600 dark:text-pink-400">0</span>
+            <span class="text-lg text-neutral-500">/ <span id="sugarTarget">25</span>g</span>
+          </div>
+          <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+            <div id="sugarBar" class="bg-pink-600 h-2 rounded-full" style="width: 0%"></div>
+          </div>
+          <p id="sugarStatus" class="text-xs text-neutral-500 dark:text-neutral-400 mt-2">Within target</p>
+        </div>
+      </div>
+
+      <!-- Meals & Items Table -->
+      <div class="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 mb-6">
+        <h2 class="text-lg font-bold mb-4">Meals & Items</h2>
+        <div id="mealsContainer" class="space-y-4">
+          <!-- Meals will be inserted here -->
+          <div class="text-center py-8 text-neutral-500 dark:text-neutral-400">
+            <p>No meals logged yet. Add a meal to get started!</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+        <h2 class="text-lg font-bold mb-4">Daily Overview</h2>
+        <div class="relative h-72">
+          <canvas id="nutritionChart"></canvas>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white dark:bg-neutral-800 rounded-lg max-w-md w-full p-6">
+      <h2 class="text-xl font-bold mb-4">DASH Diet Goals</h2>
+      <form id="goalsForm" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Protein Target (g)</label>
+          <input type="number" id="proteinTargetInput" value="200" class="w-full px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Max Sodium (mg)</label>
+          <input type="number" id="sodiumTargetInput" value="2300" class="w-full px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Min Fiber (g)</label>
+          <input type="number" id="fiberTargetInput" value="30" class="w-full px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Max Saturated Fat (g)</label>
+          <input type="number" id="satFatTargetInput" value="20" class="w-full px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Max Cholesterol (mg)</label>
+          <input type="number" id="cholesterolTargetInput" value="200" class="w-full px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Max Added Sugar (g)</label>
+          <input type="number" id="sugarTargetInput" value="25" class="w-full px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900" />
+        </div>
+        <div class="flex gap-3 pt-4">
+          <button type="button" id="closeSettingsBtn" class="flex-1 px-4 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors">
+            Cancel
+          </button>
+          <button type="submit" class="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-colors">
+            Save Goals
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Meal Modal -->
+  <div id="addMealModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white dark:bg-neutral-800 rounded-lg max-w-2xl w-full p-6 max-h-96 overflow-y-auto">
+      <h2 class="text-xl font-bold mb-4">Add Items to Meal</h2>
+      
+      <!-- Meal Selection (show after first meal added) -->
+      <div id="mealSelectionSection" class="mb-6">
+        <label class="block text-sm font-medium mb-2">Select Meal Type</label>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" class="meal-type-btn px-4 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors" data-type="breakfast">🌅 Breakfast</button>
+          <button type="button" class="meal-type-btn px-4 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors" data-type="lunch">🍽️ Lunch</button>
+          <button type="button" class="meal-type-btn px-4 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors" data-type="dinner">🌙 Dinner</button>
+          <button type="button" class="meal-type-btn px-4 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors" data-type="snack">🥜 Snack</button>
+        </div>
+      </div>
+
+      <!-- Voice & Text Input Section -->
+      <div class="mb-6 space-y-3">
+        <div>
+          <label class="block text-sm font-medium mb-2">What did you eat?</label>
+          <div class="flex gap-2">
+            <input 
+              type="text" 
+              id="foodInput" 
+              placeholder="e.g., 'Greek yogurt with berries' or click 🎤 to speak..."
+              class="flex-1 px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900"
+            />
+            <button 
+              type="button" 
+              id="voiceBtn" 
+              class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-colors"
+              title="Click to speak what you ate"
+            >
+              🎤
+            </button>
+          </div>
+          <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+            💡 Be specific: "170g Greek yogurt, nonfat" or just speak naturally
+          </p>
+        </div>
+
+        <!-- Quick suggestions -->
+        <div id="frequentItems" class="hidden">
+          <p class="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Quick add (frequent items):</p>
+          <div id="frequentItemsList" class="flex flex-wrap gap-2">
+            <!-- Will be populated dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Add Button -->
+      <div class="flex gap-3 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+        <button type="button" id="closeAddMealBtn" class="flex-1 px-4 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors">
+          Done
+        </button>
+        <button type="button" id="addItemBtn" class="flex-1 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors">
+          + Add Item
+        </button>
+      </div>
+
+      <!-- Processing indicator -->
+      <div id="processingIndicator" class="hidden mt-4 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg text-sm text-blue-700 dark:text-blue-400">
+        Processing your food entry...
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/nutrition.js"></script>
+</body>
+</html>

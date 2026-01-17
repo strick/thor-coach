@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db } from "../db.js";
-import { USE_LLM, USE_OLLAMA, OLLAMA_MODEL, OLLAMA_URL, OPENAI_API_KEY } from "../config.js";
+import { getLLMConfigForUsage } from "./llm-config.js";
 
 /**
  * Deserialize reps from database TEXT column
@@ -180,7 +180,9 @@ export function calculateWeeklyMetrics(planId: string, weekStart: Date): WeeklyM
  * Generate summary text using LLM
  */
 async function generateSummaryText(metrics: WeeklyMetrics): Promise<string> {
-  if (!USE_LLM) {
+  const llmConfig = getLLMConfigForUsage("weekly_summary");
+
+  if (!llmConfig) {
     return generateFallbackSummary(metrics);
   }
 
@@ -208,10 +210,16 @@ Write a concise 3-4 sentence summary highlighting:
 Keep it motivational but realistic. Use second person ("You").`;
 
   try {
-    if (USE_OLLAMA) {
-      return await generateWithOllama(prompt);
+    if (llmConfig.provider === "ollama") {
+      if (!llmConfig.url) {
+        throw new Error("Ollama URL is required");
+      }
+      return await generateWithOllama(prompt, llmConfig.model, llmConfig.url);
     } else {
-      return await generateWithOpenAI(prompt);
+      if (!llmConfig.apiKey) {
+        throw new Error("OpenAI API key is required");
+      }
+      return await generateWithOpenAI(prompt, llmConfig.model, llmConfig.apiKey);
     }
   } catch (error) {
     console.error("Failed to generate LLM summary, using fallback:", error);
@@ -219,12 +227,12 @@ Keep it motivational but realistic. Use second person ("You").`;
   }
 }
 
-async function generateWithOllama(prompt: string): Promise<string> {
-  const resp = await fetch(`${OLLAMA_URL}/api/chat`, {
+async function generateWithOllama(prompt: string, model: string, url: string): Promise<string> {
+  const resp = await fetch(`${url}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: OLLAMA_MODEL,
+      model: model,
       stream: false,
       messages: [
         { role: "system", content: "You are a concise fitness coach. Keep responses to 3-4 sentences." },
@@ -242,12 +250,12 @@ async function generateWithOllama(prompt: string): Promise<string> {
   return data?.message?.content || generateFallbackSummary({ week_start: "", week_end: "", total_sessions: 0, total_volume: 0, total_sets: 0, exercises_performed: [], days_trained: [] });
 }
 
-async function generateWithOpenAI(prompt: string): Promise<string> {
+async function generateWithOpenAI(prompt: string, model: string, apiKey: string): Promise<string> {
   const { OpenAI } = await import("openai");
-  const client = new OpenAI({ apiKey: OPENAI_API_KEY });
+  const client = new OpenAI({ apiKey: apiKey });
 
   const resp = await client.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: model,
     messages: [
       { role: "system", content: "You are a concise fitness coach. Keep responses to 3-4 sentences." },
       { role: "user", content: prompt }

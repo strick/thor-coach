@@ -282,7 +282,8 @@
               // Final response received
               const data = parsed.data;
               
-              addTerminalLine(`Agent: ${data.agent.toUpperCase()} | Intent: ${data.intent}`, 'agent');
+              const modelInfo = data.model && data.provider ? ` | Model: ${data.provider}/${data.model}` : '';
+              addTerminalLine(`Agent: ${data.agent.toUpperCase()} | Intent: ${data.intent}${modelInfo}`, 'agent');
               if (data.actions && data.actions.length > 0) {
                 addTerminalLine(`Actions: ${data.actions.join(', ')}`, 'success');
               }
@@ -412,7 +413,8 @@
 
       let html = formatMessage(text);
       if (metadata.agent) {
-        html += `<div class="text-xs opacity-70 mt-2">Agent: ${metadata.agent} | Intent: ${metadata.intent}</div>`;
+        const modelInfo = metadata.model && metadata.provider ? ` | Model: ${metadata.provider}/${metadata.model}` : '';
+        html += `<div class="text-xs opacity-70 mt-2">Agent: ${metadata.agent} | Intent: ${metadata.intent}${modelInfo}</div>`;
       }
       content.innerHTML = html;
 

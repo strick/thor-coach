@@ -11,3 +11,7 @@ systemRoutes.get("/config", systemController.getConfig);
 
 // Get available Ollama models
 systemRoutes.get("/ollama/models", systemController.getOllamaModels);
+
+// LLM config endpoints
+systemRoutes.get("/config/llm", systemController.getLLMConfig);
+systemRoutes.post("/config/llm", systemController.updateLLMConfig);

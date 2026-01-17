@@ -68,6 +68,28 @@ export function initializeDatabase(database: Database.Database) {
   );
   CREATE INDEX IF NOT EXISTS idx_health_events_date ON health_events(date);
   CREATE INDEX IF NOT EXISTS idx_health_events_category ON health_events(category);
+
+  CREATE TABLE IF NOT EXISTS nutrition_goals (
+    id TEXT PRIMARY KEY,
+    daily_protein_target_g INTEGER,
+    max_daily_sodium_mg INTEGER,
+    max_daily_saturated_fat_g INTEGER,
+    min_daily_fiber_g INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS food_logs (
+    id TEXT PRIMARY KEY,
+    log_date TEXT NOT NULL,
+    description TEXT NOT NULL,
+    calories INTEGER,
+    protein_g REAL,
+    sodium_mg REAL,
+    saturated_fat_g REAL,
+    fiber_g REAL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_food_logs_date ON food_logs(log_date);
   `);
 }
 
@@ -185,6 +207,135 @@ export function ensureSchemaAndSeed() {
   );
   CREATE INDEX IF NOT EXISTS idx_health_events_date ON health_events(date);
   CREATE INDEX IF NOT EXISTS idx_health_events_category ON health_events(category);
+
+  CREATE TABLE IF NOT EXISTS nutrition_goals (
+    id TEXT PRIMARY KEY,
+    daily_protein_target_g INTEGER,
+    max_daily_sodium_mg INTEGER,
+    max_daily_saturated_fat_g INTEGER,
+    min_daily_fiber_g INTEGER,
+    max_daily_cholesterol_mg INTEGER,
+    max_daily_added_sugar_g INTEGER,
+    min_daily_fiber_goal_g INTEGER,
+    diet_style TEXT DEFAULT 'DASH',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS nutrition_days (
+    id TEXT PRIMARY KEY,
+    date_local TEXT NOT NULL UNIQUE,
+    timezone TEXT DEFAULT 'America/New_York',
+    source TEXT DEFAULT 'manual_entry',
+    notes TEXT,
+    diet_style TEXT DEFAULT 'DASH',
+    high_cholesterol BOOLEAN DEFAULT 1,
+    high_protein_goal BOOLEAN DEFAULT 1,
+    recompute_required BOOLEAN DEFAULT 1,
+    last_computed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_nutrition_days_date ON nutrition_days(date_local);
+
+  CREATE TABLE IF NOT EXISTS nutrition_day_targets (
+    id TEXT PRIMARY KEY,
+    nutrition_day_id TEXT NOT NULL UNIQUE,
+    calories_kcal INTEGER DEFAULT 0,
+    protein_g INTEGER,
+    fiber_g INTEGER,
+    sodium_mg_max INTEGER,
+    sat_fat_g_max INTEGER,
+    added_sugar_g_max INTEGER,
+    cholesterol_mg_max INTEGER,
+    FOREIGN KEY(nutrition_day_id) REFERENCES nutrition_days(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS nutrition_day_totals (
+    id TEXT PRIMARY KEY,
+    nutrition_day_id TEXT NOT NULL UNIQUE,
+    calories_kcal REAL DEFAULT 0,
+    protein_g REAL DEFAULT 0,
+    carbs_g REAL DEFAULT 0,
+    fat_g REAL DEFAULT 0,
+    fiber_g REAL DEFAULT 0,
+    sugar_g REAL DEFAULT 0,
+    added_sugar_g REAL DEFAULT 0,
+    sodium_mg REAL DEFAULT 0,
+    sat_fat_g REAL DEFAULT 0,
+    cholesterol_mg REAL DEFAULT 0,
+    potassium_mg REAL DEFAULT 0,
+    calcium_mg REAL DEFAULT 0,
+    FOREIGN KEY(nutrition_day_id) REFERENCES nutrition_days(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS nutrition_meals (
+    id TEXT PRIMARY KEY,
+    nutrition_day_id TEXT NOT NULL,
+    meal_id TEXT NOT NULL,
+    meal_type TEXT NOT NULL CHECK(meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
+    time_local TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(nutrition_day_id) REFERENCES nutrition_days(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_nutrition_meals_day ON nutrition_meals(nutrition_day_id);
+  CREATE INDEX IF NOT EXISTS idx_nutrition_meals_type ON nutrition_meals(meal_type);
+
+  CREATE TABLE IF NOT EXISTS nutrition_meal_items (
+    id TEXT PRIMARY KEY,
+    meal_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    food_name TEXT NOT NULL,
+    brand TEXT,
+    serving_quantity REAL,
+    serving_unit TEXT,
+    serving_display TEXT,
+    calories_kcal REAL DEFAULT 0,
+    protein_g REAL DEFAULT 0,
+    carbs_g REAL DEFAULT 0,
+    fat_g REAL DEFAULT 0,
+    fiber_g REAL DEFAULT 0,
+    sugar_g REAL DEFAULT 0,
+    added_sugar_g REAL DEFAULT 0,
+    sodium_mg REAL DEFAULT 0,
+    sat_fat_g REAL DEFAULT 0,
+    cholesterol_mg REAL DEFAULT 0,
+    potassium_mg REAL DEFAULT 0,
+    calcium_mg REAL DEFAULT 0,
+    high_sodium BOOLEAN DEFAULT 0,
+    high_sat_fat BOOLEAN DEFAULT 0,
+    processed BOOLEAN DEFAULT 0,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(meal_id) REFERENCES nutrition_meals(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_nutrition_meal_items_meal ON nutrition_meal_items(meal_id);
+
+  CREATE TABLE IF NOT EXISTS nutrition_meal_totals (
+    id TEXT PRIMARY KEY,
+    meal_id TEXT NOT NULL UNIQUE,
+    calories_kcal REAL DEFAULT 0,
+    protein_g REAL DEFAULT 0,
+    carbs_g REAL DEFAULT 0,
+    fat_g REAL DEFAULT 0,
+    fiber_g REAL DEFAULT 0,
+    sodium_mg REAL DEFAULT 0,
+    sat_fat_g REAL DEFAULT 0,
+    cholesterol_mg REAL DEFAULT 0,
+    FOREIGN KEY(meal_id) REFERENCES nutrition_meals(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS food_logs (
+    id TEXT PRIMARY KEY,
+    log_date TEXT NOT NULL,
+    description TEXT NOT NULL,
+    calories INTEGER,
+    protein_g REAL,
+    sodium_mg REAL,
+    saturated_fat_g REAL,
+    fiber_g REAL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_food_logs_date ON food_logs(log_date);
   `);
 
   // Migration: Add LLM tracking columns if they don't exist

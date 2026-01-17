@@ -578,6 +578,9 @@ probeBackend();
 
   // ======= Progress =======
   let sessionsChart = null;
+  let weeklyVolumeChart = null;
+  let weeklySessionsChart = null;
+
   async function refreshProgress() {
     const to = todayISO();
     const from = toLocalDateString(new Date(Date.now() - 29*24*60*60*1000));
@@ -615,6 +618,318 @@ probeBackend();
         <td class="py-1 pr-4">${r.reps_per_set ?? ''}</td>
         <td class="py-1 pr-4">${r.weight_lbs ?? ''}</td>
       </tr>`).join('');
+
+    // Fetch and render weekly trends
+    await fetchWeeklyTrends();
+  }
+
+  async function fetchWeeklyTrends() {
+    try {
+      const res = await fetch(`${apiBase()}/weekly-summaries?limit=20`);
+      if (!res.ok) return;
+      const data = await res.json();
+      renderWeeklyTrendCharts(data.summaries || []);
+    } catch (e) {
+      console.error('Failed to fetch weekly trends:', e);
+    }
+  }
+
+  function renderWeeklyTrendCharts(summaries) {
+    if (!summaries || summaries.length === 0) return;
+
+    // Sort by week start date (oldest first for chart)
+    const sorted = summaries.slice().reverse();
+
+    // Extract data for charts
+    const weekLabels = sorted.map(s => s.week_start_date);
+    const volumeData = sorted.map(s => s.total_volume);
+    const sessionData = sorted.map(s => s.total_sessions);
+
+    // Weekly Volume Chart
+    const volumeCtx = $("weeklyVolumeChart");
+    if (volumeCtx) {
+      if (weeklyVolumeChart) weeklyVolumeChart.destroy();
+      weeklyVolumeChart = new Chart(volumeCtx, {
+        type: 'line',
+        data: {
+          labels: weekLabels,
+          datasets: [{
+            label: 'Total Volume (lbs)',
+            data: volumeData,
+            borderColor: 'rgb(99, 102, 241)',
+            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+            tension: 0.3,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: true, position: 'top' },
+            tooltip: {
+              callbacks: {
+                label: (context) => `Volume: ${context.parsed.y.toFixed(0)} lbs`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: (value) => value.toFixed(0) + ' lbs'
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Weekly Sessions Chart
+    const sessionsCtx = $("weeklySessionsChart");
+    if (sessionsCtx) {
+      if (weeklySessionsChart) weeklySessionsChart.destroy();
+      weeklySessionsChart = new Chart(sessionsCtx, {
+        type: 'line',
+        data: {
+          labels: weekLabels,
+          datasets: [{
+            label: 'Workout Sessions',
+            data: sessionData,
+            borderColor: 'rgb(168, 85, 247)',
+            backgroundColor: 'rgba(168, 85, 247, 0.1)',
+            tension: 0.3,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: true, position: 'top' },
+            tooltip: {
+              callbacks: {
+                label: (context) => `Sessions: ${context.parsed.y}`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                precision: 0
+              }
+            }
+          }
+        }
+      });
+    }
+  }
+
+  // ======= Exercise Progress Charts =======
+  let exerciseWeightChart = null;
+  let exerciseVolumeChart = null;
+
+  async function populateExerciseSelector() {
+    try {
+      const res = await fetch(`${apiBase()}/exercises`);
+      if (!res.ok) return;
+      const data = await res.json();
+
+      const select = $("exerciseProgressSelect");
+      if (!select) return;
+
+      // Clear existing options except the first one
+      select.innerHTML = '<option value="">Select an exercise...</option>';
+
+      // Add exercises grouped by day
+      const exercisesByDay = {};
+      (data.exercises || []).forEach(ex => {
+        if (!exercisesByDay[ex.day_of_week]) {
+          exercisesByDay[ex.day_of_week] = [];
+        }
+        exercisesByDay[ex.day_of_week].push(ex);
+      });
+
+      Object.keys(exercisesByDay).sort().forEach(dow => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = `Day ${dow}`;
+        exercisesByDay[dow].forEach(ex => {
+          const option = document.createElement('option');
+          option.value = ex.id;
+          option.textContent = ex.name;
+          optgroup.appendChild(option);
+        });
+        select.appendChild(optgroup);
+      });
+
+      // Add event listener
+      select.addEventListener('change', async (e) => {
+        const exerciseId = e.target.value;
+        if (exerciseId) {
+          await loadExerciseProgress(exerciseId);
+        } else {
+          hideExerciseProgress();
+        }
+      });
+    } catch (e) {
+      console.error('Failed to populate exercise selector:', e);
+    }
+  }
+
+  async function loadExerciseProgress(exerciseId) {
+    try {
+      const res = await fetch(`${apiBase()}/exercises/${exerciseId}/history?limit=100`);
+      if (!res.ok) throw new Error('Failed to load exercise history');
+      const data = await res.json();
+
+      renderExerciseProgressCharts(data);
+    } catch (e) {
+      console.error('Failed to load exercise progress:', e);
+      showToast('Failed to load exercise progress', 'error');
+    }
+  }
+
+  function renderExerciseProgressCharts(data) {
+    const { exercise, history, stats } = data;
+
+    if (!history || history.length === 0) {
+      showToast('No history data for this exercise', 'warning');
+      hideExerciseProgress();
+      return;
+    }
+
+    // Show charts container
+    $("exerciseProgressContainer").classList.remove('hidden');
+    $("exerciseProgressEmpty").classList.add('hidden');
+
+    // Sort by date (oldest first)
+    const sorted = history.slice().reverse();
+
+    // Extract data
+    const dates = sorted.map(h => h.session_date);
+    const weights = sorted.map(h => h.weight_lbs || 0);
+
+    // Calculate volume per session
+    const volumes = sorted.map(h => {
+      const reps = h.reps_per_set;
+      const weight = h.weight_lbs || 0;
+      const sets = h.sets || 0;
+
+      if (Array.isArray(reps)) {
+        const totalReps = reps.reduce((sum, r) => sum + r, 0);
+        return totalReps * weight;
+      } else if (typeof reps === 'number') {
+        return sets * reps * weight;
+      }
+      return 0;
+    });
+
+    // Weight Progress Chart
+    const weightCtx = $("exerciseWeightChart");
+    if (weightCtx) {
+      if (exerciseWeightChart) exerciseWeightChart.destroy();
+      exerciseWeightChart = new Chart(weightCtx, {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [{
+            label: 'Weight (lbs)',
+            data: weights,
+            borderColor: 'rgb(34, 197, 94)',
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            tension: 0.3,
+            fill: true,
+            pointRadius: 4,
+            pointHoverRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: true, position: 'top' },
+            title: {
+              display: true,
+              text: exercise.name
+            },
+            tooltip: {
+              callbacks: {
+                label: (context) => `Weight: ${context.parsed.y} lbs`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: (value) => value + ' lbs'
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Volume Progress Chart
+    const volumeCtx = $("exerciseVolumeChart");
+    if (volumeCtx) {
+      if (exerciseVolumeChart) exerciseVolumeChart.destroy();
+      exerciseVolumeChart = new Chart(volumeCtx, {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [{
+            label: 'Volume (lbs)',
+            data: volumes,
+            borderColor: 'rgb(239, 68, 68)',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            tension: 0.3,
+            fill: true,
+            pointRadius: 4,
+            pointHoverRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: true, position: 'top' },
+            title: {
+              display: true,
+              text: exercise.name
+            },
+            tooltip: {
+              callbacks: {
+                label: (context) => `Volume: ${context.parsed.y.toFixed(0)} lbs`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: (value) => value.toFixed(0) + ' lbs'
+              }
+            }
+          }
+        }
+      });
+    }
+  }
+
+  function hideExerciseProgress() {
+    $("exerciseProgressContainer").classList.add('hidden');
+    $("exerciseProgressEmpty").classList.remove('hidden');
+
+    if (exerciseWeightChart) {
+      exerciseWeightChart.destroy();
+      exerciseWeightChart = null;
+    }
+    if (exerciseVolumeChart) {
+      exerciseVolumeChart.destroy();
+      exerciseVolumeChart = null;
+    }
   }
 
   // ======= Weekly Summaries =======
@@ -835,7 +1150,26 @@ probeBackend();
           </button>
         </div>
         <div class="space-y-2">
-          ${allExercises.map(ex => `
+          ${allExercises.map(ex => {
+            // Parse reps - could be single number or array
+            const repsArray = Array.isArray(ex.reps_per_set) ? ex.reps_per_set : null;
+            const numSets = ex.sets || (repsArray ? repsArray.length : 1);
+            const displayReps = repsArray ? repsArray.join(', ') : ex.reps_per_set;
+
+            // Build edit UI for individual sets
+            const editSetsHTML = Array.from({ length: numSets }, (_, i) => {
+              const setNum = i + 1;
+              const reps = repsArray ? repsArray[i] : ex.reps_per_set;
+              return `
+                <div class="grid grid-cols-3 gap-2 items-center mb-2">
+                  <label class="text-xs text-neutral-500 dark:text-neutral-400">Set ${setNum}:</label>
+                  <input type="number" data-set-idx="${i}" class="set-reps-history-${ex.id} px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" placeholder="Reps" value="${reps || ''}" />
+                  <input type="number" step="0.5" data-set-idx="${i}" class="set-weight-history-${ex.id} px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" placeholder="Weight" value="${ex.weight_lbs || ''}" />
+                </div>
+              `;
+            }).join('');
+
+            return `
             <div class="text-xs bg-neutral-50 dark:bg-neutral-900 rounded-lg p-3 flex items-start gap-3" data-log-id="${ex.id}">
               <input type="checkbox" class="history-checkbox mt-1" data-session-id="${ex.sessionId}" onchange="updateHistoryDeleteButton()" />
               <div class="flex-1">
@@ -846,17 +1180,17 @@ probeBackend();
                   <button onclick="toggleEditMode('history-${ex.id}')" class="text-indigo-600 dark:text-indigo-400 hover:underline text-xs">Edit</button>
                 </div>
                 <div class="view-mode-history-${ex.id}">
-                  <div class="text-neutral-600 dark:text-neutral-400">${ex.sets || '?'}x${ex.reps_per_set || '?'} ${ex.weight_lbs ? '@' + ex.weight_lbs + ' lbs' : ''}</div>
+                  <div class="text-neutral-600 dark:text-neutral-400">${numSets}x ${displayReps} ${ex.weight_lbs ? '@' + ex.weight_lbs + ' lbs' : ''}</div>
                   ${ex.notes ? `<div class="text-xs text-neutral-500 dark:text-neutral-400 italic mt-1">💭 ${ex.notes}</div>` : ''}
                   ${ex.llm_provider && ex.llm_model ? `<div class="text-[10px] text-neutral-400 dark:text-neutral-500 mt-1 flex items-center gap-1">
                     <span title="AI Model used to parse this workout">🤖 ${ex.llm_provider}: ${ex.llm_model}</span>
                   </div>` : ''}
                 </div>
                 <div class="edit-mode-history-${ex.id} hidden">
-                  <div class="grid grid-cols-3 gap-2 mb-2">
-                    <input type="number" id="sets-history-${ex.id}" value="${ex.sets || ''}" placeholder="Sets" class="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" />
-                    <input type="number" id="reps-history-${ex.id}" value="${ex.reps_per_set || ''}" placeholder="Reps" class="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" />
-                    <input type="number" step="0.5" id="weight-history-${ex.id}" value="${ex.weight_lbs || ''}" placeholder="Weight" class="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" />
+                  <div class="mb-3">
+                    <div class="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Edit Individual Sets:</div>
+                    ${editSetsHTML}
+                    <button onclick="addSet('history-${ex.id}')" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline mt-1">+ Add Set</button>
                   </div>
                   <div class="mb-2">
                     <textarea id="notes-history-${ex.id}" placeholder="Notes (optional)" class="w-full px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs resize-none" rows="2">${ex.notes || ''}</textarea>
@@ -868,7 +1202,7 @@ probeBackend();
                 </div>
               </div>
             </div>
-          `).join('')}
+          `}).join('')}
         </div>
       </div>
     `;
@@ -921,7 +1255,26 @@ probeBackend();
           </button>
         </div>
         <div class="space-y-2">
-          ${allExercises.map(ex => `
+          ${allExercises.map(ex => {
+            // Parse reps - could be single number or array
+            const repsArray = Array.isArray(ex.reps_per_set) ? ex.reps_per_set : null;
+            const numSets = ex.sets || (repsArray ? repsArray.length : 1);
+            const displayReps = repsArray ? repsArray.join(', ') : ex.reps_per_set;
+
+            // Build edit UI for individual sets
+            const editSetsHTML = Array.from({ length: numSets }, (_, i) => {
+              const setNum = i + 1;
+              const reps = repsArray ? repsArray[i] : ex.reps_per_set;
+              return `
+                <div class="grid grid-cols-3 gap-2 items-center mb-2">
+                  <label class="text-xs text-neutral-500 dark:text-neutral-400">Set ${setNum}:</label>
+                  <input type="number" data-set-idx="${i}" class="set-reps-today-${ex.id} px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" placeholder="Reps" value="${reps || ''}" />
+                  <input type="number" step="0.5" data-set-idx="${i}" class="set-weight-today-${ex.id} px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" placeholder="Weight" value="${ex.weight_lbs || ''}" />
+                </div>
+              `;
+            }).join('');
+
+            return `
             <div class="text-xs bg-neutral-50 dark:bg-neutral-900 rounded-lg p-3 flex items-start gap-3" data-log-id="${ex.id}">
               <input type="checkbox" class="workout-checkbox mt-1" data-session-id="${ex.sessionId}" onchange="updateDeleteButton()" />
               <div class="flex-1">
@@ -932,17 +1285,17 @@ probeBackend();
                   <button onclick="toggleEditMode('today-${ex.id}')" class="text-indigo-600 dark:text-indigo-400 hover:underline text-xs">Edit</button>
                 </div>
                 <div class="view-mode-today-${ex.id}">
-                  <div class="text-neutral-600 dark:text-neutral-400">${ex.sets || '?'}x${ex.reps_per_set || '?'} ${ex.weight_lbs ? '@' + ex.weight_lbs + ' lbs' : ''}</div>
+                  <div class="text-neutral-600 dark:text-neutral-400">${numSets}x ${displayReps} ${ex.weight_lbs ? '@' + ex.weight_lbs + ' lbs' : ''}</div>
                   ${ex.notes ? `<div class="text-xs text-neutral-500 dark:text-neutral-400 italic mt-1">💭 ${ex.notes}</div>` : ''}
                   ${ex.llm_provider && ex.llm_model ? `<div class="text-[10px] text-neutral-400 dark:text-neutral-500 mt-1 flex items-center gap-1">
                     <span title="AI Model used to parse this workout">🤖 ${ex.llm_provider}: ${ex.llm_model}</span>
                   </div>` : ''}
                 </div>
                 <div class="edit-mode-today-${ex.id} hidden">
-                  <div class="grid grid-cols-3 gap-2 mb-2">
-                    <input type="number" id="sets-today-${ex.id}" value="${ex.sets || ''}" placeholder="Sets" class="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" />
-                    <input type="number" id="reps-today-${ex.id}" value="${ex.reps_per_set || ''}" placeholder="Reps" class="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" />
-                    <input type="number" step="0.5" id="weight-today-${ex.id}" value="${ex.weight_lbs || ''}" placeholder="Weight" class="px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" />
+                  <div class="mb-3">
+                    <div class="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Edit Individual Sets:</div>
+                    ${editSetsHTML}
+                    <button onclick="addSet('today-${ex.id}')" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline mt-1">+ Add Set</button>
                   </div>
                   <div class="mb-2">
                     <textarea id="notes-today-${ex.id}" placeholder="Notes (optional)" class="w-full px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs resize-none" rows="2">${ex.notes || ''}</textarea>
@@ -954,7 +1307,7 @@ probeBackend();
                 </div>
               </div>
             </div>
-          `).join('')}
+          `}).join('')}
         </div>
       </div>
     `;
@@ -974,21 +1327,23 @@ probeBackend();
     // Extract actual logId from prefixed version (e.g., "today-123" -> "123")
     const actualLogId = prefixedLogId.replace(/^(today-|history-)/, '');
 
-    const setsInput = document.getElementById(`sets-${prefixedLogId}`);
-    const repsInput = document.getElementById(`reps-${prefixedLogId}`);
-    const weightInput = document.getElementById(`weight-${prefixedLogId}`);
+    // Collect per-set reps and weights
+    const repsInputs = document.querySelectorAll(`.set-reps-${prefixedLogId}`);
+    const weightInputs = document.querySelectorAll(`.set-weight-${prefixedLogId}`);
     const notesInput = document.getElementById(`notes-${prefixedLogId}`);
 
-    const newSets = setsInput.value;
-    const newReps = repsInput.value;
-    const newWeight = weightInput.value;
-    const newNotes = notesInput ? notesInput.value : '';
+    const repsArray = Array.from(repsInputs).map(input => input.value ? parseInt(input.value) : null).filter(v => v !== null);
+    const weightValues = Array.from(weightInputs).map(input => input.value ? parseFloat(input.value) : null);
 
-    // Store old values for rollback
-    const oldSets = setsInput.defaultValue;
-    const oldReps = repsInput.defaultValue;
-    const oldWeight = weightInput.defaultValue;
-    const oldNotes = notesInput ? notesInput.defaultValue : '';
+    // Use the first non-null weight (assuming all sets use same weight for now)
+    const weight = weightValues.find(w => w !== null) || null;
+
+    const newNotes = notesInput ? notesInput.value : '';
+    const newSets = repsArray.length;
+
+    // Determine if reps are consistent or variable
+    const allSameReps = repsArray.length > 0 && repsArray.every(r => r === repsArray[0]);
+    const repsValue = allSameReps ? String(repsArray[0]) : JSON.stringify(repsArray);
 
     const viewMode = document.querySelector(`.view-mode-${prefixedLogId}`);
     const oldViewHTML = viewMode ? viewMode.innerHTML : '';
@@ -996,11 +1351,10 @@ probeBackend();
     try {
       // Optimistic update - update UI immediately
       if (viewMode) {
-        const setsVal = newSets || '?';
-        const repsVal = newReps || '?';
-        const weightText = newWeight ? `@${newWeight} lbs` : '';
+        const displayReps = allSameReps ? repsArray[0] : repsArray.join(', ');
+        const weightText = weight ? `@${weight} lbs` : '';
         const notesHTML = newNotes ? `<div class="text-xs text-neutral-500 dark:text-neutral-400 italic mt-1">💭 ${newNotes}</div>` : '';
-        viewMode.innerHTML = `<div class="text-neutral-600 dark:text-neutral-400">${setsVal}x${repsVal} ${weightText}</div>${notesHTML}<span class="text-yellow-500 ml-2 text-xs">⏳ Saving...</span>`;
+        viewMode.innerHTML = `<div class="text-neutral-600 dark:text-neutral-400">${newSets}x ${displayReps} ${weightText}</div>${notesHTML}<span class="text-yellow-500 ml-2 text-xs">⏳ Saving...</span>`;
       }
 
       toggleEditMode(prefixedLogId);
@@ -1010,27 +1364,22 @@ probeBackend();
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sets: newSets ? parseInt(newSets) : null,
-          reps_per_set: newReps ? parseInt(newReps) : null,
-          weight_lbs: newWeight ? parseFloat(newWeight) : null,
+          sets: newSets || null,
+          reps_per_set: repsValue || null,
+          weight_lbs: weight,
           notes: newNotes || null
         })
       });
 
       if (!res.ok) throw new Error('Failed to update');
 
-      // Success - remove pending indicator and update defaults
+      // Success - remove pending indicator
       if (viewMode) {
-        const setsVal = newSets || '?';
-        const repsVal = newReps || '?';
-        const weightText = newWeight ? `@${newWeight} lbs` : '';
+        const displayReps = allSameReps ? repsArray[0] : repsArray.join(', ');
+        const weightText = weight ? `@${weight} lbs` : '';
         const notesHTML = newNotes ? `<div class="text-xs text-neutral-500 dark:text-neutral-400 italic mt-1">💭 ${newNotes}</div>` : '';
-        viewMode.innerHTML = `<div class="text-neutral-600 dark:text-neutral-400">${setsVal}x${repsVal} ${weightText}</div>${notesHTML}`;
+        viewMode.innerHTML = `<div class="text-neutral-600 dark:text-neutral-400">${newSets}x ${displayReps} ${weightText}</div>${notesHTML}`;
       }
-      setsInput.defaultValue = newSets;
-      repsInput.defaultValue = newReps;
-      weightInput.defaultValue = newWeight;
-      if (notesInput) notesInput.defaultValue = newNotes;
 
       showToast('Exercise updated successfully!', 'success');
       await loadWorkoutsByDate();
@@ -1042,18 +1391,44 @@ probeBackend();
       if (viewMode) {
         viewMode.innerHTML = oldViewHTML;
       }
-      setsInput.value = oldSets;
-      repsInput.value = oldReps;
-      weightInput.value = oldWeight;
-      if (notesInput) notesInput.value = oldNotes;
 
       showToast('Failed to update exercise. Changes reverted.', 'error');
       toggleEditMode(prefixedLogId);  // Show edit mode again so user can retry
     }
   }
 
+  function addSet(prefixedLogId) {
+    const editMode = document.querySelector(`.edit-mode-${prefixedLogId}`);
+    if (!editMode) return;
+
+    // Count existing sets
+    const existingRepsInputs = editMode.querySelectorAll(`[class^="set-reps-"]`);
+    const setNum = existingRepsInputs.length + 1;
+
+    // Find the container for sets
+    const setsContainer = editMode.querySelector('div.mb-3');
+    if (!setsContainer) return;
+
+    // Find the "Add Set" button
+    const addButton = setsContainer.querySelector('button');
+    if (!addButton) return;
+
+    // Create new set inputs
+    const newSetHTML = `
+      <div class="grid grid-cols-3 gap-2 items-center mb-2">
+        <label class="text-xs text-neutral-500 dark:text-neutral-400">Set ${setNum}:</label>
+        <input type="number" data-set-idx="${setNum - 1}" class="set-reps-${prefixedLogId} px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" placeholder="Reps" value="" />
+        <input type="number" step="0.5" data-set-idx="${setNum - 1}" class="set-weight-${prefixedLogId} px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" placeholder="Weight" value="" />
+      </div>
+    `;
+
+    // Insert before the "Add Set" button
+    addButton.insertAdjacentHTML('beforebegin', newSetHTML);
+  }
+
   window.toggleEditMode = toggleEditMode;
   window.saveExerciseLog = saveExerciseLog;
+  window.addSet = addSet;
 
   async function deleteWorkout(sessionId) {
     const confirmed = await showConfirm({
@@ -2579,3 +2954,4 @@ OLLAMA_MODEL=llama3.1:8b
   refreshProgress();
   fetchWeeklySummaries();
   loadTodaysWorkouts();
+  populateExerciseSelector();

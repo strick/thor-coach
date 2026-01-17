@@ -50,7 +50,9 @@
       "Bash(docker inspect:*)",
       "Bash(npm run build:health-mcp:*)",
       "Bash(npm test:*)",
-      "Bash(nvidia-smi:*)"
+      "Bash(nvidia-smi:*)",
+      "Bash(time curl -s -X POST http://localhost:3004/chat -H \"Content-Type: application/json\" -d '{\"\"\"\"text\"\"\"\":\"\"\"\"What exercises should I do today?\"\"\"\"}')",
+      "Bash(docker builder prune:*)"
     ],
     "deny": [],
     "ask": []

@@ -189,6 +189,54 @@ export class HealthApiClient {
     return response.json();
   }
 
+  // ==================== NUTRITION ====================
+
+  /**
+   * Log food from natural language
+   */
+  async logFood(text: string, date?: string): Promise<any> {
+    const response = await fetch(`${this.baseUrl}/api/nutrition/log`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, date }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get daily nutrition summary
+   */
+  async getDailyNutrition(date?: string): Promise<any> {
+    const queryParams = date ? `?date=${date}` : '';
+    const response = await fetch(`${this.baseUrl}/api/nutrition/today${queryParams}`);
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get nutrition summary for date range
+   */
+  async getNutritionSummary(from: string, to: string): Promise<any> {
+    const response = await fetch(
+      `${this.baseUrl}/api/nutrition/summary?from=${from}&to=${to}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
   // ==================== HEALTH CHECK ====================
 
   /**

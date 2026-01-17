@@ -12,6 +12,15 @@ export async function handleIngest(text: string, dateISO?: string, planId = THOR
 
   const parseResult = await parseFreeform(text, planId, dow);
 
+  const sessionDate = toISODate(date);
+
+  const getExistingSession = db.prepare(`
+    SELECT id, llm_provider, llm_model
+    FROM workout_sessions
+    WHERE plan_id = ? AND session_date = ?
+    LIMIT 1
+  `);
+
   const insertSession = db.prepare(`
     INSERT INTO workout_sessions (id,plan_id,session_date,day_of_week,llm_provider,llm_model)
     VALUES (@id,@plan_id,@session_date,@day_of_week,@llm_provider,@llm_model)
@@ -30,20 +39,42 @@ export async function handleIngest(text: string, dateISO?: string, planId = THOR
     LIMIT 1
   `);
 
-  const sessionId = randomUUID();
-  const sessionRow = {
-    id: sessionId,
-    plan_id: planId,
-    session_date: toISODate(date),
-    day_of_week: dow,
-    llm_provider: parseResult.llm_provider,
-    llm_model: parseResult.llm_model
-  };
-
   const results: any[] = [];
 
+  // Transaction ensures atomicity - check and insert happen together
   const tx = db.transaction((items: ParsedLog[]) => {
-    insertSession.run(sessionRow);
+    // Check for existing session INSIDE transaction for atomicity
+    const existingSession = getExistingSession.get(planId, sessionDate) as { id: string; llm_provider: string; llm_model: string } | undefined;
+
+    // Use existing session if found, otherwise create new one
+    let sessionId: string;
+    let sessionLlmProvider: string;
+    let sessionLlmModel: string;
+    let sessionExists: boolean;
+
+    if (existingSession) {
+      // Reuse existing session for this day
+      sessionId = existingSession.id;
+      sessionLlmProvider = existingSession.llm_provider;
+      sessionLlmModel = existingSession.llm_model;
+      sessionExists = true;
+    } else {
+      // Create new session
+      sessionId = randomUUID();
+      sessionLlmProvider = parseResult.llm_provider;
+      sessionLlmModel = parseResult.llm_model;
+      sessionExists = false;
+
+      // Insert the new session
+      insertSession.run({
+        id: sessionId,
+        plan_id: planId,
+        session_date: sessionDate,
+        day_of_week: dow,
+        llm_provider: sessionLlmProvider,
+        llm_model: sessionLlmModel
+      });
+    }
 
     for (const item of items) {
       const { match, normalized } = normalizeExercise(item.exercise, dayExercises);
@@ -53,7 +84,7 @@ export async function handleIngest(text: string, dateISO?: string, planId = THOR
       }
 
       // Check if this exercise was already logged today
-      const alreadyLogged = checkExistingLog.get(sessionRow.session_date, match.id);
+      const alreadyLogged = checkExistingLog.get(sessionDate, match.id);
       if (alreadyLogged) {
         results.push({
           status: "skipped_already_logged_today",
@@ -81,16 +112,20 @@ export async function handleIngest(text: string, dateISO?: string, planId = THOR
       insertLog.run(row);
       results.push({ status: "logged", exercise: normalized, sets: item.sets, reps: item.reps, weight_lbs: item.weight_lbs, notes: item.notes });
     }
+
+    // Return session info from transaction
+    return { sessionId, sessionLlmProvider, sessionLlmModel, sessionExists };
   });
 
-  tx(parseResult.items);
+  const sessionInfo = tx(parseResult.items);
 
   return {
-    sessionId,
-    date: sessionRow.session_date,
+    sessionId: sessionInfo.sessionId,
+    sessionExists: sessionInfo.sessionExists,
+    date: sessionDate,
     day_of_week: dow,
-    llm_provider: parseResult.llm_provider,
-    llm_model: parseResult.llm_model,
+    llm_provider: sessionInfo.sessionLlmProvider,
+    llm_model: sessionInfo.sessionLlmModel,
     results
   };
 }

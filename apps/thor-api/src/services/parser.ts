@@ -1,13 +1,13 @@
 import { getDayExercises } from "./plans.js";
 import type { ParsedLog } from "../models.js";
-import { USE_LLM, USE_OLLAMA, OLLAMA_MODEL, OLLAMA_URL, OPENAI_API_KEY, OPENAI_MODEL } from "../config.js";
+import { getLLMConfigForUsage } from "./llm-config.js";
 
-async function parseWithOllama(system: string, user: string) {
-  const resp = await fetch(`${OLLAMA_URL}/api/chat`, {
+async function parseWithOllama(system: string, user: string, model: string, url: string) {
+  const resp = await fetch(`${url}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: OLLAMA_MODEL,
+      model: model,
       format: "json",
       stream: false,
       messages: [
@@ -45,7 +45,12 @@ export interface ParseResult {
 }
 
 export async function parseFreeform(text: string, planId: string, dow: number): Promise<ParseResult> {
-  if (!USE_LLM) throw new Error("Must use LLM parser");
+  // Get runtime LLM config for workout parsing
+  const llmConfig = getLLMConfigForUsage("workout_parsing");
+
+  if (!llmConfig) {
+    throw new Error("No LLM config available for workout parsing");
+  }
 
   const normalizedText = text.replace(/£\s*/g, "").replace(/\bpounds?\b/gi, " lbs");
   const valid = getDayExercises(planId, dow).map((e: any) => e.name);
@@ -107,19 +112,25 @@ ${normalizedText}
     });
   }
 
-  if (USE_OLLAMA) {
-    const parsed = await parseWithOllama(sys, user);
+  if (llmConfig.provider === "ollama") {
+    if (!llmConfig.url) {
+      throw new Error("Ollama URL is required for ollama provider");
+    }
+    const parsed = await parseWithOllama(sys, user, llmConfig.model, llmConfig.url);
     if (!parsed?.items || !Array.isArray(parsed.items)) throw new Error("Model returned no items (Ollama)");
     return {
       items: normalizeItems(parsed.items),
       llm_provider: "ollama",
-      llm_model: OLLAMA_MODEL
+      llm_model: llmConfig.model
     };
   }
 
   // OpenAI path: strict schema, fallback to json_object
+  if (!llmConfig.apiKey) {
+    throw new Error("OpenAI API key is required for openai provider");
+  }
   const { OpenAI } = await import("openai");
-  const client = new OpenAI({ apiKey: OPENAI_API_KEY });
+  const client = new OpenAI({ apiKey: llmConfig.apiKey });
 
   const exerciseMatchProp = valid.length > 0
     ? { type: "string", enum: valid }
@@ -156,7 +167,7 @@ ${normalizedText}
 
   try {
     const resp = await client.chat.completions.create({
-      model: OPENAI_MODEL,
+      model: llmConfig.model,
       response_format: { type: "json_schema", json_schema: schema },
       messages: [{ role: "system", content: sys }, { role: "user", content: user }],
       temperature: 0
@@ -167,11 +178,11 @@ ${normalizedText}
     return {
       items: normalizeItems(parsed.items),
       llm_provider: "openai",
-      llm_model: OPENAI_MODEL
+      llm_model: llmConfig.model
     };
   } catch {
     const resp2 = await client.chat.completions.create({
-      model: OPENAI_MODEL,
+      model: llmConfig.model,
       response_format: { type: "json_object" },
       messages: [{ role: "system", content: sys }, { role: "user", content: user }],
       temperature: 0
@@ -182,7 +193,7 @@ ${normalizedText}
     return {
       items: normalizeItems(parsed2.items),
       llm_provider: "openai",
-      llm_model: OPENAI_MODEL
+      llm_model: llmConfig.model
     };
   }
 }

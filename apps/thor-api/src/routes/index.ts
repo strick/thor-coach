@@ -5,6 +5,7 @@ import { summaryRoutes } from "./summaries.js";
 import { systemRoutes } from "./system.js";
 import { testRoutes } from "./tests.js";
 import { healthRoutes } from "./health.js";
+import { nutritionRoutes } from "./nutrition.js";
 
 export const router = express.Router();
 
@@ -15,3 +16,4 @@ router.use("/api", summaryRoutes);
 router.use("/api", systemRoutes);
 router.use("/api", testRoutes);
 router.use("/api", healthRoutes);
+router.use("/api", nutritionRoutes);

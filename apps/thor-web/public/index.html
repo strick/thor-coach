@@ -46,6 +46,9 @@
           <button data-tab="health" class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
             ❤️ Health
           </button>
+          <a href="/nutrition.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            🍎 Nutrition
+          </a>
         </div>
       </nav>
     </header>
@@ -216,6 +219,55 @@
               <button id="toggleHistoryBtn" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">Show All</button>
             </div>
             <div id="historicalSummaries" class="space-y-2 hidden"></div>
+          </div>
+        </section>
+
+        <!-- Exercise Progress Charts -->
+        <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold">Exercise Progress</h3>
+            <select id="exerciseProgressSelect" class="px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm">
+              <option value="">Select an exercise...</option>
+            </select>
+          </div>
+          <div id="exerciseProgressContainer" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <h4 class="text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-3">Max Weight Progress</h4>
+                <div style="height: 250px;">
+                  <canvas id="exerciseWeightChart"></canvas>
+                </div>
+              </div>
+              <div>
+                <h4 class="text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-3">Total Volume Progress</h4>
+                <div style="height: 250px;">
+                  <canvas id="exerciseVolumeChart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="exerciseProgressEmpty" class="text-center py-8 text-neutral-500 dark:text-neutral-400">
+            <div class="text-3xl mb-2">📊</div>
+            <p>Select an exercise to view progress over time</p>
+          </div>
+        </section>
+
+        <!-- Week-over-Week Trends -->
+        <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
+          <h3 class="text-lg font-semibold mb-4">Week-over-Week Trends</h3>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h4 class="text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-3">Weekly Volume</h4>
+              <div style="height: 250px;">
+                <canvas id="weeklyVolumeChart"></canvas>
+              </div>
+            </div>
+            <div>
+              <h4 class="text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-3">Weekly Sessions</h4>
+              <div style="height: 250px;">
+                <canvas id="weeklySessionsChart"></canvas>
+              </div>
+            </div>
           </div>
         </section>
 
