@@ -275,8 +275,8 @@
       const nutritionContainer = document.getElementById('nutritionStats');
       nutritionContainer.innerHTML = '';
       
-      if (nutrition && nutrition.rangeTotals) {
-        const { total_calories, total_protein_g, total_sodium_mg, total_saturated_fat_g, total_fiber_g, days_logged } = nutrition.rangeTotals;
+      if (nutrition && nutrition.totals) {
+        const { total_calories, total_protein_g, total_sodium_mg, total_saturated_fat_g, total_fiber_g, days_logged } = nutrition.totals;
         const items = [
           { label: 'Total Calories', value: `${Math.round(total_calories)} kcal`, icon: '🔥' },
           { label: 'Total Protein', value: `${Math.round(total_protein_g)}g`, icon: '🥚' },

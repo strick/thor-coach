@@ -278,8 +278,8 @@
       const container = document.getElementById('nutritionSummary');
       container.innerHTML = '';
       
-      if (nutrition && nutrition.rangeTotals) {
-        const { total_calories, total_protein_g, total_fiber_g, total_sodium_mg, days_logged } = nutrition.rangeTotals;
+      if (nutrition && nutrition.totals) {
+        const { total_calories, total_protein_g, total_fiber_g, total_sodium_mg, days_logged } = nutrition.totals;
         const items = [
           { label: 'Total Calories', value: `${Math.round(total_calories)} kcal`, icon: '🔥' },
           { label: 'Total Protein', value: `${Math.round(total_protein_g)}g`, icon: '🥚' },

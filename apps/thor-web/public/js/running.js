@@ -239,8 +239,8 @@ async function loadNutritionStats() {
     const container = document.getElementById('nutritionStats');
     container.innerHTML = '';
     
-    if (data && data.rangeTotals) {
-      const { total_calories, total_protein_g, total_fiber_g, days_logged } = data.rangeTotals;
+    if (data && data.totals) {
+      const { total_calories, total_protein_g, total_fiber_g, days_logged } = data.totals;
       const items = [
         { label: 'Total Calories', value: `${Math.round(total_calories)} kcal`, icon: '🔥' },
         { label: 'Total Protein', value: `${Math.round(total_protein_g)}g`, icon: '🥚' },
