@@ -24,11 +24,19 @@ import {
 } from "../services/nutrition.js";
 
 /**
- * POST /api/nutrition/log
+ * Helper: Extract userId from query param or default to main user
+ */
+function getUserId(req: Request): string {
+  return (req.query.userId as string) || 'user-main';
+}
+
+/**
+ * POST /api/nutrition/log?userId=...
  * Log food from natural language
  */
 export const logFood = asyncHandler(async (req: Request, res: Response) => {
   const { text, date } = req.body;
+  const userId = getUserId(req);
 
   if (!text || typeof text !== "string") {
     throw new ApiError(400, "Missing or invalid 'text' field");
@@ -38,38 +46,41 @@ export const logFood = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(400, "Invalid 'date' field");
   }
 
-  const foodLogId = await logFoodFromText(text, date);
+  const foodLogId = await logFoodFromText(userId, text, date);
 
   res.json({
     status: "logged",
     foodLogId,
+    userId,
     date: date || new Date().toISOString().slice(0, 10)
   });
 });
 
 /**
- * GET /api/nutrition/today?date=YYYY-MM-DD
+ * GET /api/nutrition/today?date=YYYY-MM-DD&userId=...
  * Get daily nutrition summary for a specific date (defaults to today)
  */
 export const getDailyNutrition = asyncHandler(async (req: Request, res: Response) => {
   const date = (req.query.date as string) || new Date().toISOString().slice(0, 10);
+  const userId = getUserId(req);
 
   // Validate date format (YYYY-MM-DD)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new ApiError(400, "Invalid date format. Expected YYYY-MM-DD");
   }
 
-  const summary = getDailyNutritionSummary(date);
+  const summary = getDailyNutritionSummary(userId, date);
   res.json(summary);
 });
 
 /**
- * GET /api/nutrition/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
+ * GET /api/nutrition/summary?from=YYYY-MM-DD&to=YYYY-MM-DD&userId=...
  * Get nutrition summary for a date range (aggregated from daily nutrition data)
  */
 export const getNutritionSummary = asyncHandler(async (req: Request, res: Response) => {
   const from = req.query.from as string;
   const to = req.query.to as string;
+  const userId = getUserId(req);
 
   if (!from || !to) {
     throw new ApiError(400, "Missing 'from' or 'to' query parameters");
@@ -80,24 +91,26 @@ export const getNutritionSummary = asyncHandler(async (req: Request, res: Respon
     throw new ApiError(400, "Invalid date format. Expected YYYY-MM-DD");
   }
 
-  const summary = getNutritionRangeFromDays(from, to);
+  const summary = getNutritionRangeFromDays(userId, from, to);
   res.json(summary);
 });
 
 /**
- * GET /api/nutrition/goals
+ * GET /api/nutrition/goals?userId=...
  * Get current nutrition goals
  */
 export const getGoals = asyncHandler(async (req: Request, res: Response) => {
-  const goals = getNutritionGoals();
+  const userId = getUserId(req);
+  const goals = getNutritionGoals(userId);
   res.json(goals || { message: "No nutrition goals set" });
 });
 
 /**
- * POST /api/nutrition/goals
+ * POST /api/nutrition/goals?userId=...
  * Set or update nutrition goals
  */
 export const updateGoals = asyncHandler(async (req: Request, res: Response) => {
+  const userId = getUserId(req);
   const {
     daily_protein_target_g,
     max_daily_sodium_mg,
@@ -120,7 +133,7 @@ export const updateGoals = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(400, "At least one nutrition goal must be provided");
   }
 
-  const goalId = setNutritionGoals({
+  const goalId = setNutritionGoals(userId, {
     daily_protein_target_g,
     max_daily_sodium_mg,
     max_daily_saturated_fat_g,
@@ -133,6 +146,7 @@ export const updateGoals = asyncHandler(async (req: Request, res: Response) => {
   res.json({
     status: "goals_updated",
     goalId,
+    userId,
     goals: {
       daily_protein_target_g,
       max_daily_sodium_mg,
@@ -146,20 +160,21 @@ export const updateGoals = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/nutrition/day?date=YYYY-MM-DD
+ * GET /api/nutrition/day?date=YYYY-MM-DD&userId=...
  * Get full nutrition day with meals and items
  */
 export const getDayNutrition = asyncHandler(async (req: Request, res: Response) => {
   const date = (req.query.date as string) || new Date().toISOString().slice(0, 10);
+  const userId = getUserId(req);
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new ApiError(400, "Invalid date format. Expected YYYY-MM-DD");
   }
 
-  const day = getNutritionDay(date);
+  const day = getNutritionDay(userId, date);
   if (!day) {
-    getOrCreateNutritionDay(date);
-    const newDay = getNutritionDay(date);
+    getOrCreateNutritionDay(userId, date);
+    const newDay = getNutritionDay(userId, date);
     return res.json(newDay);
   }
 
@@ -167,11 +182,12 @@ export const getDayNutrition = asyncHandler(async (req: Request, res: Response) 
 });
 
 /**
- * POST /api/nutrition/meal
+ * POST /api/nutrition/meal?userId=...
  * Add a meal to a date
  */
 export const addMeal = asyncHandler(async (req: Request, res: Response) => {
   const { date, mealType, timeLocal } = req.body;
+  const userId = getUserId(req);
 
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new ApiError(400, "Invalid date format. Expected YYYY-MM-DD");
@@ -181,16 +197,17 @@ export const addMeal = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(400, "Invalid meal_type. Must be breakfast, lunch, dinner, or snack");
   }
 
-  const meal = addMealToDay(date, mealType, timeLocal);
-  res.json({ status: "meal_added", meal });
+  const meal = addMealToDay(userId, date, mealType, timeLocal);
+  res.json({ status: "meal_added", meal, userId });
 });
 
 /**
- * POST /api/nutrition/item
+ * POST /api/nutrition/item?userId=...
  * Add item to a meal
  */
 export const addItem = asyncHandler(async (req: Request, res: Response) => {
   const { mealId, foodName, nutrition, serving } = req.body;
+  const userId = getUserId(req);
 
   if (!mealId) {
     throw new ApiError(400, "Missing mealId");
@@ -200,7 +217,7 @@ export const addItem = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(400, "Missing foodName");
   }
 
-  const item = addItemToMeal(mealId, foodName, nutrition || {}, serving || {});
+  const item = addItemToMeal(userId, mealId, foodName, nutrition || {}, serving || {});
   
   // Recompute totals - need to find the nutrition_day_id
   const mealRecord = (global as any).db?.prepare(
@@ -209,33 +226,34 @@ export const addItem = asyncHandler(async (req: Request, res: Response) => {
   
   if (mealRecord) {
     const dayRecord = (global as any).db?.prepare(
-      `SELECT date_local FROM nutrition_days WHERE id = ?`
+      `SELECT user_id, date_local FROM nutrition_days WHERE id = ?`
     ).get(mealRecord.nutrition_day_id);
     if (dayRecord) {
-      computeTotals(dayRecord.date_local);
+      computeTotals(dayRecord.user_id, dayRecord.date_local);
     }
   }
 
-  res.json({ status: "item_added", item });
+  res.json({ status: "item_added", item, userId });
 });
 
 /**
- * GET /api/nutrition/day/totals?date=YYYY-MM-DD
+ * GET /api/nutrition/day/totals?date=YYYY-MM-DD&userId=...
  * Get summary totals vs targets for a day
  */
 export const getDayTotals = asyncHandler(async (req: Request, res: Response) => {
   const date = (req.query.date as string) || new Date().toISOString().slice(0, 10);
+  const userId = getUserId(req);
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new ApiError(400, "Invalid date format. Expected YYYY-MM-DD");
   }
 
-  const day = getNutritionDay(date);
+  const day = getNutritionDay(userId, date);
   if (!day) {
     return res.json({ status: "no_data", date });
   }
 
-  const goals = getNutritionGoals();
+  const goals = getNutritionGoals(userId);
   const targets = day.targets || {};
   const totals = day.totals || {};
 
@@ -347,11 +365,12 @@ export const updateItem = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/nutrition/template
+ * POST /api/nutrition/template?userId=...
  * Save a meal template from selected items
  */
 export const saveMealTemplate = asyncHandler(async (req: Request, res: Response) => {
   const { name, mealType, itemIds, date } = req.body;
+  const userId = getUserId(req);
 
   console.log('[Template] Saving template with itemIds:', itemIds);
   console.log('[Template] Request body:', req.body);
@@ -365,15 +384,15 @@ export const saveMealTemplate = asyncHandler(async (req: Request, res: Response)
   // First, let's check what items exist in the meal_items table
   try {
     const allItems = db.prepare(
-      `SELECT id, food_name FROM nutrition_meal_items LIMIT 10`
-    ).all() as any[];
+      `SELECT id, food_name FROM nutrition_meal_items WHERE user_id = ? LIMIT 10`
+    ).all(userId) as any[];
     console.log('[Template] Sample items in DB:', allItems);
     
     for (const itemId of itemIds) {
       console.log('[Template] Looking for item:', itemId);
       const item = db.prepare(
-        `SELECT * FROM nutrition_meal_items WHERE id = ?`
-      ).get(itemId) as any;
+        `SELECT * FROM nutrition_meal_items WHERE id = ? AND user_id = ?`
+      ).get(itemId, userId) as any;
       
       if (item) {
         items.push(item);
@@ -400,19 +419,21 @@ export const saveMealTemplate = asyncHandler(async (req: Request, res: Response)
   db.prepare(`
     CREATE TABLE IF NOT EXISTS nutrition_templates (
       id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
       name TEXT NOT NULL,
       meal_type TEXT,
       items_json TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      created_date TEXT
+      created_date TEXT,
+      FOREIGN KEY(user_id) REFERENCES users(id)
     )
   `).run();
 
   console.log('[Template] Inserting template with ID:', templateId);
   const result = db.prepare(`
-    INSERT INTO nutrition_templates (id, name, meal_type, items_json, created_at, created_date)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(templateId, name, mealType || 'meal', JSON.stringify(items), new Date().toISOString(), date);
+    INSERT INTO nutrition_templates (id, user_id, name, meal_type, items_json, created_at, created_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(templateId, userId, name, mealType || 'meal', JSON.stringify(items), new Date().toISOString(), date);
 
   console.log('[Template] Insert result:', result);
   console.log('[Template] Saved template:', templateId);
@@ -420,21 +441,23 @@ export const saveMealTemplate = asyncHandler(async (req: Request, res: Response)
   res.json({
     status: "template_saved",
     templateId,
+    userId,
     name,
     itemCount: items.length
   });
 });
 
 /**
- * GET /api/nutrition/templates
- * Get all saved meal templates
+ * GET /api/nutrition/templates?userId=...
+ * Get all saved meal templates for user
  */
 export const getMealTemplates = asyncHandler(async (req: Request, res: Response) => {
-  console.log('[Template] Fetching all templates...');
+  const userId = getUserId(req);
+  console.log('[Template] Fetching templates for user:', userId);
   
   const templates = db.prepare(
-    `SELECT id, name, meal_type, created_at, created_date, items_json FROM nutrition_templates ORDER BY created_at DESC`
-  ).all() as any[] || [];
+    `SELECT id, name, meal_type, created_at, created_date, items_json FROM nutrition_templates WHERE user_id = ? ORDER BY created_at DESC`
+  ).all(userId) as any[] || [];
 
   console.log('[Template] Found templates:', templates.length);
   
@@ -446,17 +469,19 @@ export const getMealTemplates = asyncHandler(async (req: Request, res: Response)
 
   res.json({
     status: "templates_retrieved",
+    userId,
     templates: parsedTemplates
   });
 });
 
 /**
- * POST /api/nutrition/template/:id/apply
+ * POST /api/nutrition/template/:id/apply?userId=...
  * Apply a template (add items from template to a meal)
  */
 export const applyMealTemplate = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const { mealId } = req.body;
+  const userId = getUserId(req);
 
   if (!mealId) {
     throw new ApiError(400, "Missing 'mealId'");
@@ -464,8 +489,8 @@ export const applyMealTemplate = asyncHandler(async (req: Request, res: Response
   
   // Get template
   const template = db.prepare(
-    `SELECT items_json FROM nutrition_templates WHERE id = ?`
-  ).get(id) as any;
+    `SELECT items_json FROM nutrition_templates WHERE id = ? AND user_id = ?`
+  ).get(id, userId) as any;
 
   if (!template) {
     throw new ApiError(404, "Template not found");
@@ -476,7 +501,7 @@ export const applyMealTemplate = asyncHandler(async (req: Request, res: Response
 
   // Add each item from template to the meal
   for (const item of items) {
-    const newItem = addItemToMeal(mealId, item.food_name, {
+    const newItem = addItemToMeal(userId, mealId, item.food_name, {
       calories_kcal: item.calories_kcal,
       protein_g: item.protein_g,
       carbs_g: item.carbs_g,
@@ -497,20 +522,22 @@ export const applyMealTemplate = asyncHandler(async (req: Request, res: Response
 
   res.json({
     status: "template_applied",
+    userId,
     itemsAdded: addedItems.length
   });
 });
 
 /**
- * DELETE /api/nutrition/template/:id
+ * DELETE /api/nutrition/template/:id?userId=...
  * Delete a meal template
  */
 export const deleteMealTemplate = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
+  const userId = getUserId(req);
   
   const result = db.prepare(
-    `DELETE FROM nutrition_templates WHERE id = ?`
-  ).run(id) as any;
+    `DELETE FROM nutrition_templates WHERE id = ? AND user_id = ?`
+  ).run(id, userId) as any;
 
   if (!result || result.changes === 0) {
     throw new ApiError(404, "Template not found");
@@ -518,6 +545,7 @@ export const deleteMealTemplate = asyncHandler(async (req: Request, res: Respons
 
   res.json({
     status: "template_deleted",
+    userId,
     success: true
   });
 });

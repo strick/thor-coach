@@ -4,6 +4,7 @@
 
 const API_BASE = `http://${window.location.hostname}:3000/api`;
 let currentDate = new Date().toISOString().slice(0, 10);
+let currentUserId = 'user-main'; // Default to main user, will load from dropdown
 let nutritionChart = null;
 let currentMealId = null;
 let currentMealType = null;
@@ -96,6 +97,14 @@ function updateMicButton() {
 }
 
 /**
+ * Build API URL with userId query parameter
+ */
+function buildApiUrl(endpoint) {
+  const separator = endpoint.includes('?') ? '&' : '?';
+  return `${endpoint}${separator}userId=${encodeURIComponent(currentUserId)}`;
+}
+
+/**
  * Handle adding item to meal
  */
 async function handleAddItem() {
@@ -112,7 +121,7 @@ async function handleAddItem() {
   // Create meal if not exists
   if (!currentMealId) {
     try {
-      const mealResponse = await fetch(`${API_BASE}/nutrition/meal`, {
+      const mealResponse = await fetch(buildApiUrl(`${API_BASE}/nutrition/meal`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -140,7 +149,7 @@ async function handleAddItem() {
   try {
     // Parse nutrition from text using LLM
     console.log('[Nutrition] Parsing food:', foodInput.value);
-    const parseResponse = await fetch(`${API_BASE}/nutrition/parse`, {
+    const parseResponse = await fetch(buildApiUrl(`${API_BASE}/nutrition/parse`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: foodInput.value })
@@ -156,7 +165,7 @@ async function handleAddItem() {
     // Add each item to the meal
     const { items } = parsed;
     for (const item of items) {
-      const itemResponse = await fetch(`${API_BASE}/nutrition/item`, {
+      const itemResponse = await fetch(buildApiUrl(`${API_BASE}/nutrition/item`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -239,7 +248,7 @@ function selectMealType(type) {
  */
 async function createMealForTemplate(mealType) {
   try {
-    const mealResponse = await fetch(`${API_BASE}/nutrition/meal`, {
+    const mealResponse = await fetch(buildApiUrl(`${API_BASE}/nutrition/meal`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -269,7 +278,7 @@ async function saveGoals(event) {
   event.preventDefault();
   
   try {
-    const response = await fetch(`${API_BASE}/nutrition/goals`, {
+    const response = await fetch(buildApiUrl(`${API_BASE}/nutrition/goals`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -300,7 +309,7 @@ async function saveGoals(event) {
  */
 async function deleteNutritionItem(itemId) {
   try {
-    const response = await fetch(`${API_BASE}/nutrition/item`, {
+    const response = await fetch(buildApiUrl(`${API_BASE}/nutrition/item`), {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ itemId })
@@ -324,7 +333,7 @@ async function deleteNutritionItem(itemId) {
  */
 async function deleteMeal(mealId) {
   try {
-    const response = await fetch(`${API_BASE}/nutrition/meal`, {
+    const response = await fetch(buildApiUrl(`${API_BASE}/nutrition/meal`), {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mealId })
@@ -348,7 +357,7 @@ async function deleteMeal(mealId) {
  */
 async function loadMealTemplates() {
   try {
-    const response = await fetch(`${API_BASE}/nutrition/templates`);
+    const response = await fetch(buildApiUrl(`${API_BASE}/nutrition/templates`));
     const data = await response.json();
     const templates = data.templates || [];
 
@@ -402,7 +411,7 @@ async function applyTemplateToMeal(templateId) {
     if (!mealType) return;
     
     try {
-      const mealResponse = await fetch(`${API_BASE}/nutrition/meal`, {
+      const mealResponse = await fetch(buildApiUrl(`${API_BASE}/nutrition/meal`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -430,7 +439,7 @@ async function applyTemplateToMeal(templateId) {
   try {
     showProcessing(true);
 
-    const response = await fetch(`${API_BASE}/nutrition/template/${templateId}/apply`, {
+    const response = await fetch(buildApiUrl(`${API_BASE}/nutrition/template/${templateId}/apply`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -465,7 +474,7 @@ async function deleteMealTemplate(templateId) {
   }
 
   try {
-    const response = await fetch(`${API_BASE}/nutrition/template/${templateId}`, {
+    const response = await fetch(buildApiUrl(`${API_BASE}/nutrition/template/${templateId}`), {
       method: 'DELETE'
     });
 
@@ -536,7 +545,7 @@ async function saveMealAsTemplate(mealId) {
 
     console.log('[Nutrition] Sending template save request:', payload);
 
-    const response = await fetch(`${API_BASE}/nutrition/template`, {
+    const response = await fetch(buildApiUrl(`${API_BASE}/nutrition/template`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -676,7 +685,7 @@ async function saveEditedItem(event) {
   console.log('[Nutrition] Saving item edits:', updates);
 
   try {
-    const response = await fetch(`${API_BASE}/nutrition/item`, {
+    const response = await fetch(buildApiUrl(`${API_BASE}/nutrition/item`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates)
@@ -705,7 +714,7 @@ async function saveEditedItem(event) {
 async function loadNutritionDay() {
   try {
     console.log('[Nutrition] Loading nutrition day for date:', currentDate);
-    const response = await fetch(`${API_BASE}/nutrition/day?date=${currentDate}`);
+    const response = await fetch(buildApiUrl(`${API_BASE}/nutrition/day?date=${currentDate}`));
     const day = await response.json();
     console.log('[Nutrition] Received day data:', day);
     
@@ -739,7 +748,7 @@ async function loadNutritionDay() {
  */
 async function loadGoals() {
   try {
-    const response = await fetch(`${API_BASE}/nutrition/goals`);
+    const response = await fetch(buildApiUrl(`${API_BASE}/nutrition/goals`));
     const goals = await response.json();
     
     if (goals && goals.id) {
@@ -1152,6 +1161,77 @@ function showError(message) {
   }, 3000);
 }
 
+/**
+ * Load and populate users dropdown
+ */
+async function loadUsers() {
+  try {
+    const response = await fetch(`${API_BASE}/users`);
+    const users = await response.json();
+    
+    const userSelect = document.getElementById('userSelect');
+    if (!userSelect) return;
+    
+    userSelect.innerHTML = '';
+    users.forEach(user => {
+      const option = document.createElement('option');
+      option.value = user.id;
+      option.textContent = user.name;
+      userSelect.appendChild(option);
+    });
+    
+    // Set current user
+    const savedUserId = localStorage.getItem('selectedUserId') || 'user-main';
+    userSelect.value = savedUserId;
+    currentUserId = savedUserId;
+  } catch (error) {
+    console.error('Error loading users:', error);
+    showError('Failed to load users');
+  }
+}
+
+/**
+ * Open add user modal
+ */
+function openAddUserModal() {
+  const userName = prompt('Enter new user name:');
+  if (!userName || userName.trim() === '') return;
+  
+  createNewUser(userName.trim());
+}
+
+/**
+ * Create a new user
+ */
+async function createNewUser(name) {
+  try {
+    const response = await fetch(`${API_BASE}/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email: '' })
+    });
+    
+    if (!response.ok) {
+      showError('Failed to create user');
+      return;
+    }
+    
+    const result = await response.json();
+    showSuccess(`Created user: ${name}`);
+    
+    // Reload users and select the new one
+    await loadUsers();
+    currentUserId = result.user.id;
+    localStorage.setItem('selectedUserId', currentUserId);
+    document.getElementById('userSelect').value = currentUserId;
+    
+    loadNutritionDay();
+  } catch (error) {
+    console.error('Error creating user:', error);
+    showError('Failed to create user');
+  }
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   dateInput.valueAsDate = new Date();
@@ -1255,4 +1335,27 @@ document.addEventListener('DOMContentLoaded', () => {
       addMealModal.classList.add('hidden');
     }
   });
+
+  // User selection
+  const userSelect = document.getElementById('userSelect');
+  const addUserBtn = document.getElementById('addUserBtn');
+  
+  if (userSelect) {
+    userSelect.addEventListener('change', (e) => {
+      currentUserId = e.target.value;
+      localStorage.setItem('selectedUserId', currentUserId);
+      loadNutritionDay(); // Reload data for new user
+    });
+  }
+  
+  if (addUserBtn) {
+    addUserBtn.addEventListener('click', openAddUserModal);
+  }
+
+  // Load users and initialize
+  loadUsers();
+  const savedUserId = localStorage.getItem('selectedUserId');
+  if (savedUserId) {
+    currentUserId = savedUserId;
+  }
 });

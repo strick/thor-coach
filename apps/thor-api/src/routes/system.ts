@@ -15,3 +15,7 @@ systemRoutes.get("/ollama/models", systemController.getOllamaModels);
 // LLM config endpoints
 systemRoutes.get("/config/llm", systemController.getLLMConfig);
 systemRoutes.post("/config/llm", systemController.updateLLMConfig);
+// User management endpoints
+systemRoutes.get("/users", systemController.getUsers);
+systemRoutes.post("/users", systemController.createUser);
+systemRoutes.delete("/users/:id", systemController.deleteUser);

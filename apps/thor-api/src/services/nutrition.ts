@@ -169,7 +169,7 @@ async function parseWithOpenAI(
 /**
  * Log food from natural language text
  */
-export async function logFoodFromText(text: string, date?: string): Promise<string[]> {
+export async function logFoodFromText(userId: string, text: string, date?: string): Promise<string[]> {
   const result = await parseNutritionText(text);
   const logDate = date || new Date().toISOString().slice(0, 10);
   const foodLogIds: string[] = [];
@@ -178,10 +178,11 @@ export async function logFoodFromText(text: string, date?: string): Promise<stri
     const foodLogId = randomUUID();
     
     db.prepare(`
-      INSERT INTO food_logs (id, log_date, description, calories, protein_g, sodium_mg, saturated_fat_g, fiber_g)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO food_logs (id, user_id, log_date, description, calories, protein_g, sodium_mg, saturated_fat_g, fiber_g)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       foodLogId,
+      userId,
       logDate,
       item.description,
       item.calories ?? null,
@@ -200,8 +201,8 @@ export async function logFoodFromText(text: string, date?: string): Promise<stri
 /**
  * Get daily nutrition summary for a specific date
  */
-export function getDailyNutritionSummary(date: string) {
-  const totals = db.prepare<[string], {
+export function getDailyNutritionSummary(userId: string, date: string) {
+  const totals = db.prepare<[string, string], {
     total_calories: number;
     total_protein_g: number;
     total_sodium_mg: number;
@@ -217,10 +218,10 @@ export function getDailyNutritionSummary(date: string) {
       COALESCE(SUM(fiber_g), 0) as total_fiber_g,
       COUNT(*) as food_count
     FROM food_logs
-    WHERE log_date = ?
-  `).get(date);
+    WHERE user_id = ? AND log_date = ?
+  `).get(userId, date);
 
-  const foods = db.prepare<[string], {
+  const foods = db.prepare<[string, string], {
     id: string;
     description: string;
     calories: number | null;
@@ -232,9 +233,9 @@ export function getDailyNutritionSummary(date: string) {
   }>(`
     SELECT id, description, calories, protein_g, sodium_mg, saturated_fat_g, fiber_g, created_at
     FROM food_logs
-    WHERE log_date = ?
+    WHERE user_id = ? AND log_date = ?
     ORDER BY created_at ASC
-  `).all(date);
+  `).all(userId, date);
 
   // Get nutrition goals (if set)
   const goals = db.prepare<[], {
@@ -271,7 +272,7 @@ export function getDailyNutritionSummary(date: string) {
  * Get nutrition summary aggregated from daily nutrition data
  * This pulls from the new nutrition_days schema instead of old food_logs
  */
-export function getNutritionRangeFromDays(from: string, to: string) {
+export function getNutritionRangeFromDays(userId: string, from: string, to: string) {
   const daily: any[] = [];
   const totals = {
     total_calories_kcal: 0,
@@ -304,7 +305,7 @@ export function getNutritionRangeFromDays(from: string, to: string) {
   // Load data for each date
   let daysWithData = 0;
   for (const dateLocal of datesInRange) {
-    const day = getNutritionDay(dateLocal);
+    const day = getNutritionDay(userId, dateLocal);
     if (day && day.totals) {
       daily.push({
         date_local: dateLocal,
@@ -332,7 +333,7 @@ export function getNutritionRangeFromDays(from: string, to: string) {
   totals.days_logged = daysWithData;
 
   // Get nutrition goals
-  const goals = getNutritionGoals();
+  const goals = getNutritionGoals(userId);
 
   return {
     from,
@@ -421,7 +422,7 @@ export function getNutritionSummaryRange(from: string, to: string) {
 /**
  * Set or update nutrition goals
  */
-export function setNutritionGoals(goals: {
+export function setNutritionGoals(userId: string, goals: {
   daily_protein_target_g?: number;
   max_daily_sodium_mg?: number;
   max_daily_saturated_fat_g?: number;
@@ -435,6 +436,7 @@ export function setNutritionGoals(goals: {
   db.prepare(`
     INSERT INTO nutrition_goals (
       id,
+      user_id,
       daily_protein_target_g,
       max_daily_sodium_mg,
       max_daily_saturated_fat_g,
@@ -443,9 +445,10 @@ export function setNutritionGoals(goals: {
       max_daily_added_sugar_g,
       diet_style
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     goalId,
+    userId,
     goals.daily_protein_target_g ?? null,
     goals.max_daily_sodium_mg ?? null,
     goals.max_daily_saturated_fat_g ?? null,
@@ -461,8 +464,8 @@ export function setNutritionGoals(goals: {
 /**
  * Get current nutrition goals
  */
-export function getNutritionGoals() {
-  return db.prepare<[], {
+export function getNutritionGoals(userId: string) {
+  return db.prepare<[string], {
     id: string;
     daily_protein_target_g: number | null;
     max_daily_sodium_mg: number | null;
@@ -475,27 +478,28 @@ export function getNutritionGoals() {
   }>(`
     SELECT *
     FROM nutrition_goals
+    WHERE user_id = ?
     ORDER BY created_at DESC
     LIMIT 1
-  `).get();
+  `).get(userId);
 }
 
 /**
  * Get or create nutrition day record
  */
-export function getOrCreateNutritionDay(dateLocal: string) {
-  let day = db.prepare<[string], { id: string }>(`
-    SELECT id FROM nutrition_days WHERE date_local = ?
-  `).get(dateLocal);
+export function getOrCreateNutritionDay(userId: string, dateLocal: string) {
+  let day = db.prepare<[string, string], { id: string }>(`
+    SELECT id FROM nutrition_days WHERE user_id = ? AND date_local = ?
+  `).get(userId, dateLocal);
 
   if (!day) {
     const dayId = randomUUID();
     db.prepare(`
       INSERT INTO nutrition_days (
-        id, date_local, timezone, source, diet_style, high_cholesterol, high_protein_goal
+        id, user_id, date_local, timezone, source, diet_style, high_cholesterol, high_protein_goal
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(dayId, dateLocal, 'America/New_York', 'manual_entry', 'DASH', 1, 1);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(dayId, userId, dateLocal, 'America/New_York', 'manual_entry', 'DASH', 1, 1);
 
     // Create targets and totals records
     db.prepare(`
@@ -520,8 +524,8 @@ export function getOrCreateNutritionDay(dateLocal: string) {
 /**
  * Add a meal to a nutrition day
  */
-export function addMealToDay(dateLocal: string, mealType: string, timeLocal?: string) {
-  const dayId = getOrCreateNutritionDay(dateLocal);
+export function addMealToDay(userId: string, dateLocal: string, mealType: string, timeLocal?: string) {
+  const dayId = getOrCreateNutritionDay(userId, dateLocal);
   const mealId = randomUUID();
   const meal = {
     id: mealId,
@@ -532,10 +536,10 @@ export function addMealToDay(dateLocal: string, mealType: string, timeLocal?: st
 
   db.prepare(`
     INSERT INTO nutrition_meals (
-      id, nutrition_day_id, meal_id, meal_type, time_local
+      id, user_id, nutrition_day_id, meal_id, meal_type, time_local
     )
-    VALUES (?, ?, ?, ?, ?)
-  `).run(meal.id, dayId, meal.meal_id, meal.meal_type, meal.time_local);
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(meal.id, userId, dayId, meal.meal_id, meal.meal_type, meal.time_local);
 
   db.prepare(`
     INSERT INTO nutrition_meal_totals (id, meal_id)
@@ -548,7 +552,7 @@ export function addMealToDay(dateLocal: string, mealType: string, timeLocal?: st
 /**
  * Add item to a meal
  */
-export function addItemToMeal(mealId: string, foodName: string, nutrition: any, servingInfo: any) {
+export function addItemToMeal(userId: string, mealId: string, foodName: string, nutrition: any, servingInfo: any) {
   const itemId = randomUUID();
   const itemRecord = {
     id: itemId,
@@ -559,6 +563,7 @@ export function addItemToMeal(mealId: string, foodName: string, nutrition: any, 
   };
 
   console.log("[Nutrition] Adding item to meal:", {
+    userId,
     mealId,
     foodName,
     nutrition,
@@ -567,14 +572,15 @@ export function addItemToMeal(mealId: string, foodName: string, nutrition: any, 
 
   db.prepare(`
     INSERT INTO nutrition_meal_items (
-      id, meal_id, item_id, food_name, brand, serving_quantity, serving_unit,
+      id, user_id, meal_id, item_id, food_name, brand, serving_quantity, serving_unit,
       serving_display, calories_kcal, protein_g, carbs_g, fat_g, fiber_g,
       sugar_g, added_sugar_g, sodium_mg, sat_fat_g, cholesterol_mg,
       potassium_mg, calcium_mg, high_sodium, high_sat_fat, processed, notes
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     itemId,
+    userId,
     mealId,
     itemRecord.item_id,
     itemRecord.food_name,
@@ -604,10 +610,10 @@ export function addItemToMeal(mealId: string, foodName: string, nutrition: any, 
 /**
  * Compute totals for a meal and day
  */
-export function computeTotals(dateLocal: string) {
-  const dayId = db.prepare<[string], { id: string }>(`
-    SELECT id FROM nutrition_days WHERE date_local = ?
-  `).get(dateLocal)?.id;
+export function computeTotals(userId: string, dateLocal: string) {
+  const dayId = db.prepare<[string, string], { id: string }>(`
+    SELECT id FROM nutrition_days WHERE user_id = ? AND date_local = ?
+  `).get(userId, dateLocal)?.id;
 
   if (!dayId) return;
 
@@ -689,10 +695,10 @@ export function computeTotals(dateLocal: string) {
 /**
  * Get full nutrition day with all meals and items
  */
-export function getNutritionDay(dateLocal: string) {
-  const dayId = db.prepare<[string], { id: string }>(`
-    SELECT id FROM nutrition_days WHERE date_local = ?
-  `).get(dateLocal)?.id;
+export function getNutritionDay(userId: string, dateLocal: string) {
+  const dayId = db.prepare<[string, string], { id: string }>(`
+    SELECT id FROM nutrition_days WHERE user_id = ? AND date_local = ?
+  `).get(userId, dateLocal)?.id;
 
   if (!dayId) return null;
 
@@ -815,11 +821,11 @@ export function deleteItemFromMeal(itemId: string): boolean {
 
   // Recompute meal and day totals
   const dayRecord = db
-    .prepare(`SELECT date_local FROM nutrition_days WHERE id = ?`)
-    .get(item.nutrition_day_id) as { date_local: string } | undefined;
+    .prepare(`SELECT user_id, date_local FROM nutrition_days WHERE id = ?`)
+    .get(item.nutrition_day_id) as { user_id: string; date_local: string } | undefined;
 
   if (dayRecord) {
-    computeTotals(dayRecord.date_local);
+    computeTotals(dayRecord.user_id, dayRecord.date_local);
   }
 
   return true;
@@ -899,12 +905,12 @@ export function updateItemInMeal(
 
   // Recompute meal and day totals
   const dayRecord = db
-    .prepare(`SELECT date_local FROM nutrition_days WHERE id = ?`)
-    .get(item.nutrition_day_id) as { date_local: string } | undefined;
+    .prepare(`SELECT user_id, date_local FROM nutrition_days WHERE id = ?`)
+    .get(item.nutrition_day_id) as { user_id: string; date_local: string } | undefined;
 
   if (dayRecord) {
     console.log('[Nutrition] Recomputing totals for date:', dayRecord.date_local);
-    computeTotals(dayRecord.date_local);
+    computeTotals(dayRecord.user_id, dayRecord.date_local);
   }
 
   // Return updated item
@@ -939,11 +945,11 @@ export function deleteMealFromDay(mealId: string): boolean {
 
   // Recompute day totals
   const dayRecord = db
-    .prepare(`SELECT date_local FROM nutrition_days WHERE id = ?`)
-    .get(meal.nutrition_day_id) as { date_local: string } | undefined;
+    .prepare(`SELECT user_id, date_local FROM nutrition_days WHERE id = ?`)
+    .get(meal.nutrition_day_id) as { user_id: string; date_local: string } | undefined;
 
   if (dayRecord) {
-    computeTotals(dayRecord.date_local);
+    computeTotals(dayRecord.user_id, dayRecord.date_local);
   }
 
   return true;

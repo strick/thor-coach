@@ -149,6 +149,14 @@ export function seedDatabase(database: Database.Database) {
 
 export function ensureSchemaAndSeed() {
   db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_users_name ON users(name);
+
   CREATE TABLE IF NOT EXISTS plans (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL
@@ -210,6 +218,7 @@ export function ensureSchemaAndSeed() {
 
   CREATE TABLE IF NOT EXISTS nutrition_goals (
     id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
     daily_protein_target_g INTEGER,
     max_daily_sodium_mg INTEGER,
     max_daily_saturated_fat_g INTEGER,
@@ -218,12 +227,15 @@ export function ensureSchemaAndSeed() {
     max_daily_added_sugar_g INTEGER,
     min_daily_fiber_goal_g INTEGER,
     diet_style TEXT DEFAULT 'DASH',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(user_id) REFERENCES users(id)
   );
+  CREATE INDEX IF NOT EXISTS idx_nutrition_goals_user ON nutrition_goals(user_id);
 
   CREATE TABLE IF NOT EXISTS nutrition_days (
     id TEXT PRIMARY KEY,
-    date_local TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    date_local TEXT NOT NULL,
     timezone TEXT DEFAULT 'America/New_York',
     source TEXT DEFAULT 'manual_entry',
     notes TEXT,
@@ -233,9 +245,12 @@ export function ensureSchemaAndSeed() {
     recompute_required BOOLEAN DEFAULT 1,
     last_computed_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(user_id) REFERENCES users(id),
+    UNIQUE(user_id, date_local)
   );
   CREATE INDEX IF NOT EXISTS idx_nutrition_days_date ON nutrition_days(date_local);
+  CREATE INDEX IF NOT EXISTS idx_nutrition_days_user ON nutrition_days(user_id);
 
   CREATE TABLE IF NOT EXISTS nutrition_day_targets (
     id TEXT PRIMARY KEY,
@@ -270,18 +285,22 @@ export function ensureSchemaAndSeed() {
 
   CREATE TABLE IF NOT EXISTS nutrition_meals (
     id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
     nutrition_day_id TEXT NOT NULL,
     meal_id TEXT NOT NULL,
     meal_type TEXT NOT NULL CHECK(meal_type IN ('breakfast', 'lunch', 'dinner', 'snack')),
     time_local TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(user_id) REFERENCES users(id),
     FOREIGN KEY(nutrition_day_id) REFERENCES nutrition_days(id)
   );
   CREATE INDEX IF NOT EXISTS idx_nutrition_meals_day ON nutrition_meals(nutrition_day_id);
   CREATE INDEX IF NOT EXISTS idx_nutrition_meals_type ON nutrition_meals(meal_type);
+  CREATE INDEX IF NOT EXISTS idx_nutrition_meals_user ON nutrition_meals(user_id);
 
   CREATE TABLE IF NOT EXISTS nutrition_meal_items (
     id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
     meal_id TEXT NOT NULL,
     item_id TEXT NOT NULL,
     food_name TEXT NOT NULL,
@@ -306,9 +325,11 @@ export function ensureSchemaAndSeed() {
     processed BOOLEAN DEFAULT 0,
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(user_id) REFERENCES users(id),
     FOREIGN KEY(meal_id) REFERENCES nutrition_meals(id)
   );
   CREATE INDEX IF NOT EXISTS idx_nutrition_meal_items_meal ON nutrition_meal_items(meal_id);
+  CREATE INDEX IF NOT EXISTS idx_nutrition_meal_items_user ON nutrition_meal_items(user_id);
 
   CREATE TABLE IF NOT EXISTS nutrition_meal_totals (
     id TEXT PRIMARY KEY,
@@ -326,6 +347,7 @@ export function ensureSchemaAndSeed() {
 
   CREATE TABLE IF NOT EXISTS food_logs (
     id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
     log_date TEXT NOT NULL,
     description TEXT NOT NULL,
     calories INTEGER,
@@ -333,9 +355,11 @@ export function ensureSchemaAndSeed() {
     sodium_mg REAL,
     saturated_fat_g REAL,
     fiber_g REAL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(user_id) REFERENCES users(id)
   );
   CREATE INDEX IF NOT EXISTS idx_food_logs_date ON food_logs(log_date);
+  CREATE INDEX IF NOT EXISTS idx_food_logs_user ON food_logs(user_id);
 
   CREATE TABLE IF NOT EXISTS running_sessions (
     id TEXT PRIMARY KEY,
@@ -361,7 +385,26 @@ export function ensureSchemaAndSeed() {
   );
   CREATE INDEX IF NOT EXISTS idx_running_sessions_date ON running_sessions(session_date);
   CREATE INDEX IF NOT EXISTS idx_running_sessions_created ON running_sessions(created_at);
+
+  CREATE TABLE IF NOT EXISTS nutrition_templates (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    meal_type TEXT,
+    items_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    created_date TEXT,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_nutrition_templates_user ON nutrition_templates(user_id);
   `);
+
+  // Initialize default users if they don't exist
+  const userCount = db.prepare(`SELECT COUNT(*) as count FROM users`).get() as any;
+  if (userCount.count === 0) {
+    const mainUserId = 'user-main';
+    db.prepare(`INSERT INTO users (id, name, email) VALUES (?, ?, ?)`).run(mainUserId, 'Main User', null);
+  }
 
   // Migration: Add LLM tracking columns if they don't exist
   const checkColumn = db.prepare(`PRAGMA table_info(workout_sessions)`).all() as Array<{ name: string }>;
