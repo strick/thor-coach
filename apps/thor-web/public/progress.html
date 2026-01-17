@@ -120,11 +120,11 @@
             <span>🍎</span> Nutrition Summary
           </h2>
           
-          <!-- Nutrition Totals -->
-          <div id="nutritionStats" class="grid grid-cols-2 gap-2 mb-6"></div>
+          <!-- Nutrition Totals - Compact Single Row -->
+          <div id="nutritionStats" class="flex justify-between gap-3 mb-6 text-center"></div>
           
           <!-- Nutrition Chart -->
-          <div class="mt-4" style="position: relative; height: 300px;">
+          <div class="mt-4" style="position: relative; height: 320px;">
             <canvas id="nutritionChart"></canvas>
           </div>
         </section>
@@ -297,9 +297,9 @@
         
         items.forEach(item => {
           const div = document.createElement('div');
-          div.className = 'flex flex-col items-center p-3 rounded bg-neutral-50 dark:bg-neutral-900';
+          div.className = 'flex flex-col items-center gap-1 flex-1';
           div.title = item.title;
-          div.innerHTML = `<span class="text-2xl mb-1">${item.icon}</span><span class="text-sm font-medium text-indigo-600 dark:text-indigo-400">${item.value}</span>`;
+          div.innerHTML = `<span class="text-xl">${item.icon}</span><span class="text-xs font-bold text-indigo-600 dark:text-indigo-400 break-words max-w-[80px]">${item.value}</span>`;
           nutritionContainer.appendChild(div);
         });
         
@@ -367,16 +367,21 @@
         return;
       }
 
-      // Filter and prepare data
-      const data = dailyData.filter(d => d.date_local).map(d => ({
-        date: d.date_local,
-        calories: d.calories_kcal || 0,
-        protein: d.protein_g || 0,
-        fiber: d.fiber_g || 0,
-        sodium: (d.sodium_mg || 0) / 10 // Scale down sodium for visibility
-      }));
+      console.log('[Progress] Raw dailyData received:', dailyData.length, 'items', dailyData);
 
-      console.log('[Progress] Chart data prepared:', data);
+      // Filter and prepare data
+      const data = dailyData.filter(d => d && d.date_local).map(d => {
+        const item = {
+          date: d.date_local,
+          calories: parseFloat(d.calories_kcal) || 0,
+          protein: parseFloat(d.protein_g) || 0,
+          fiber: parseFloat(d.fiber_g) || 0,
+          sodium: (parseFloat(d.sodium_mg) || 0) / 10
+        };
+        return item;
+      });
+
+      console.log('[Progress] Prepared chart data:', { count: data.length, sample: data[0], allData: data });
 
       const labels = data.map(d => {
         const date = new Date(d.date);

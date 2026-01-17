@@ -258,9 +258,6 @@ async function loadNutritionStats() {
         `;
         container.appendChild(div);
       });
-      
-      // Create nutrition chart
-      renderNutritionChartRunning(data.daily);
     } else {
       container.innerHTML = '<p class="text-neutral-500 dark:text-neutral-400 col-span-3">No nutrition data recorded</p>';
     }
@@ -270,121 +267,6 @@ async function loadNutritionStats() {
     container.innerHTML = '<p class="text-neutral-500 dark:text-neutral-400">Unable to load nutrition data</p>';
   }
 }
-
-/**
- * Render nutrition chart for running page
- */
-function renderNutritionChartRunning(dailyData) {
-  const ctx = document.getElementById('nutritionChartRunning');
-  if (!ctx) {
-    console.error('[Running] nutritionChartRunning canvas not found');
-    return;
-  }
-
-  if (!dailyData || dailyData.length === 0) {
-    console.warn('[Running] No daily data available for chart');
-    return;
-  }
-
-  console.log('[Running] Daily data for chart:', dailyData);
-
-  // Destroy existing chart if it exists
-  if (window.nutritionChartRunning) {
-    window.nutritionChartRunning.destroy();
-  }
-
-  // Filter and prepare data
-  const data = dailyData.filter(d => d.date_local).map(d => ({
-    date: d.date_local,
-    calories: d.calories_kcal || 0,
-    protein: d.protein_g || 0,
-    fiber: d.fiber_g || 0,
-    sodium: (d.sodium_mg || 0) / 10
-  }));
-
-  const labels = data.map(d => {
-    const date = new Date(d.date);
-    return `${date.getMonth() + 1}/${date.getDate()}`;
-  });
-
-  console.log('[Running] Chart data prepared:', { dataPoints: data.length, labels });
-
-  window.nutritionChartRunning = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Calories (kcal)',
-          data: data.map(d => d.calories),
-          backgroundColor: '#ef4444',
-          borderColor: '#dc2626',
-          borderWidth: 1
-        },
-        {
-          label: 'Protein (g)',
-          data: data.map(d => d.protein),
-          backgroundColor: '#f97316',
-          borderColor: '#ea580c',
-          borderWidth: 1
-        },
-        {
-          label: 'Fiber (g)',
-          data: data.map(d => d.fiber),
-          backgroundColor: '#22c55e',
-          borderColor: '#16a34a',
-          borderWidth: 1
-        },
-        {
-          label: 'Sodium (mg ÷10)',
-          data: data.map(d => d.sodium),
-          backgroundColor: '#06b6d4',
-          borderColor: '#0891b2',
-          borderWidth: 1
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      plugins: {
-        legend: {
-          display: true,
-          position: 'bottom',
-          labels: {
-            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#a3a3a3' : '#404040',
-            font: { size: 12 },
-            padding: 12
-          }
-        }
-      },
-      scales: {
-        x: {
-          stacked: false,
-          grid: {
-            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#404040' : '#e5e5e5'
-          },
-          ticks: {
-            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#a3a3a3' : '#666'
-          }
-        },
-        y: {
-          stacked: false,
-          beginAtZero: true,
-          grid: {
-            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#404040' : '#e5e5e5'
-          },
-          ticks: {
-            color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#a3a3a3' : '#666'
-          }
-        }
-      }
-    }
-  });
-
-  console.log('[Running] Chart created successfully');
-}
-
 
 /**
  * Open add session modal
