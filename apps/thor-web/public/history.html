@@ -91,8 +91,15 @@
         <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
           <span>🍎</span> Nutrition Summary
         </h2>
-        <div id="nutritionSummary" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        <!-- Nutrition Totals -->
+        <div id="nutritionSummary" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <p class="text-sm text-neutral-600 dark:text-neutral-400">Loading nutrition data...</p>
+        </div>
+        
+        <!-- Nutrition Chart -->
+        <div class="mt-4">
+          <canvas id="nutritionChartHistory" height="80"></canvas>
         </div>
       </section>
     </main>
@@ -297,9 +304,109 @@
           `;
           container.appendChild(div);
         });
+        
+        // Create nutrition chart
+        renderNutritionChartHistory(nutrition.daily);
       } else {
         container.innerHTML = '<p class="text-sm text-neutral-600 dark:text-neutral-400">No nutrition data recorded</p>';
       }
+    }
+
+    function renderNutritionChartHistory(dailyData) {
+      const ctx = document.getElementById('nutritionChartHistory');
+      if (!ctx) return;
+
+      // Destroy existing chart if it exists
+      if (window.nutritionChartHistory) {
+        window.nutritionChartHistory.destroy();
+      }
+
+      // Filter and prepare data
+      const data = dailyData.filter(d => d.date_local).slice(0, 30).map(d => ({
+        date: d.date_local,
+        calories: d.calories_kcal || 0,
+        protein: d.protein_g || 0,
+        fiber: d.fiber_g || 0,
+        sodium: (d.sodium_mg || 0) / 10
+      }));
+
+      const labels = data.map(d => {
+        const date = new Date(d.date);
+        return `${date.getMonth() + 1}/${date.getDate()}`;
+      });
+
+      window.nutritionChartHistory = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Calories (kcal)',
+              data: data.map(d => d.calories),
+              backgroundColor: '#ef4444',
+              borderColor: '#dc2626',
+              borderWidth: 1
+            },
+            {
+              label: 'Protein (g)',
+              data: data.map(d => d.protein),
+              backgroundColor: '#f97316',
+              borderColor: '#ea580c',
+              borderWidth: 1
+            },
+            {
+              label: 'Fiber (g)',
+              data: data.map(d => d.fiber),
+              backgroundColor: '#22c55e',
+              borderColor: '#16a34a',
+              borderWidth: 1
+            },
+            {
+              label: 'Sodium (mg ÷10)',
+              data: data.map(d => d.sodium),
+              backgroundColor: '#06b6d4',
+              borderColor: '#0891b2',
+              borderWidth: 1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'bottom',
+              labels: {
+                color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#a3a3a3' : '#404040',
+                font: { size: 12 },
+                padding: 12
+              }
+            }
+          },
+          scales: {
+            x: {
+              stacked: false,
+              grid: {
+                color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#404040' : '#e5e5e5'
+              },
+              ticks: {
+                color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#a3a3a3' : '#666'
+              }
+            },
+            y: {
+              stacked: false,
+              beginAtZero: true,
+              grid: {
+                color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#404040' : '#e5e5e5'
+              },
+              ticks: {
+                color: window.matchMedia('(prefers-color-scheme: dark)').matches ? '#a3a3a3' : '#666'
+              }
+            }
+          }
+        }
+      });
     }
   </script>
 </body>

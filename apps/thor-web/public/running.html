@@ -91,8 +91,13 @@
     <!-- Nutrition Totals -->
     <div class="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg p-6 mb-8">
       <h2 class="text-xl font-bold mb-4">🍎 Nutrition Totals (Last 30 Days)</h2>
-      <div id="nutritionStats" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div id="nutritionStats" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <p class="text-neutral-500 dark:text-neutral-400">Loading nutrition data...</p>
+      </div>
+      
+      <!-- Nutrition Chart -->
+      <div class="mt-4">
+        <canvas id="nutritionChartRunning" height="80"></canvas>
       </div>
     </div>
 
