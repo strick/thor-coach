@@ -126,8 +126,20 @@
           fetch(`${API_BASE}/api/health-events?from=${from}&to=${to}`).then(r => r.json()).catch(() => ({ events: [] }))
         ]);
 
+        // Fetch detailed exercises for each workout
+        const workoutSessions = workoutsRes.sessions || [];
+        const workoutsWithDetails = await Promise.all(
+          workoutSessions.map(async (session) => {
+            const detailRes = await fetch(`${API_BASE}/api/workouts?date=${session.session_date}`)
+              .then(r => r.json())
+              .catch(() => ({ workouts: [] }));
+            const details = detailRes.workouts || [];
+            return { ...session, exercises: details.length > 0 ? details[0].exercises : [] };
+          })
+        );
+
         displayEventsByDate(
-          workoutsRes.sessions || [],
+          workoutsWithDetails,
           runningRes.sessions || [],
           healthRes.events || []
         );
@@ -189,9 +201,21 @@
           
           if (event.type === 'workout') {
             icon = '💪';
+            const exercises = event.data.exercises || [];
+            const exerciseList = exercises.length > 0 
+              ? `<div class="mt-3 space-y-2 text-xs border-t border-neutral-200 dark:border-neutral-700 pt-3">
+                   ${exercises.map(ex => `
+                     <div class="flex justify-between">
+                       <span>${ex.exercise}</span>
+                       <span class="text-neutral-600 dark:text-neutral-400">${ex.sets}×${ex.reps_per_set}${ex.weight_lbs ? ` @ ${ex.weight_lbs}lbs` : ''}</span>
+                     </div>
+                   `).join('')}
+                 </div>`
+              : '<p class="text-xs text-neutral-500 dark:text-neutral-500 mt-2">No exercise details</p>';
             content = `
               <p class="font-medium">${icon} Workout</p>
               <p class="text-xs text-neutral-500 dark:text-neutral-500 mt-1">${event.data.day_of_week || ''}</p>
+              ${exerciseList}
             `;
           } else if (event.type === 'running') {
             const distance = event.data.distance_miles ? (event.data.distance_miles * 1.60934).toFixed(2) : 0;
