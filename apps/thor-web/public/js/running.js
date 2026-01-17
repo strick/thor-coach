@@ -15,6 +15,7 @@ async function initDashboard() {
   await loadSessions();
   await loadStats();
   await loadWeeklyStats();
+  await loadNutritionStats();
   attachDurationChangeListeners();
 }
 
@@ -217,6 +218,52 @@ async function loadWeeklyStats() {
     });
   } catch (error) {
     console.error("[Running] Error loading weekly stats:", error);
+  }
+}
+
+/**
+ * Load nutrition stats for last 30 days
+ */
+async function loadNutritionStats() {
+  try {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - 30);
+    
+    const fromStr = from.toISOString().split('T')[0];
+    const toStr = to.toISOString().split('T')[0];
+    
+    const response = await fetch(`http://${window.location.hostname}:3000/api/nutrition/summary?from=${fromStr}&to=${toStr}`);
+    const data = await response.json();
+    
+    const container = document.getElementById('nutritionStats');
+    container.innerHTML = '';
+    
+    if (data && data.rangeTotals) {
+      const { total_calories, total_protein_g, total_fiber_g, days_logged } = data.rangeTotals;
+      const items = [
+        { label: 'Total Calories', value: `${Math.round(total_calories)} kcal`, icon: '🔥' },
+        { label: 'Total Protein', value: `${Math.round(total_protein_g)}g`, icon: '🥚' },
+        { label: 'Total Fiber', value: `${Math.round(total_fiber_g)}g`, icon: '🌾' },
+        { label: 'Days Logged', value: `${days_logged}`, icon: '📅' }
+      ];
+      
+      items.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'bg-neutral-50 dark:bg-neutral-900 rounded p-4';
+        div.innerHTML = `
+          <div class="text-sm text-neutral-600 dark:text-neutral-400 mb-1">${item.icon} ${item.label}</div>
+          <div class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">${item.value}</div>
+        `;
+        container.appendChild(div);
+      });
+    } else {
+      container.innerHTML = '<p class="text-neutral-500 dark:text-neutral-400 col-span-3">No nutrition data recorded</p>';
+    }
+  } catch (error) {
+    console.error("[Running] Error loading nutrition stats:", error);
+    const container = document.getElementById('nutritionStats');
+    container.innerHTML = '<p class="text-neutral-500 dark:text-neutral-400">Unable to load nutrition data</p>';
   }
 }
 

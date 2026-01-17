@@ -160,15 +160,16 @@
       const toStr = to.toISOString().split('T')[0];
 
       try {
-        const [workoutsRes, runningRes, healthRes] = await Promise.all([
+        const [workoutsRes, runningRes, healthRes, nutritionRes] = await Promise.all([
           fetch(`${API_BASE}/api/workouts?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => ({ sessions: [] })),
           fetch(`${API_BASE}/api/running/sessions?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => ({ sessions: [] })),
-          fetch(`${API_BASE}/api/health-events?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => ({ events: [] }))
+          fetch(`${API_BASE}/api/health-events?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => ({ events: [] })),
+          fetch(`${API_BASE}/api/nutrition/summary?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => ({}))
         ]);
 
         updateStats(workoutsRes.sessions || [], runningRes.sessions || [], healthRes.events || [], fromStr);
         updateCharts(workoutsRes.sessions || [], runningRes.sessions || [], fromStr, toStr);
-        updateSummaries(healthRes.events || []);
+        updateSummaries(healthRes.events || [], nutritionRes);
       } catch (error) {
         console.error('Error loading progress:', error);
       }
@@ -249,7 +250,7 @@
       });
     }
 
-    function updateSummaries(health) {
+    function updateSummaries(health, nutrition) {
       // Health summary
       const healthContainer = document.getElementById('healthStats');
       healthContainer.innerHTML = '';
@@ -270,9 +271,29 @@
         healthContainer.innerHTML = '<p class="text-sm text-neutral-600 dark:text-neutral-400">No health events recorded</p>';
       }
 
-      // Nutrition summary (placeholder)
+      // Nutrition summary - display totals, not individual foods
       const nutritionContainer = document.getElementById('nutritionStats');
-      nutritionContainer.innerHTML = '<p class="text-sm text-neutral-600 dark:text-neutral-400">Nutrition tracking coming soon</p>';
+      nutritionContainer.innerHTML = '';
+      
+      if (nutrition && nutrition.rangeTotals) {
+        const { total_calories, total_protein_g, total_sodium_mg, total_saturated_fat_g, total_fiber_g, days_logged } = nutrition.rangeTotals;
+        const items = [
+          { label: 'Total Calories', value: `${Math.round(total_calories)} kcal`, icon: '🔥' },
+          { label: 'Total Protein', value: `${Math.round(total_protein_g)}g`, icon: '🥚' },
+          { label: 'Fiber', value: `${Math.round(total_fiber_g)}g`, icon: '🌾' },
+          { label: 'Sodium', value: `${Math.round(total_sodium_mg)}mg`, icon: '🧂' },
+          { label: 'Days Logged', value: days_logged, icon: '📅' }
+        ];
+        
+        items.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'flex justify-between items-center p-2 rounded bg-neutral-50 dark:bg-neutral-900';
+          div.innerHTML = `<span class="text-sm">${item.icon} ${item.label}</span><span class="font-medium text-indigo-600 dark:text-indigo-400">${item.value}</span>`;
+          nutritionContainer.appendChild(div);
+        });
+      } else {
+        nutritionContainer.innerHTML = '<p class="text-sm text-neutral-600 dark:text-neutral-400">No nutrition data recorded</p>';
+      }
     }
 
     function generateWeekLabels(fromStr, toStr) {
