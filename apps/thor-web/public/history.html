@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>History Dashboard — Thor</title>
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-h-screen">
+  <div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <header class="bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700">
+      <div class="px-4 sm:px-6 py-4 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">📖 History Dashboard</h1>
+          <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">View your complete activity log</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="cfgPill" class="text-xs px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Connected</span>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <nav class="px-4 sm:px-6">
+        <div class="flex gap-1 border-b border-neutral-200 dark:border-neutral-700">
+          <a href="/index.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            🏠 Home
+          </a>
+          <a href="/nutrition.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            🍎 Nutrition
+          </a>
+          <a href="/running.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            🏃 Running
+          </a>
+          <a href="/health.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            ❤️ Health
+          </a>
+          <span class="px-4 py-3 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400">
+            📖 History
+          </span>
+          <a href="/progress.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            📊 Progress
+          </a>
+        </div>
+      </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="p-4 sm:p-6">
+      <!-- Date Range Filter -->
+      <div class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span>🗓️</span> Filter by Date Range
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium mb-1">From</label>
+            <input type="date" id="dateFrom" class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">To</label>
+            <input type="date" id="dateTo" class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div class="flex items-end gap-2">
+            <button id="filterBtn" class="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 font-medium text-sm transition-colors">
+              Filter
+            </button>
+            <button id="clearFilterBtn" class="rounded-lg border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors px-4 py-2.5 text-sm font-medium">
+              Clear
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Workouts Section -->
+      <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span>💪</span> Workout History
+        </h2>
+        <div id="workoutsList" class="space-y-3"></div>
+        <div id="noWorkouts" class="text-sm text-neutral-600 dark:text-neutral-400 text-center py-4">No workouts found</div>
+      </section>
+
+      <!-- Running Sessions Section -->
+      <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span>🏃</span> Running Sessions
+        </h2>
+        <div id="runningList" class="space-y-3"></div>
+        <div id="noRunning" class="text-sm text-neutral-600 dark:text-neutral-400 text-center py-4">No running sessions found</div>
+      </section>
+
+      <!-- Nutrition Section -->
+      <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span>🍎</span> Nutrition History
+        </h2>
+        <div id="nutritionList" class="space-y-3"></div>
+        <div id="noNutrition" class="text-sm text-neutral-600 dark:text-neutral-400 text-center py-4">No nutrition entries found</div>
+      </section>
+
+      <!-- Health Events Section -->
+      <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span>❤️</span> Health Events
+        </h2>
+        <div id="healthList" class="space-y-3"></div>
+        <div id="noHealth" class="text-sm text-neutral-600 dark:text-neutral-400 text-center py-4">No health events found</div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3001';
+
+    // Initialize date inputs to last 30 days
+    window.addEventListener('load', () => {
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      document.getElementById('dateFrom').valueAsDate = thirtyDaysAgo;
+      document.getElementById('dateTo').valueAsDate = today;
+      
+      loadHistoryData();
+    });
+
+    document.getElementById('filterBtn').addEventListener('click', loadHistoryData);
+    document.getElementById('clearFilterBtn').addEventListener('click', () => {
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      document.getElementById('dateFrom').valueAsDate = thirtyDaysAgo;
+      document.getElementById('dateTo').valueAsDate = today;
+      loadHistoryData();
+    });
+
+    async function loadHistoryData() {
+      const from = document.getElementById('dateFrom').value;
+      const to = document.getElementById('dateTo').value;
+
+      try {
+        // Load all data in parallel
+        const [workouts, running, health] = await Promise.all([
+          fetch(`${API_BASE}/api/workouts?from=${from}&to=${to}`).then(r => r.json()).catch(() => []),
+          fetch(`${API_BASE}/api/running/sessions?from=${from}&to=${to}`).then(r => r.json()).catch(() => []),
+          fetch(`${API_BASE}/api/health/events?from=${from}&to=${to}`).then(r => r.json()).catch(() => [])
+        ]);
+
+        displayWorkouts(workouts);
+        displayRunning(running);
+        displayHealth(health);
+      } catch (error) {
+        console.error('Error loading history:', error);
+      }
+    }
+
+    function displayWorkouts(workouts) {
+      const container = document.getElementById('workoutsList');
+      const noData = document.getElementById('noWorkouts');
+      
+      container.innerHTML = '';
+      if (!workouts || workouts.length === 0) {
+        noData.classList.remove('hidden');
+        return;
+      }
+      noData.classList.add('hidden');
+
+      workouts.forEach(w => {
+        const div = document.createElement('div');
+        div.className = 'p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900';
+        div.innerHTML = `
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="font-medium">${w.date || 'Unknown date'}</p>
+              <p class="text-sm text-neutral-600 dark:text-neutral-400 mt-1">${w.raw || 'No details'}</p>
+            </div>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function displayRunning(sessions) {
+      const container = document.getElementById('runningList');
+      const noData = document.getElementById('noRunning');
+      
+      container.innerHTML = '';
+      if (!sessions || sessions.length === 0) {
+        noData.classList.remove('hidden');
+        return;
+      }
+      noData.classList.add('hidden');
+
+      sessions.forEach(s => {
+        const div = document.createElement('div');
+        div.className = 'p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900';
+        div.innerHTML = `
+          <div class="flex justify-between items-start">
+            <div class="flex-1">
+              <p class="font-medium">${s.date || 'Unknown date'}</p>
+              <div class="grid grid-cols-3 gap-4 mt-2 text-sm">
+                <div><span class="text-neutral-600 dark:text-neutral-400">Distance:</span> <span class="font-medium text-emerald-600 dark:text-emerald-400">${s.distance || 0} km</span></div>
+                <div><span class="text-neutral-600 dark:text-neutral-400">Duration:</span> <span class="font-medium text-blue-600 dark:text-blue-400">${s.duration || 0} min</span></div>
+                <div><span class="text-neutral-600 dark:text-neutral-400">Pace:</span> <span class="font-medium text-orange-600 dark:text-orange-400">${s.pace || 'N/A'}</span></div>
+              </div>
+            </div>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function displayHealth(events) {
+      const container = document.getElementById('healthList');
+      const noData = document.getElementById('noHealth');
+      
+      container.innerHTML = '';
+      if (!events || events.length === 0) {
+        noData.classList.remove('hidden');
+        return;
+      }
+      noData.classList.add('hidden');
+
+      events.forEach(e => {
+        const div = document.createElement('div');
+        div.className = 'p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900';
+        div.innerHTML = `
+          <div class="flex justify-between items-start">
+            <div class="flex-1">
+              <p class="font-medium">${e.date || 'Unknown date'} - ${e.category || 'Unknown'}</p>
+              <div class="grid grid-cols-3 gap-4 mt-2 text-sm">
+                <div><span class="text-neutral-600 dark:text-neutral-400">Intensity:</span> <span class="font-medium">${e.intensity || 'N/A'}/10</span></div>
+                <div><span class="text-neutral-600 dark:text-neutral-400">Duration:</span> <span class="font-medium">${e.duration || 0} min</span></div>
+                ${e.notes ? `<div><span class="text-neutral-600 dark:text-neutral-400">Notes:</span> <span class="font-medium">${e.notes}</span></div>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+  </script>
+</body>
+</html>

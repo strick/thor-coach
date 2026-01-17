@@ -6,14 +6,31 @@ const router = Router();
 
 /**
  * GET /api/running/sessions - Get all running sessions
+ * Query params: from (YYYY-MM-DD), to (YYYY-MM-DD), date (YYYY-MM-DD)
  */
 router.get("/sessions", (req, res) => {
   try {
-    const sessions = db
-      .prepare(
-        `SELECT * FROM running_sessions ORDER BY session_date DESC, created_at DESC`
-      )
-      .all();
+    const { from, to, date } = req.query;
+    let query = `SELECT * FROM running_sessions`;
+    const params: any[] = [];
+
+    if (date) {
+      query += ` WHERE session_date = ?`;
+      params.push(date);
+    } else if (from && to) {
+      query += ` WHERE session_date >= ? AND session_date <= ?`;
+      params.push(from, to);
+    } else if (from) {
+      query += ` WHERE session_date >= ?`;
+      params.push(from);
+    } else if (to) {
+      query += ` WHERE session_date <= ?`;
+      params.push(to);
+    }
+
+    query += ` ORDER BY session_date DESC, created_at DESC`;
+
+    const sessions = db.prepare(query).all(...params);
     res.json({ sessions });
   } catch (error) {
     console.error("[Running] Error fetching sessions:", error);

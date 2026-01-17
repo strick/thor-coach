@@ -1098,11 +1098,18 @@ probeBackend();
       // Show loading skeleton
       showLoadingSkeleton("workoutsList", 2);
 
-      const res = await fetch(`${apiBase()}/workouts?date=${date}`);
-      if (!res.ok) throw new Error('Failed to load workouts');
+      // Fetch both workouts and running sessions
+      const [workoutRes, runningRes] = await Promise.all([
+        fetch(`${apiBase()}/workouts?date=${date}`),
+        fetch(`${apiBase()}/running/sessions?date=${date}`)
+      ]);
 
-      const data = await res.json();
-      renderWorkoutsList(data.workouts || []);
+      if (!workoutRes.ok) throw new Error('Failed to load workouts');
+
+      const workoutData = await workoutRes.json();
+      const runningData = runningRes.ok ? await runningRes.json() : { sessions: [] };
+
+      renderWorkoutsList(workoutData.workouts || [], runningData.sessions || []);
     } catch (e) {
       console.error('Failed to load workouts:', e);
       $("workoutsList").innerHTML = `
@@ -1115,13 +1122,13 @@ probeBackend();
     }
   }
 
-  function renderWorkoutsList(workouts) {
-    if (workouts.length === 0) {
+  function renderWorkoutsList(workouts, runningSessions = []) {
+    if (workouts.length === 0 && runningSessions.length === 0) {
       $("workoutsList").innerHTML = `
         <div class="text-center py-8">
           <div class="text-4xl mb-3">💪</div>
-          <p class="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">No workouts logged for this date</p>
-          <p class="text-xs text-neutral-500 dark:text-neutral-400">Log your first workout using the form above!</p>
+          <p class="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">No workouts or running logged for this date</p>
+          <p class="text-xs text-neutral-500 dark:text-neutral-400">Log your first workout or run using the forms above!</p>
         </div>
       `;
       return;
@@ -1139,71 +1146,129 @@ probeBackend();
       }))
     );
 
+
     $("workoutsList").innerHTML = `
-      <div class="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-4">
-        <div class="flex items-center justify-between mb-4">
-          <div class="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-            ${allExercises.length} exercise${allExercises.length !== 1 ? 's' : ''} logged
+      <div class="space-y-4">
+        ${allExercises.length > 0 ? `
+        <div class="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-4">
+          <div class="flex items-center justify-between mb-4">
+            <div class="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              ${allExercises.length} exercise${allExercises.length !== 1 ? 's' : ''} logged
+            </div>
+            <button id="deleteSelectedHistoryBtn" onclick="deleteSelectedHistory()" class="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded hidden">
+              Delete Selected
+            </button>
           </div>
-          <button id="deleteSelectedHistoryBtn" onclick="deleteSelectedHistory()" class="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded hidden">
-            Delete Selected
-          </button>
-        </div>
-        <div class="space-y-2">
-          ${allExercises.map(ex => {
-            // Parse reps - could be single number or array
-            const repsArray = Array.isArray(ex.reps_per_set) ? ex.reps_per_set : null;
-            const numSets = ex.sets || (repsArray ? repsArray.length : 1);
-            const displayReps = repsArray ? repsArray.join(', ') : ex.reps_per_set;
+          <div class="space-y-2">
+            ${allExercises.map(ex => {
+              // Parse reps - could be single number or array
+              const repsArray = Array.isArray(ex.reps_per_set) ? ex.reps_per_set : null;
+              const numSets = ex.sets || (repsArray ? repsArray.length : 1);
+              const displayReps = repsArray ? repsArray.join(', ') : ex.reps_per_set;
 
-            // Build edit UI for individual sets
-            const editSetsHTML = Array.from({ length: numSets }, (_, i) => {
-              const setNum = i + 1;
-              const reps = repsArray ? repsArray[i] : ex.reps_per_set;
+              // Build edit UI for individual sets
+              const editSetsHTML = Array.from({ length: numSets }, (_, i) => {
+                const setNum = i + 1;
+                const reps = repsArray ? repsArray[i] : ex.reps_per_set;
+                return `
+                  <div class="grid grid-cols-3 gap-2 items-center mb-2">
+                    <label class="text-xs text-neutral-500 dark:text-neutral-400">Set ${setNum}:</label>
+                    <input type="number" data-set-idx="${i}" class="set-reps-history-${ex.id} px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" placeholder="Reps" value="${reps || ''}" />
+                    <input type="number" step="0.5" data-set-idx="${i}" class="set-weight-history-${ex.id} px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" placeholder="Weight" value="${ex.weight_lbs || ''}" />
+                  </div>
+                `;
+              }).join('');
+
               return `
-                <div class="grid grid-cols-3 gap-2 items-center mb-2">
-                  <label class="text-xs text-neutral-500 dark:text-neutral-400">Set ${setNum}:</label>
-                  <input type="number" data-set-idx="${i}" class="set-reps-history-${ex.id} px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" placeholder="Reps" value="${reps || ''}" />
-                  <input type="number" step="0.5" data-set-idx="${i}" class="set-weight-history-${ex.id} px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs" placeholder="Weight" value="${ex.weight_lbs || ''}" />
-                </div>
-              `;
-            }).join('');
-
-            return `
-            <div class="text-xs bg-neutral-50 dark:bg-neutral-900 rounded-lg p-3 flex items-start gap-3" data-log-id="${ex.id}">
-              <input type="checkbox" class="history-checkbox mt-1" data-session-id="${ex.sessionId}" onchange="updateHistoryDeleteButton()" />
-              <div class="flex-1">
-                <div class="flex items-center justify-between mb-2">
-                  <button onclick="loadExerciseByName('${ex.exercise.replace(/'/g, "\\'")}')" class="font-medium text-neutral-700 dark:text-neutral-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline cursor-pointer text-left transition-colors" title="Click to view exercise history">
-                    ${ex.exercise}
-                  </button>
-                  <button onclick="toggleEditMode('history-${ex.id}')" class="text-indigo-600 dark:text-indigo-400 hover:underline text-xs">Edit</button>
-                </div>
-                <div class="view-mode-history-${ex.id}">
-                  <div class="text-neutral-600 dark:text-neutral-400">${numSets}x ${displayReps} ${ex.weight_lbs ? '@' + ex.weight_lbs + ' lbs' : ''}</div>
-                  ${ex.notes ? `<div class="text-xs text-neutral-500 dark:text-neutral-400 italic mt-1">💭 ${ex.notes}</div>` : ''}
-                  ${ex.llm_provider && ex.llm_model ? `<div class="text-[10px] text-neutral-400 dark:text-neutral-500 mt-1 flex items-center gap-1">
-                    <span title="AI Model used to parse this workout">🤖 ${ex.llm_provider}: ${ex.llm_model}</span>
-                  </div>` : ''}
-                </div>
-                <div class="edit-mode-history-${ex.id} hidden">
-                  <div class="mb-3">
-                    <div class="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Edit Individual Sets:</div>
-                    ${editSetsHTML}
-                    <button onclick="addSet('history-${ex.id}')" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline mt-1">+ Add Set</button>
+              <div class="text-xs bg-neutral-50 dark:bg-neutral-900 rounded-lg p-3 flex items-start gap-3" data-log-id="${ex.id}">
+                <input type="checkbox" class="history-checkbox mt-1" data-session-id="${ex.sessionId}" onchange="updateHistoryDeleteButton()" />
+                <div class="flex-1">
+                  <div class="flex items-center justify-between mb-2">
+                    <button onclick="loadExerciseByName('${ex.exercise.replace(/'/g, "\\'")}')" class="font-medium text-neutral-700 dark:text-neutral-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline cursor-pointer text-left transition-colors" title="Click to view exercise history">
+                      ${ex.exercise}
+                    </button>
+                    <button onclick="toggleEditMode('history-${ex.id}')" class="text-indigo-600 dark:text-indigo-400 hover:underline text-xs">Edit</button>
                   </div>
-                  <div class="mb-2">
-                    <textarea id="notes-history-${ex.id}" placeholder="Notes (optional)" class="w-full px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs resize-none" rows="2">${ex.notes || ''}</textarea>
+                  <div class="view-mode-history-${ex.id}">
+                    <div class="text-neutral-600 dark:text-neutral-400">${numSets}x ${displayReps} ${ex.weight_lbs ? '@' + ex.weight_lbs + ' lbs' : ''}</div>
+                    ${ex.notes ? `<div class="text-xs text-neutral-500 dark:text-neutral-400 italic mt-1">💭 ${ex.notes}</div>` : ''}
+                    ${ex.llm_provider && ex.llm_model ? `<div class="text-[10px] text-neutral-400 dark:text-neutral-500 mt-1 flex items-center gap-1">
+                      <span title="AI Model used to parse this workout">🤖 ${ex.llm_provider}: ${ex.llm_model}</span>
+                    </div>` : ''}
                   </div>
-                  <div class="flex gap-2">
-                    <button onclick="saveExerciseLog('history-${ex.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded">Save</button>
-                    <button onclick="toggleEditMode('history-${ex.id}')" class="text-xs bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 px-3 py-1 rounded">Cancel</button>
+                  <div class="edit-mode-history-${ex.id} hidden">
+                    <div class="mb-3">
+                      <div class="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Edit Individual Sets:</div>
+                      ${editSetsHTML}
+                      <button onclick="addSet('history-${ex.id}')" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline mt-1">+ Add Set</button>
+                    </div>
+                    <div class="mb-2">
+                      <textarea id="notes-history-${ex.id}" placeholder="Notes (optional)" class="w-full px-2 py-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs resize-none" rows="2">${ex.notes || ''}</textarea>
+                    </div>
+                    <div class="flex gap-2">
+                      <button onclick="saveExerciseLog('history-${ex.id}')" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded">Save</button>
+                      <button onclick="toggleEditMode('history-${ex.id}')" class="text-xs bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 px-3 py-1 rounded">Cancel</button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          `}).join('')}
+            `}).join('')}
+          </div>
         </div>
+        ` : ''}
+        ${runningSessions.length > 0 ? `
+        <div class="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-4">
+          <div class="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-4">
+            ${runningSessions.length} running session${runningSessions.length !== 1 ? 's' : ''}
+          </div>
+          <div class="space-y-2">
+            ${runningSessions.map(session => {
+              const formatDuration = (totalMinutes) => {
+                if (!totalMinutes) return '0m 0s';
+                const mins = Math.floor(totalMinutes);
+                const secs = Math.round((totalMinutes - mins) * 60);
+                return `${mins}m ${secs}s`;
+              };
+
+              const formatPace = (decimalMinutes) => {
+                if (!decimalMinutes) return '--:-- /mi';
+                const mins = Math.floor(decimalMinutes);
+                const secs = Math.round((decimalMinutes - mins) * 60);
+                return `${mins}:${secs.toString().padStart(2, '0')} /mi`;
+              };
+
+              const duration = formatDuration(session.duration_minutes);
+              const pace = formatPace(session.pace_min_per_mile);
+              const calories = session.calories_burned ? Math.round(session.calories_burned) : 0;
+
+              return `
+              <div class="text-xs bg-orange-50 dark:bg-orange-950/30 rounded-lg p-3 flex items-start gap-3 border border-orange-200 dark:border-orange-800">
+                <div class="text-lg">🏃</div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between mb-2">
+                    <div class="font-medium text-neutral-700 dark:text-neutral-300">
+                      Running: ${session.distance_miles || 0} miles
+                    </div>
+                    <button onclick="editRunningSession('${session.id}')" class="text-indigo-600 dark:text-indigo-400 hover:underline text-xs">Edit</button>
+                  </div>
+                  <div class="space-y-1 text-neutral-600 dark:text-neutral-400">
+                    <div>⏱️ Duration: ${duration}</div>
+                    <div>🏃 Pace: ${pace}</div>
+                    <div>🔥 Calories: ${calories}</div>
+                    ${session.surface ? `<div>🛣️ Surface: ${session.surface}</div>` : ''}
+                    ${session.effort_level ? `<div>💪 Effort: ${session.effort_level}</div>` : ''}
+                    ${session.weather ? `<div>🌤️ Weather: ${session.weather}</div>` : ''}
+                    ${session.avg_heart_rate ? `<div>❤️ Avg HR: ${Math.round(session.avg_heart_rate)} bpm</div>` : ''}
+                    ${session.notes ? `<div class="text-xs italic">💭 ${session.notes}</div>` : ''}
+                  </div>
+                </div>
+                <button onclick="deleteRunningSession('${session.id}')" class="text-red-600 dark:text-red-400 hover:underline text-xs">Delete</button>
+              </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        ` : ''}
       </div>
     `;
   }
@@ -1694,13 +1759,51 @@ probeBackend();
     }
   }
 
+  // Running session functions
+  async function deleteRunningSession(sessionId) {
+    const confirmed = await showConfirm({
+      title: 'Delete Running Session?',
+      message: 'This will permanently delete this running session. This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger',
+      icon: '🗑️'
+    });
+
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`${apiBase()}/running/sessions/${sessionId}`, {
+        method: 'DELETE'
+      });
+
+      if (!res.ok) throw new Error('Failed to delete session');
+
+      showToast('Running session deleted successfully!', 'success');
+      await loadWorkoutsByDate();
+    } catch (e) {
+      console.error('Failed to delete running session:', e);
+      showToast('Failed to delete running session', 'error');
+    }
+  }
+
+  function editRunningSession(sessionId) {
+    // For now, redirect to the running dashboard to edit
+    // You could also implement an inline edit modal here
+    window.location.href = 'running.html';
+  }
+
   // Make functions available globally
   window.updateHistoryDeleteButton = updateHistoryDeleteButton;
   window.deleteSelectedHistory = deleteSelectedHistory;
+  window.deleteRunningSession = deleteRunningSession;
+  window.editRunningSession = editRunningSession;
 
   // ======= Workout Calendar =======
   let currentCalendarMonth = new Date();
   let workoutDatesCache = new Set();
+  let runningDatesCache = new Set();
+  let runningSessionsCache = new Map(); // Map of date -> array of running sessions
   let calendarInitialized = false;
 
   async function loadWorkoutDatesForMonth(year, month) {
@@ -1712,7 +1815,7 @@ probeBackend();
       const fromDate = toLocalDateString(firstDay);
       const toDate = toLocalDateString(lastDay);
 
-      // Fetch all sessions for this month
+      // Fetch all workout sessions for this month
       const res = await fetch(`${apiBase()}/progress/summary?from=${fromDate}&to=${toDate}`);
       if (!res.ok) throw new Error('Failed to load workout dates');
 
@@ -1723,6 +1826,26 @@ probeBackend();
       (data.sessions || []).forEach(session => {
         workoutDatesCache.add(session.session_date);
       });
+
+      // Fetch all running sessions for this month
+      const runRes = await fetch(`${apiBase()}/running/sessions?from=${fromDate}&to=${toDate}`);
+      if (runRes.ok) {
+        const runData = await runRes.json();
+        
+        // Extract unique running dates and store full sessions
+        runningDatesCache.clear();
+        runningSessionsCache.clear();
+        
+        (runData.sessions || []).forEach(session => {
+          runningDatesCache.add(session.session_date);
+          
+          // Store sessions by date
+          if (!runningSessionsCache.has(session.session_date)) {
+            runningSessionsCache.set(session.session_date, []);
+          }
+          runningSessionsCache.get(session.session_date).push(session);
+        });
+      }
 
       return workoutDatesCache;
     } catch (e) {
@@ -1772,12 +1895,15 @@ probeBackend();
       const date = new Date(year, month, day);
       const dateStr = toLocalDateString(date);
       const hasWorkout = workoutDatesCache.has(dateStr);
+      const hasRunning = runningDatesCache.has(dateStr);
       const isToday = dateStr === todayStr;
 
       let bgClass = 'bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-800';
       let dotClass = 'bg-neutral-300 dark:bg-neutral-700';
+      let runningDotClass = '';
       let textClass = 'text-neutral-700 dark:text-neutral-300';
       let borderClass = '';
+      let tooltipText = dateStr;
 
       if (isToday) {
         borderClass = 'ring-1 ring-indigo-500';
@@ -1787,16 +1913,36 @@ probeBackend();
       if (hasWorkout) {
         dotClass = 'bg-emerald-500';
         bgClass = 'bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-950/50';
+        tooltipText += ' - Has workout';
+      }
+
+      if (hasRunning) {
+        runningDotClass = 'bg-orange-500';
+        tooltipText += hasWorkout ? ', running' : ' - Has running';
+      }
+
+      // Build the indicator dots HTML
+      let dotsHTML = `<span class="w-1.5 h-1.5 rounded-full ${dotClass} mt-0.5"></span>`;
+      if (hasRunning && hasWorkout) {
+        // Show both dots if both workout and running exist
+        dotsHTML = `
+          <div class="flex gap-1 mt-0.5">
+            <span class="w-1.5 h-1.5 rounded-full ${dotClass}"></span>
+            <span class="w-1.5 h-1.5 rounded-full ${runningDotClass}"></span>
+          </div>
+        `;
+      } else if (hasRunning) {
+        dotsHTML = `<span class="w-1.5 h-1.5 rounded-full ${runningDotClass} mt-0.5"></span>`;
       }
 
       calendarHTML += `
         <button
           onclick="loadCalendarDay('${dateStr}')"
           class="aspect-square rounded ${bgClass} ${borderClass} transition-all flex flex-col items-center justify-center cursor-pointer text-xs"
-          title="${dateStr}${hasWorkout ? ' - Has workout' : ''}"
+          title="${tooltipText}"
         >
           <span class="font-medium ${textClass}">${day}</span>
-          <span class="w-1.5 h-1.5 rounded-full ${dotClass} mt-0.5"></span>
+          ${dotsHTML}
         </button>
       `;
     }

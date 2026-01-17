@@ -2,45 +2,111 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Thor — Health Dashboard</title>
-  <link rel="stylesheet" href="/css/health.css" />
- </head>
-<body>
-  <main class="container">
-    <h1>Health Dashboard</h1>
-
-    <section class="card">
-      <h2>Log a Health Event</h2>
-      <form id="health-form">
-        <label>Date: <input type="date" id="event-date" required /></label>
-        <label>Category:
-          <select id="category" required>
-            <option value="sleep">sleep</option>
-            <option value="migraine">migraine</option>
-            <option value="run">run</option>
-            <option value="yardwork">yardwork</option>
-            <option value="other">other</option>
-          </select>
-        </label>
-        <label>Intensity (1-10): <input type="number" id="intensity" min="1" max="10" /></label>
-        <label>Duration (minutes): <input type="number" id="duration" min="1" /></label>
-        <label>Notes:<textarea id="notes"></textarea></label>
-        <div class="actions">
-          <button type="submit">Log Event</button>
-          <button type="button" id="refresh">Refresh</button>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Health Dashboard — Thor</title>
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-h-screen">
+  <div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <header class="bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700">
+      <div class="px-4 sm:px-6 py-4 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">❤️ Health Dashboard</h1>
+          <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">Track your health events</p>
         </div>
-      </form>
-      <div id="form-msg" class="muted"></div>
-    </section>
+        <div class="flex items-center gap-3">
+          <span id="cfgPill" class="text-xs px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Connected</span>
+        </div>
+      </div>
 
-    <section class="card">
-      <h2>Recent Events</h2>
-      <div id="events-count" class="muted"></div>
-      <canvas id="sparkline" width="600" height="80"></canvas>
-      <ul id="events-list" class="events"></ul>
-    </section>
-  </main>
+      <!-- Tab Navigation -->
+      <nav class="px-4 sm:px-6">
+        <div class="flex gap-1 border-b border-neutral-200 dark:border-neutral-700">
+          <a href="/index.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            🏠 Home
+          </a>
+          <a href="/nutrition.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            🍎 Nutrition
+          </a>
+          <a href="/running.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            🏃 Running
+          </a>
+          <span class="px-4 py-3 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400">
+            ❤️ Health
+          </span>
+          <a href="/history.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            📖 History
+          </a>
+          <a href="/progress.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            📊 Progress
+          </a>
+        </div>
+      </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="p-4 sm:p-6">
+      <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span>📝</span> Log a Health Event
+        </h2>
+        <form id="health-form" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium mb-1">Date</label>
+              <input type="date" id="event-date" required class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Category</label>
+              <select id="category" required class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="sleep">sleep</option>
+                <option value="migraine">migraine</option>
+                <option value="run">run</option>
+                <option value="yardwork">yardwork</option>
+                <option value="other">other</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Intensity (1-10)</label>
+              <input type="number" id="intensity" min="1" max="10" class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Duration (minutes)</label>
+              <input type="number" id="duration" min="1" class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Notes</label>
+            <textarea id="notes" rows="3" class="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+          </div>
+          <div class="flex gap-2">
+            <button type="submit" class="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 font-medium text-sm transition-colors">
+              Log Event
+            </button>
+            <button type="button" id="refresh" class="px-4 py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-sm font-medium">
+              Refresh
+            </button>
+          </div>
+          <div id="form-msg" class="text-sm text-neutral-600 dark:text-neutral-400"></div>
+        </form>
+      </section>
+
+      <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span>📊</span> Recent Events
+        </h2>
+        <div id="events-count" class="text-sm text-neutral-600 dark:text-neutral-400 mb-4"></div>
+        <canvas id="sparkline" width="600" height="80" class="mb-4"></canvas>
+        <ul id="events-list" class="space-y-2"></ul>
+      </section>
+    </main>
+  </div>
 
   <script src="/js/health.js"></script>
 </body>

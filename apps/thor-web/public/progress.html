@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Progress Dashboard — Thor</title>
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-h-screen">
+  <div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <header class="bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700">
+      <div class="px-4 sm:px-6 py-4 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">📊 Progress Dashboard</h1>
+          <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">Track your performance trends</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="cfgPill" class="text-xs px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Connected</span>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <nav class="px-4 sm:px-6">
+        <div class="flex gap-1 border-b border-neutral-200 dark:border-neutral-700">
+          <a href="/index.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            🏠 Home
+          </a>
+          <a href="/nutrition.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            🍎 Nutrition
+          </a>
+          <a href="/running.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            🏃 Running
+          </a>
+          <a href="/health.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            ❤️ Health
+          </a>
+          <a href="/history.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            📖 History
+          </a>
+          <span class="px-4 py-3 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400">
+            📊 Progress
+          </span>
+        </div>
+      </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="p-4 sm:p-6">
+      <!-- Time Range Selection -->
+      <div class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mb-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span>📅</span> Time Range
+        </h2>
+        <div class="flex gap-2 flex-wrap">
+          <button class="timeRange-btn px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-sm font-medium" data-days="7">Last 7 Days</button>
+          <button class="timeRange-btn px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-sm font-medium active:bg-indigo-600 active:text-white" data-days="30">Last 30 Days</button>
+          <button class="timeRange-btn px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-sm font-medium" data-days="90">Last 90 Days</button>
+          <button class="timeRange-btn px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-sm font-medium" data-days="365">Last Year</button>
+        </div>
+      </div>
+
+      <!-- Workouts Stats -->
+      <section class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+          <div class="text-neutral-600 dark:text-neutral-400 text-sm font-semibold">Total Workouts</div>
+          <div class="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mt-2" id="totalWorkouts">0</div>
+        </div>
+        <div class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+          <div class="text-neutral-600 dark:text-neutral-400 text-sm font-semibold">Avg per Week</div>
+          <div class="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-2" id="avgWorkoutsPerWeek">0</div>
+        </div>
+        <div class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+          <div class="text-neutral-600 dark:text-neutral-400 text-sm font-semibold">Total Running Distance</div>
+          <div class="text-3xl font-bold text-orange-600 dark:text-orange-400 mt-2" id="totalDistance">0 km</div>
+        </div>
+        <div class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+          <div class="text-neutral-600 dark:text-neutral-400 text-sm font-semibold">Avg Running Pace</div>
+          <div class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2" id="avgPace">N/A</div>
+        </div>
+      </section>
+
+      <!-- Charts Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- Workout Frequency Chart -->
+        <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+          <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <span>💪</span> Workout Frequency
+          </h2>
+          <canvas id="workoutChart" height="80"></canvas>
+        </section>
+
+        <!-- Running Distance Chart -->
+        <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+          <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <span>🏃</span> Running Distance Trend
+          </h2>
+          <canvas id="runningChart" height="80"></canvas>
+        </section>
+      </div>
+
+      <!-- Health & Nutrition Stats -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Health Events -->
+        <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+          <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <span>❤️</span> Health Events Summary
+          </h2>
+          <div id="healthStats" class="space-y-2"></div>
+        </section>
+
+        <!-- Nutrition Summary -->
+        <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+          <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            <span>🍎</span> Nutrition Summary
+          </h2>
+          <div id="nutritionStats" class="space-y-2"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3001';
+    let currentDays = 30;
+    let workoutChart = null;
+    let runningChart = null;
+
+    // Initialize
+    window.addEventListener('load', () => {
+      document.querySelectorAll('.timeRange-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          document.querySelectorAll('.timeRange-btn').forEach(b => {
+            b.classList.remove('bg-indigo-600', 'text-white');
+            b.classList.add('border-neutral-300', 'dark:border-neutral-700');
+          });
+          e.target.classList.add('bg-indigo-600', 'text-white');
+          e.target.classList.remove('border-neutral-300', 'dark:border-neutral-700');
+          currentDays = parseInt(e.target.dataset.days);
+          loadProgressData();
+        });
+      });
+
+      // Set 30 days as active by default
+      document.querySelector('[data-days="30"]').classList.add('bg-indigo-600', 'text-white');
+      loadProgressData();
+    });
+
+    async function loadProgressData() {
+      const from = new Date();
+      from.setDate(from.getDate() - currentDays);
+      const to = new Date();
+
+      const fromStr = from.toISOString().split('T')[0];
+      const toStr = to.toISOString().split('T')[0];
+
+      try {
+        const [workouts, running, health] = await Promise.all([
+          fetch(`${API_BASE}/api/workouts?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => []),
+          fetch(`${API_BASE}/api/running/sessions?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => []),
+          fetch(`${API_BASE}/api/health/events?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => [])
+        ]);
+
+        updateStats(workouts, running, health, fromStr);
+        updateCharts(workouts, running, fromStr, toStr);
+        updateSummaries(health);
+      } catch (error) {
+        console.error('Error loading progress:', error);
+      }
+    }
+
+    function updateStats(workouts, running, health, fromStr) {
+      // Workout stats
+      document.getElementById('totalWorkouts').textContent = workouts ? workouts.length : 0;
+      
+      // Calculate weeks in range
+      const weeks = Math.ceil(currentDays / 7);
+      const avgPerWeek = workouts ? Math.round((workouts.length / weeks) * 10) / 10 : 0;
+      document.getElementById('avgWorkoutsPerWeek').textContent = avgPerWeek;
+
+      // Running stats
+      const totalDistance = running ? running.reduce((sum, r) => sum + (parseFloat(r.distance) || 0), 0) : 0;
+      document.getElementById('totalDistance').textContent = totalDistance.toFixed(1) + ' km';
+
+      // Average pace
+      if (running && running.length > 0) {
+        const paces = running.map(r => r.pace).filter(p => p);
+        if (paces.length > 0) {
+          document.getElementById('avgPace').textContent = paces[0]; // Show first pace as example
+        }
+      }
+    }
+
+    function updateCharts(workouts, running, fromStr, toStr) {
+      // Aggregate data by week
+      const weeks = generateWeekLabels(fromStr, toStr);
+      const workoutsByWeek = aggregateByWeek(workouts, 'date', weeks);
+      const distanceByWeek = aggregateByWeek(running, 'date', weeks, 'distance');
+
+      // Workout chart
+      const workoutCtx = document.getElementById('workoutChart').getContext('2d');
+      if (workoutChart) workoutChart.destroy();
+      workoutChart = new Chart(workoutCtx, {
+        type: 'line',
+        data: {
+          labels: weeks,
+          datasets: [{
+            label: 'Workouts per Week',
+            data: workoutsByWeek,
+            borderColor: 'rgb(99, 102, 241)',
+            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      // Running chart
+      const runningCtx = document.getElementById('runningChart').getContext('2d');
+      if (runningChart) runningChart.destroy();
+      runningChart = new Chart(runningCtx, {
+        type: 'line',
+        data: {
+          labels: weeks,
+          datasets: [{
+            label: 'Distance (km)',
+            data: distanceByWeek,
+            borderColor: 'rgb(249, 115, 22)',
+            backgroundColor: 'rgba(249, 115, 22, 0.1)',
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    function updateSummaries(health) {
+      // Health summary
+      const healthContainer = document.getElementById('healthStats');
+      healthContainer.innerHTML = '';
+      
+      if (health && health.length > 0) {
+        const categories = {};
+        health.forEach(e => {
+          categories[e.category] = (categories[e.category] || 0) + 1;
+        });
+        
+        Object.entries(categories).forEach(([cat, count]) => {
+          const div = document.createElement('div');
+          div.className = 'flex justify-between items-center p-2 rounded bg-neutral-50 dark:bg-neutral-900';
+          div.innerHTML = `<span class="text-sm">${cat}</span><span class="font-medium text-indigo-600 dark:text-indigo-400">${count}</span>`;
+          healthContainer.appendChild(div);
+        });
+      } else {
+        healthContainer.innerHTML = '<p class="text-sm text-neutral-600 dark:text-neutral-400">No health events recorded</p>';
+      }
+
+      // Nutrition summary (placeholder)
+      const nutritionContainer = document.getElementById('nutritionStats');
+      nutritionContainer.innerHTML = '<p class="text-sm text-neutral-600 dark:text-neutral-400">Nutrition tracking coming soon</p>';
+    }
+
+    function generateWeekLabels(fromStr, toStr) {
+      const from = new Date(fromStr);
+      const to = new Date(toStr);
+      const weeks = [];
+      const current = new Date(from);
+      
+      while (current <= to) {
+        const weekStart = new Date(current);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        weeks.push(`${weekStart.getDate()} ${weekStart.toLocaleString('default', { month: 'short' })}`);
+        current.setDate(current.getDate() + 7);
+      }
+      
+      return weeks;
+    }
+
+    function aggregateByWeek(items, dateField, weeks, valueField = null) {
+      return weeks.map((week, idx) => {
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay() + (idx * 7));
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+
+        return items ? items.filter(item => {
+          const itemDate = new Date(item[dateField]);
+          return itemDate >= weekStart && itemDate < weekEnd;
+        }).reduce((sum, item) => {
+          if (valueField) return sum + (parseFloat(item[valueField]) || 0);
+          return sum + 1;
+        }, 0) : 0;
+      });
+    }
+  </script>
+</body>
+</html>
