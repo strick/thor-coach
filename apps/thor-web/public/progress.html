@@ -279,24 +279,30 @@
       const from = new Date(fromStr);
       const to = new Date(toStr);
       const weeks = [];
-      const current = new Date(from);
+      const weekData = [];
+      
+      let current = new Date(from);
+      // Align to start of week (Sunday)
+      current.setDate(current.getDate() - current.getDay());
       
       while (current <= to) {
         const weekStart = new Date(current);
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        weeks.push(`${weekStart.getDate()} ${weekStart.toLocaleString('default', { month: 'short' })}`);
+        const weekLabel = `${weekStart.getDate()} ${weekStart.toLocaleString('default', { month: 'short' })}`;
+        weeks.push(weekLabel);
+        weekData.push({ start: new Date(weekStart), end: new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000) });
         current.setDate(current.getDate() + 7);
       }
       
+      // Store weekData globally for use in aggregateByWeek
+      window.weekRanges = weekData;
       return weeks;
     }
 
     function aggregateByWeek(items, dateField, weeks, valueField = null) {
       return weeks.map((week, idx) => {
-        const weekStart = new Date();
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay() + (idx * 7));
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 7);
+        if (!window.weekRanges || !window.weekRanges[idx]) return 0;
+        
+        const { start: weekStart, end: weekEnd } = window.weekRanges[idx];
 
         return items ? items.filter(item => {
           const itemDate = new Date(item[dateField]);
