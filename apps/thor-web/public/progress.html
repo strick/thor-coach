@@ -279,9 +279,9 @@
       nutritionContainer.innerHTML = '';
       
       if (nutrition && nutrition.totals) {
-        const { total_calories, total_protein_g, total_sodium_mg, total_saturated_fat_g, total_fiber_g, days_logged } = nutrition.totals;
+        const { total_calories_kcal, total_protein_g, total_sodium_mg, total_sat_fat_g, total_fiber_g, days_logged } = nutrition.totals;
         const items = [
-          { label: 'Total Calories', value: `${Math.round(total_calories)} kcal`, icon: '🔥' },
+          { label: 'Total Calories', value: `${Math.round(total_calories_kcal)} kcal`, icon: '🔥' },
           { label: 'Total Protein', value: `${Math.round(total_protein_g)}g`, icon: '🥚' },
           { label: 'Fiber', value: `${Math.round(total_fiber_g)}g`, icon: '🌾' },
           { label: 'Sodium', value: `${Math.round(total_sodium_mg)}mg`, icon: '🧂' },

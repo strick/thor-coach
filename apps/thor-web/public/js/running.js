@@ -240,9 +240,9 @@ async function loadNutritionStats() {
     container.innerHTML = '';
     
     if (data && data.totals) {
-      const { total_calories, total_protein_g, total_fiber_g, days_logged } = data.totals;
+      const { total_calories_kcal, total_protein_g, total_fiber_g, days_logged } = data.totals;
       const items = [
-        { label: 'Total Calories', value: `${Math.round(total_calories)} kcal`, icon: '🔥' },
+        { label: 'Total Calories', value: `${Math.round(total_calories_kcal)} kcal`, icon: '🔥' },
         { label: 'Total Protein', value: `${Math.round(total_protein_g)}g`, icon: '🥚' },
         { label: 'Total Fiber', value: `${Math.round(total_fiber_g)}g`, icon: '🌾' },
         { label: 'Days Logged', value: `${days_logged}`, icon: '📅' }

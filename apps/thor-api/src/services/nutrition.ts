@@ -267,6 +267,102 @@ export function getDailyNutritionSummary(date: string) {
 /**
  * Get nutrition summary for a date range
  */
+/**
+ * Get nutrition summary aggregated from daily nutrition data
+ * This pulls from the new nutrition_days schema instead of old food_logs
+ */
+export function getNutritionRangeFromDays(from: string, to: string) {
+  const daily: any[] = [];
+  const totals = {
+    total_calories_kcal: 0,
+    total_protein_g: 0,
+    total_carbs_g: 0,
+    total_fat_g: 0,
+    total_fiber_g: 0,
+    total_sugar_g: 0,
+    total_added_sugar_g: 0,
+    total_sodium_mg: 0,
+    total_sat_fat_g: 0,
+    total_cholesterol_mg: 0,
+    total_potassium_mg: 0,
+    total_calcium_mg: 0,
+    total_food_count: 0,
+    days_logged: 0
+  };
+
+  // Get all dates in range
+  const currentDate = new Date(from);
+  const endDate = new Date(to);
+  const datesInRange: string[] = [];
+  
+  while (currentDate <= endDate) {
+    const dateStr = currentDate.toISOString().slice(0, 10);
+    datesInRange.push(dateStr);
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  // Load data for each date
+  let daysWithData = 0;
+  for (const dateLocal of datesInRange) {
+    const day = getNutritionDay(dateLocal);
+    if (day && day.totals) {
+      daily.push({
+        date_local: dateLocal,
+        ...day.totals
+      });
+
+      // Accumulate totals
+      totals.total_calories_kcal += day.totals.calories_kcal || 0;
+      totals.total_protein_g += day.totals.protein_g || 0;
+      totals.total_carbs_g += day.totals.carbs_g || 0;
+      totals.total_fat_g += day.totals.fat_g || 0;
+      totals.total_fiber_g += day.totals.fiber_g || 0;
+      totals.total_sugar_g += day.totals.sugar_g || 0;
+      totals.total_added_sugar_g += day.totals.added_sugar_g || 0;
+      totals.total_sodium_mg += day.totals.sodium_mg || 0;
+      totals.total_sat_fat_g += day.totals.sat_fat_g || 0;
+      totals.total_cholesterol_mg += day.totals.cholesterol_mg || 0;
+      totals.total_potassium_mg += day.totals.potassium_mg || 0;
+      totals.total_calcium_mg += day.totals.calcium_mg || 0;
+      totals.total_food_count += day.totals.total_food_count || 0;
+      daysWithData++;
+    }
+  }
+
+  totals.days_logged = daysWithData;
+
+  // Get nutrition goals
+  const goals = db.prepare<[], {
+    daily_protein_target_g: number | null;
+    max_daily_sodium_mg: number | null;
+    max_daily_saturated_fat_g: number | null;
+    min_daily_fiber_g: number | null;
+    max_daily_cholesterol_mg: number | null;
+    max_daily_added_sugar_g: number | null;
+    diet_style: string | null;
+  }>(`
+    SELECT
+      daily_protein_target_g,
+      max_daily_sodium_mg,
+      max_daily_saturated_fat_g,
+      min_daily_fiber_g,
+      max_daily_cholesterol_mg,
+      max_daily_added_sugar_g,
+      diet_style
+    FROM nutrition_goals
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get();
+
+  return {
+    from,
+    to,
+    daily,
+    totals,
+    goals: goals || null
+  };
+}
+
 export function getNutritionSummaryRange(from: string, to: string) {
   const dailyData = db.prepare<[string, string], {
     log_date: string;

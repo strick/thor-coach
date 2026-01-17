@@ -8,6 +8,7 @@ import {
   logFoodFromText,
   getDailyNutritionSummary,
   getNutritionSummaryRange,
+  getNutritionRangeFromDays,
   setNutritionGoals,
   getNutritionGoals,
   getOrCreateNutritionDay,
@@ -63,7 +64,7 @@ export const getDailyNutrition = asyncHandler(async (req: Request, res: Response
 
 /**
  * GET /api/nutrition/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
- * Get nutrition summary for a date range
+ * Get nutrition summary for a date range (aggregated from daily nutrition data)
  */
 export const getNutritionSummary = asyncHandler(async (req: Request, res: Response) => {
   const from = req.query.from as string;
@@ -78,7 +79,7 @@ export const getNutritionSummary = asyncHandler(async (req: Request, res: Respon
     throw new ApiError(400, "Invalid date format. Expected YYYY-MM-DD");
   }
 
-  const summary = getNutritionSummaryRange(from, to);
+  const summary = getNutritionRangeFromDays(from, to);
   res.json(summary);
 });
 
