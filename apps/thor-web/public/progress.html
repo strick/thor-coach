@@ -126,7 +126,7 @@
   </div>
 
   <script>
-    const API_BASE = 'http://localhost:3001';
+    const API_BASE = 'http://localhost:3000';
     let currentDays = 30;
     let workoutChart = null;
     let runningChart = null;
@@ -160,15 +160,15 @@
       const toStr = to.toISOString().split('T')[0];
 
       try {
-        const [workouts, running, health] = await Promise.all([
-          fetch(`${API_BASE}/api/workouts?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => []),
-          fetch(`${API_BASE}/api/running/sessions?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => []),
-          fetch(`${API_BASE}/api/health/events?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => [])
+        const [workoutsRes, runningRes, healthRes] = await Promise.all([
+          fetch(`${API_BASE}/api/workouts?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => ({ sessions: [] })),
+          fetch(`${API_BASE}/api/running/sessions?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => ({ sessions: [] })),
+          fetch(`${API_BASE}/api/health-events?from=${fromStr}&to=${toStr}`).then(r => r.json()).catch(() => ({ events: [] }))
         ]);
 
-        updateStats(workouts, running, health, fromStr);
-        updateCharts(workouts, running, fromStr, toStr);
-        updateSummaries(health);
+        updateStats(workoutsRes.sessions || [], runningRes.sessions || [], healthRes.events || [], fromStr);
+        updateCharts(workoutsRes.sessions || [], runningRes.sessions || [], fromStr, toStr);
+        updateSummaries(healthRes.events || []);
       } catch (error) {
         console.error('Error loading progress:', error);
       }
@@ -183,13 +183,13 @@
       const avgPerWeek = workouts ? Math.round((workouts.length / weeks) * 10) / 10 : 0;
       document.getElementById('avgWorkoutsPerWeek').textContent = avgPerWeek;
 
-      // Running stats
-      const totalDistance = running ? running.reduce((sum, r) => sum + (parseFloat(r.distance) || 0), 0) : 0;
+      // Running stats - convert miles to km
+      const totalDistance = running ? running.reduce((sum, r) => sum + (parseFloat(r.distance_miles) || 0) * 1.60934, 0) : 0;
       document.getElementById('totalDistance').textContent = totalDistance.toFixed(1) + ' km';
 
       // Average pace
       if (running && running.length > 0) {
-        const paces = running.map(r => r.pace).filter(p => p);
+        const paces = running.map(r => r.pace_min_per_mile).filter(p => p);
         if (paces.length > 0) {
           document.getElementById('avgPace').textContent = paces[0]; // Show first pace as example
         }
@@ -199,8 +199,8 @@
     function updateCharts(workouts, running, fromStr, toStr) {
       // Aggregate data by week
       const weeks = generateWeekLabels(fromStr, toStr);
-      const workoutsByWeek = aggregateByWeek(workouts, 'date', weeks);
-      const distanceByWeek = aggregateByWeek(running, 'date', weeks, 'distance');
+      const workoutsByWeek = aggregateByWeek(workouts, 'session_date', weeks);
+      const distanceByWeek = aggregateByWeek(running, 'session_date', weeks, 'distance_miles');
 
       // Workout chart
       const workoutCtx = document.getElementById('workoutChart').getContext('2d');
