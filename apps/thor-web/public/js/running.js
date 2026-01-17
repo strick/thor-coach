@@ -242,18 +242,19 @@ async function loadNutritionStats() {
     if (data && data.totals) {
       const { total_calories_kcal, total_protein_g, total_fiber_g, days_logged } = data.totals;
       const items = [
-        { label: 'Total Calories', value: `${Math.round(total_calories_kcal)} kcal`, icon: '🔥' },
-        { label: 'Total Protein', value: `${Math.round(total_protein_g)}g`, icon: '🥚' },
-        { label: 'Total Fiber', value: `${Math.round(total_fiber_g)}g`, icon: '🌾' },
-        { label: 'Days Logged', value: `${days_logged}`, icon: '📅' }
+        { value: `${Math.round(total_calories_kcal)} kcal`, icon: '🔥', title: 'Calories' },
+        { value: `${Math.round(total_protein_g)}g`, icon: '🥚', title: 'Protein' },
+        { value: `${Math.round(total_fiber_g)}g`, icon: '🌾', title: 'Fiber' },
+        { value: `${days_logged}`, icon: '📅', title: 'Days' }
       ];
       
       items.forEach(item => {
         const div = document.createElement('div');
-        div.className = 'bg-neutral-50 dark:bg-neutral-900 rounded p-4';
+        div.className = 'bg-neutral-50 dark:bg-neutral-900 rounded p-4 flex flex-col items-center';
+        div.title = item.title;
         div.innerHTML = `
-          <div class="text-sm text-neutral-600 dark:text-neutral-400 mb-1">${item.icon} ${item.label}</div>
-          <div class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">${item.value}</div>
+          <div class="text-3xl mb-2">${item.icon}</div>
+          <div class="text-lg font-bold text-indigo-600 dark:text-indigo-400">${item.value}</div>
         `;
         container.appendChild(div);
       });
@@ -275,7 +276,17 @@ async function loadNutritionStats() {
  */
 function renderNutritionChartRunning(dailyData) {
   const ctx = document.getElementById('nutritionChartRunning');
-  if (!ctx) return;
+  if (!ctx) {
+    console.error('[Running] nutritionChartRunning canvas not found');
+    return;
+  }
+
+  if (!dailyData || dailyData.length === 0) {
+    console.warn('[Running] No daily data available for chart');
+    return;
+  }
+
+  console.log('[Running] Daily data for chart:', dailyData);
 
   // Destroy existing chart if it exists
   if (window.nutritionChartRunning) {
@@ -283,7 +294,7 @@ function renderNutritionChartRunning(dailyData) {
   }
 
   // Filter and prepare data
-  const data = dailyData.filter(d => d.date_local).slice(0, 30).map(d => ({
+  const data = dailyData.filter(d => d.date_local).map(d => ({
     date: d.date_local,
     calories: d.calories_kcal || 0,
     protein: d.protein_g || 0,
@@ -295,6 +306,8 @@ function renderNutritionChartRunning(dailyData) {
     const date = new Date(d.date);
     return `${date.getMonth() + 1}/${date.getDate()}`;
   });
+
+  console.log('[Running] Chart data prepared:', { dataPoints: data.length, labels });
 
   window.nutritionChartRunning = new Chart(ctx, {
     type: 'bar',
@@ -368,6 +381,8 @@ function renderNutritionChartRunning(dailyData) {
       }
     }
   });
+
+  console.log('[Running] Chart created successfully');
 }
 
 

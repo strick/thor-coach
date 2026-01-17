@@ -288,24 +288,26 @@
       if (nutrition && nutrition.totals) {
         const { total_calories_kcal, total_protein_g, total_sodium_mg, total_sat_fat_g, total_fiber_g, days_logged } = nutrition.totals;
         const items = [
-          { label: 'Total Calories', value: `${Math.round(total_calories_kcal)} kcal`, icon: '🔥' },
-          { label: 'Total Protein', value: `${Math.round(total_protein_g)}g`, icon: '🥚' },
-          { label: 'Fiber', value: `${Math.round(total_fiber_g)}g`, icon: '🌾' },
-          { label: 'Sodium', value: `${Math.round(total_sodium_mg)}mg`, icon: '🧂' },
-          { label: 'Days Logged', value: days_logged, icon: '📅' }
+          { value: `${Math.round(total_calories_kcal)} kcal`, icon: '🔥', title: 'Calories' },
+          { value: `${Math.round(total_protein_g)}g`, icon: '🥚', title: 'Protein' },
+          { value: `${Math.round(total_fiber_g)}g`, icon: '🌾', title: 'Fiber' },
+          { value: `${Math.round(total_sodium_mg)}mg`, icon: '🧂', title: 'Sodium' },
+          { value: days_logged, icon: '📅', title: 'Days' }
         ];
         
         items.forEach(item => {
           const div = document.createElement('div');
-          div.className = 'flex justify-between items-center p-2 rounded bg-neutral-50 dark:bg-neutral-900';
-          div.innerHTML = `<span class="text-sm">${item.icon} ${item.label}</span><span class="font-medium text-indigo-600 dark:text-indigo-400">${item.value}</span>`;
+          div.className = 'flex flex-col items-center p-3 rounded bg-neutral-50 dark:bg-neutral-900';
+          div.title = item.title;
+          div.innerHTML = `<span class="text-2xl mb-1">${item.icon}</span><span class="text-sm font-medium text-indigo-600 dark:text-indigo-400">${item.value}</span>`;
           nutritionContainer.appendChild(div);
         });
         
         // Create nutrition chart
+        console.log('[Progress] Daily data for chart:', nutrition.daily);
         renderNutritionChart(nutrition.daily);
       } else {
-        nutritionContainer.innerHTML = '<p class="text-sm text-neutral-600 dark:text-neutral-400">No nutrition data recorded</p>';
+        nutritionContainer.innerHTML = '<p class="text-sm text-neutral-600 dark:text-neutral-400 col-span-2">No nutrition data recorded</p>';
       }
     }
 
@@ -350,21 +352,31 @@
 
     function renderNutritionChart(dailyData) {
       const ctx = document.getElementById('nutritionChart');
-      if (!ctx) return;
+      if (!ctx) {
+        console.error('[Progress] nutritionChart canvas not found');
+        return;
+      }
 
       // Destroy existing chart if it exists
       if (window.nutritionChart) {
         window.nutritionChart.destroy();
       }
 
+      if (!dailyData || dailyData.length === 0) {
+        console.warn('[Progress] No daily data to chart');
+        return;
+      }
+
       // Filter and prepare data
-      const data = dailyData.filter(d => d.date_local).slice(0, 30).map(d => ({
+      const data = dailyData.filter(d => d.date_local).map(d => ({
         date: d.date_local,
         calories: d.calories_kcal || 0,
         protein: d.protein_g || 0,
         fiber: d.fiber_g || 0,
         sodium: (d.sodium_mg || 0) / 10 // Scale down sodium for visibility
       }));
+
+      console.log('[Progress] Chart data prepared:', data);
 
       const labels = data.map(d => {
         const date = new Date(d.date);
@@ -443,6 +455,7 @@
           }
         }
       });
+      console.log('[Progress] Chart created successfully');
     }
   </script>
 </body>
