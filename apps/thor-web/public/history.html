@@ -85,6 +85,16 @@
         <div id="eventsByDate" class="space-y-6"></div>
         <div id="noEvents" class="text-sm text-neutral-600 dark:text-neutral-400 text-center py-4">No events found</div>
       </section>
+
+      <!-- Nutrition Summary for Date Range -->
+      <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 mt-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span>🍎</span> Nutrition Summary
+        </h2>
+        <div id="nutritionSummary" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <p class="text-sm text-neutral-600 dark:text-neutral-400">Loading nutrition data...</p>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -120,10 +130,11 @@
 
       try {
         // Load all data in parallel
-        const [workoutsRes, runningRes, healthRes] = await Promise.all([
+        const [workoutsRes, runningRes, healthRes, nutritionRes] = await Promise.all([
           fetch(`${API_BASE}/api/workouts?from=${from}&to=${to}`).then(r => r.json()).catch(() => ({ sessions: [] })),
           fetch(`${API_BASE}/api/running/sessions?from=${from}&to=${to}`).then(r => r.json()).catch(() => ({ sessions: [] })),
-          fetch(`${API_BASE}/api/health-events?from=${from}&to=${to}`).then(r => r.json()).catch(() => ({ events: [] }))
+          fetch(`${API_BASE}/api/health-events?from=${from}&to=${to}`).then(r => r.json()).catch(() => ({ events: [] })),
+          fetch(`${API_BASE}/api/nutrition/summary?from=${from}&to=${to}`).then(r => r.json()).catch(() => ({}))
         ]);
 
         // Fetch detailed exercises for each workout
@@ -143,6 +154,7 @@
           runningRes.sessions || [],
           healthRes.events || []
         );
+        displayNutritionSummary(nutritionRes);
       } catch (error) {
         console.error('Error loading history:', error);
       }
@@ -260,6 +272,34 @@
 
     function displayHealth(events) {
       // This function is no longer used but kept as fallback
+    }
+
+    function displayNutritionSummary(nutrition) {
+      const container = document.getElementById('nutritionSummary');
+      container.innerHTML = '';
+      
+      if (nutrition && nutrition.rangeTotals) {
+        const { total_calories, total_protein_g, total_fiber_g, total_sodium_mg, days_logged } = nutrition.rangeTotals;
+        const items = [
+          { label: 'Total Calories', value: `${Math.round(total_calories)} kcal`, icon: '🔥' },
+          { label: 'Total Protein', value: `${Math.round(total_protein_g)}g`, icon: '🥚' },
+          { label: 'Total Fiber', value: `${Math.round(total_fiber_g)}g`, icon: '🌾' },
+          { label: 'Total Sodium', value: `${Math.round(total_sodium_mg)}mg`, icon: '🧂' },
+          { label: 'Days Logged', value: `${days_logged}`, icon: '📅' }
+        ];
+        
+        items.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'bg-neutral-50 dark:bg-neutral-900 rounded p-4';
+          div.innerHTML = `
+            <div class="text-sm text-neutral-600 dark:text-neutral-400 mb-1">${item.icon} ${item.label}</div>
+            <div class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">${item.value}</div>
+          `;
+          container.appendChild(div);
+        });
+      } else {
+        container.innerHTML = '<p class="text-sm text-neutral-600 dark:text-neutral-400">No nutrition data recorded</p>';
+      }
     }
   </script>
 </body>
