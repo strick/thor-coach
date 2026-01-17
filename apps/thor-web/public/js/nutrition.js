@@ -353,14 +353,19 @@ async function loadMealTemplates() {
     const templates = data.templates || [];
 
     const templatesList = document.getElementById('templatesList');
-    const templatesSection = document.getElementById('templatesSection');
+    const noTemplatesMsg = document.getElementById('noTemplatesMsg');
 
     if (templates.length === 0) {
-      templatesSection.classList.add('hidden');
+      templatesList.innerHTML = '';
+      if (noTemplatesMsg) {
+        noTemplatesMsg.style.display = 'block';
+      }
       return;
     }
 
-    templatesSection.classList.remove('hidden');
+    if (noTemplatesMsg) {
+      noTemplatesMsg.style.display = 'none';
+    }
     
     templatesList.innerHTML = templates.map(template => `
       <button 
@@ -390,9 +395,36 @@ async function loadMealTemplates() {
  * Apply a template to the current meal
  */
 async function applyTemplateToMeal(templateId) {
+  // If no meal ID, we need to create one first
   if (!currentMealId) {
-    showError('Please create a meal first or select a meal type');
-    return;
+    // Show error asking user to select meal type first
+    const mealType = prompt('Which meal type? (breakfast/lunch/dinner/snack)', 'lunch');
+    if (!mealType) return;
+    
+    try {
+      const mealResponse = await fetch(`${API_BASE}/nutrition/meal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: currentDate,
+          mealType: mealType.toLowerCase(),
+          timeLocal: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        })
+      });
+
+      if (!mealResponse.ok) {
+        showError('Failed to create meal');
+        return;
+      }
+
+      const mealResult = await mealResponse.json();
+      currentMealId = mealResult.meal.id;
+      currentMealType = mealType.toLowerCase();
+    } catch (error) {
+      console.error('Error creating meal:', error);
+      showError('Failed to create meal');
+      return;
+    }
   }
 
   try {
@@ -478,6 +510,9 @@ async function saveMealAsTemplate(mealId) {
   // Get selected items
   const selectedItemIds = getSelectedItemsForMeal(mealId);
 
+  console.log('[Nutrition] Selected item IDs:', selectedItemIds);
+  console.log('[Nutrition] Meal:', meal);
+
   if (selectedItemIds.length === 0) {
     showError('Please select at least one item to save as template');
     return;
@@ -492,26 +527,35 @@ async function saveMealAsTemplate(mealId) {
   try {
     showProcessing(true);
 
+    const payload = {
+      name: templateName.trim(),
+      mealType: meal.meal_type,
+      itemIds: selectedItemIds,
+      date: currentDate
+    };
+
+    console.log('[Nutrition] Sending template save request:', payload);
+
     const response = await fetch(`${API_BASE}/nutrition/template`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: templateName.trim(),
-        mealType: meal.meal_type,
-        itemIds: selectedItemIds,
-        date: currentDate
-      })
+      body: JSON.stringify(payload)
     });
+
+    console.log('[Nutrition] Save template response status:', response.status);
+    const responseData = await response.json();
+    console.log('[Nutrition] Save template response:', responseData);
 
     if (response.ok) {
       showSuccess(`Template "${templateName}" saved!`);
+      // Reload templates after saving
+      loadMealTemplates();
     } else {
-      const error = await response.json();
-      showError(error.message || 'Failed to save template');
+      showError(responseData.message || 'Failed to save template');
     }
   } catch (error) {
     console.error('Error saving template:', error);
-    showError('Failed to save template');
+    showError('Failed to save template: ' + error.message);
   } finally {
     showProcessing(false);
   }
@@ -859,7 +903,7 @@ function renderMealCard(meal) {
   if (meal.items && meal.items.length > 0) {
     itemsHtml = `
       <div class="mt-3 space-y-2">
-        <div class="text-xs font-medium text-neutral-500 dark:text-neutral-400">Items:</div>
+        <div class="text-xs font-medium text-neutral-500 dark:text-neutral-400">Items: (check to save as template ☑️)</div>
         ${meal.items.map(item => `
           <div class="flex items-start justify-between bg-neutral-50 dark:bg-neutral-900 p-2 rounded text-sm">
             <div class="flex items-start gap-2 flex-1">

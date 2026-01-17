@@ -40,6 +40,9 @@
           <a href="/health.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
             ❤️ Health
           </a>
+          <a href="/templates.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
+            📋 Templates
+          </a>
           <a href="/history.html" class="px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors">
             📖 History
           </a>
@@ -271,14 +274,18 @@
   <!-- Add Meal Modal -->
   <div id="addMealModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
     <div class="bg-white dark:bg-neutral-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6">
-      <h2 class="text-xl font-bold mb-4">Add Items to Meal</h2>
+      <h2 class="text-xl font-bold mb-2">Add Items to Meal</h2>
+      <p class="text-sm text-neutral-600 dark:text-neutral-400 mb-4">Use a template or add items manually</p>
       
       <!-- Saved Templates Section -->
-      <div id="templatesSection" class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg hidden">
+      <div id="templatesSection" class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
         <h3 class="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-3">📋 Saved Templates</h3>
-        <div id="templatesList" class="grid grid-cols-2 md:grid-cols-3 gap-2">
+        <div id="templatesList" class="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
           <!-- Templates will be populated here -->
         </div>
+        <p id="noTemplatesMsg" class="text-sm text-blue-700 dark:text-blue-400">
+          No templates yet. Log a meal, then click ⭐ on the meal card to save it as a template!
+        </p>
       </div>
       
       <!-- Meal Selection (show after first meal added) -->

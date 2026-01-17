@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Template Management</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="bg-white dark:bg-neutral-950 text-neutral-900 dark:text-white transition-colors">
+  <nav class="bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-8">
+        <a href="index.html" class="text-xl font-bold text-blue-600 dark:text-blue-400">Thor</a>
+        <div class="flex gap-6">
+          <a href="nutrition.html" class="text-sm font-medium hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Nutrition</a>
+          <a href="running.html" class="text-sm font-medium hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Running</a>
+          <a href="templates.html" class="text-sm font-medium text-blue-600 dark:text-blue-400">Templates</a>
+          <a href="health.html" class="text-sm font-medium hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Health</a>
+        </div>
+      </div>
+      <button id="themeToggleBtn" class="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+        <span class="text-xl">🌙</span>
+      </button>
+    </div>
+  </nav>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold mb-2">📋 Meal Templates</h1>
+      <p class="text-neutral-600 dark:text-neutral-400">Manage your saved meal templates</p>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="text-center py-8">
+      <p class="text-neutral-600 dark:text-neutral-400">Loading templates...</p>
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="hidden text-center py-16 bg-neutral-50 dark:bg-neutral-900/50 rounded-lg border border-neutral-200 dark:border-neutral-800">
+      <p class="text-lg font-semibold mb-2">No templates yet</p>
+      <p class="text-neutral-600 dark:text-neutral-400">Go to Nutrition and save a meal as a template to get started!</p>
+      <a href="nutrition.html" class="inline-block mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">Create Template</a>
+    </div>
+
+    <!-- Templates Grid -->
+    <div id="templatesGrid" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <!-- Templates will be inserted here -->
+    </div>
+  </main>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="deleteModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-neutral-900 rounded-lg p-6 max-w-sm mx-4">
+      <h3 class="text-lg font-bold mb-2">Delete Template?</h3>
+      <p class="text-neutral-600 dark:text-neutral-400 mb-6">
+        Are you sure you want to delete "<span id="deleteTemplateName"></span>"? This action cannot be undone.
+      </p>
+      <div class="flex gap-3">
+        <button id="cancelDeleteBtn" class="flex-1 px-4 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors">
+          Cancel
+        </button>
+        <button id="confirmDeleteBtn" class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Items Modal -->
+  <div id="itemsModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-neutral-900 rounded-lg p-6 max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h3 class="text-xl font-bold mb-1" id="itemsModalTitle">Template Items</h3>
+          <p class="text-sm text-neutral-600 dark:text-neutral-400" id="itemsModalMealType"></p>
+        </div>
+        <button id="closeItemsModal" class="text-2xl hover:text-neutral-600 dark:hover:text-neutral-400">&times;</button>
+      </div>
+      <div id="itemsList" class="space-y-2">
+        <!-- Items will be inserted here -->
+      </div>
+      <div class="mt-6 flex gap-3">
+        <button id="closeItemsModalBtn" class="flex-1 px-4 py-2 border border-neutral-300 dark:border-neutral-700 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors">
+          Close
+        </button>
+        <button id="applyFromModalBtn" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+          Apply Template
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3000/api';
+    let templates = [];
+    let selectedTemplateId = null;
+
+    async function loadTemplates() {
+      try {
+        const response = await fetch(`${API_BASE}/nutrition/templates`);
+        const data = await response.json();
+        templates = data.templates || [];
+
+        const loadingState = document.getElementById('loadingState');
+        const emptyState = document.getElementById('emptyState');
+        const templatesGrid = document.getElementById('templatesGrid');
+
+        if (templates.length === 0) {
+          loadingState.classList.add('hidden');
+          emptyState.classList.remove('hidden');
+          templatesGrid.classList.add('hidden');
+          return;
+        }
+
+        loadingState.classList.add('hidden');
+        emptyState.classList.add('hidden');
+        templatesGrid.classList.remove('hidden');
+
+        templatesGrid.innerHTML = templates
+          .map(
+            (template) => `
+          <div class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg p-6 hover:shadow-lg transition-shadow">
+            <div class="flex justify-between items-start mb-4">
+              <div>
+                <h3 class="font-bold text-lg">${escapeHtml(template.name)}</h3>
+                <p class="text-xs text-neutral-500 dark:text-neutral-400 capitalize">${template.meal_type || 'meal'}</p>
+              </div>
+              <div class="flex gap-2">
+                <button 
+                  class="p-2 text-neutral-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  title="View items"
+                  onclick="showItemsModal('${template.id}')"
+                >
+                  👁️
+                </button>
+                <button 
+                  class="p-2 text-neutral-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                  title="Delete"
+                  onclick="showDeleteModal('${template.id}', '${escapeHtml(template.name)}')"
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+
+            <div class="bg-neutral-50 dark:bg-neutral-800/50 rounded p-3 mb-4">
+              <p class="text-xs text-neutral-600 dark:text-neutral-400 mb-2">Items:</p>
+              <div class="space-y-1">
+                ${JSON.parse(template.items_json || '[]')
+                  .slice(0, 3)
+                  .map((item) => `<p class="text-sm">• ${escapeHtml(item.food_name)}</p>`)
+                  .join('')}
+                ${JSON.parse(template.items_json || '[]').length > 3 ? `<p class="text-xs text-neutral-500">+${JSON.parse(template.items_json || '[]').length - 3} more</p>` : ''}
+              </div>
+            </div>
+
+            <div class="flex gap-2">
+              <button
+                class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                onclick="applyTemplate('${template.id}')"
+              >
+                Apply
+              </button>
+            </div>
+
+            <p class="text-xs text-neutral-400 dark:text-neutral-500 mt-3">
+              ${new Date(template.created_at).toLocaleDateString()}
+            </p>
+          </div>
+        `
+          )
+          .join('');
+      } catch (error) {
+        console.error('Error loading templates:', error);
+        document.getElementById('loadingState').innerHTML =
+          '<p class="text-red-600">Error loading templates</p>';
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function showDeleteModal(templateId, templateName) {
+      selectedTemplateId = templateId;
+      document.getElementById('deleteTemplateName').textContent = templateName;
+      document.getElementById('deleteModal').classList.remove('hidden');
+    }
+
+    function hideDeleteModal() {
+      document.getElementById('deleteModal').classList.add('hidden');
+      selectedTemplateId = null;
+    }
+
+    async function confirmDelete() {
+      if (!selectedTemplateId) return;
+
+      try {
+        const response = await fetch(
+          `${API_BASE}/nutrition/template/${selectedTemplateId}`,
+          { method: 'DELETE' }
+        );
+
+        if (response.ok) {
+          hideDeleteModal();
+          loadTemplates();
+        } else {
+          alert('Failed to delete template');
+        }
+      } catch (error) {
+        console.error('Error deleting template:', error);
+        alert('Error deleting template');
+      }
+    }
+
+    function showItemsModal(templateId) {
+      const template = templates.find((t) => t.id === templateId);
+      if (!template) return;
+
+      selectedTemplateId = templateId;
+      const items = JSON.parse(template.items_json || '[]');
+
+      document.getElementById('itemsModalTitle').textContent = template.name;
+      document.getElementById('itemsModalMealType').textContent = `${template.meal_type || 'meal'} • ${items.length} item${items.length !== 1 ? 's' : ''}`;
+
+      const itemsList = document.getElementById('itemsList');
+      itemsList.innerHTML = items
+        .map(
+          (item) => `
+        <div class="bg-neutral-50 dark:bg-neutral-800/50 rounded p-3 border border-neutral-200 dark:border-neutral-700">
+          <div class="font-medium">${escapeHtml(item.food_name)}</div>
+          <div class="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+            ${item.calories_kcal ? `${item.calories_kcal} cal` : ''} 
+            ${item.protein_g ? `• ${item.protein_g}g protein` : ''}
+          </div>
+        </div>
+      `
+        )
+        .join('');
+
+      document.getElementById('itemsModal').classList.remove('hidden');
+    }
+
+    function hideItemsModal() {
+      document.getElementById('itemsModal').classList.add('hidden');
+      selectedTemplateId = null;
+    }
+
+    async function applyTemplate(templateId) {
+      // For now, redirect to nutrition page with template info
+      // In a real app, we'd need to let them choose which meal to apply to
+      alert('To apply this template, go to Nutrition page and open the Add Meal modal. The template will appear there!');
+    }
+
+    // Event Listeners
+    document.getElementById('cancelDeleteBtn').addEventListener('click', hideDeleteModal);
+    document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
+    document.getElementById('closeItemsModal').addEventListener('click', hideItemsModal);
+    document.getElementById('closeItemsModalBtn').addEventListener('click', hideItemsModal);
+    document.getElementById('applyFromModalBtn').addEventListener('click', () => {
+      hideItemsModal();
+      alert('To apply this template, go to Nutrition page and open the Add Meal modal. The template will appear there!');
+    });
+
+    // Theme toggle
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    themeToggleBtn?.addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+    });
+
+    // Load theme preference
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    }
+
+    // Load templates on page load
+    loadTemplates();
+  </script>
+</body>
+</html>
