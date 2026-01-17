@@ -155,10 +155,11 @@
       container.innerHTML = '';
       
       // Combine all events with a type property for sorting/grouping
+      // Filter out events without dates
       const allEvents = [
         ...workouts.map(w => ({ type: 'workout', date: w.session_date, data: w })),
         ...running.map(r => ({ type: 'running', date: r.session_date, data: r })),
-        ...health.map(h => ({ type: 'health', date: h.event_date, data: h }))
+        ...health.filter(h => h.date).map(h => ({ type: 'health', date: h.date, data: h }))
       ];
 
       if (allEvents.length === 0) {
