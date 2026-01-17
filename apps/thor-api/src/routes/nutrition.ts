@@ -29,3 +29,9 @@ nutritionRoutes.post("/nutrition/item", nutritionController.addItem);
 nutritionRoutes.put("/nutrition/item", nutritionController.updateItem);
 nutritionRoutes.delete("/nutrition/item", nutritionController.deleteItem);
 nutritionRoutes.delete("/nutrition/meal", nutritionController.deleteMeal);
+
+// Meal template endpoints
+nutritionRoutes.post("/nutrition/template", nutritionController.saveMealTemplate);
+nutritionRoutes.get("/nutrition/templates", nutritionController.getMealTemplates);
+nutritionRoutes.post("/nutrition/template/:id/apply", nutritionController.applyMealTemplate);
+nutritionRoutes.delete("/nutrition/template/:id", nutritionController.deleteMealTemplate);

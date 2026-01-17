@@ -344,3 +344,156 @@ export const updateItem = asyncHandler(async (req: Request, res: Response) => {
   console.log('[Controller] updateItem succeeded, returning:', updated);
   res.json({ success: true, item: updated });
 });
+
+/**
+ * POST /api/nutrition/template
+ * Save a meal template from selected items
+ */
+export const saveMealTemplate = asyncHandler(async (req: Request, res: Response) => {
+  const { name, mealType, itemIds, date } = req.body;
+
+  if (!name || !Array.isArray(itemIds) || itemIds.length === 0) {
+    throw new ApiError(400, "Missing 'name' or 'itemIds'");
+  }
+
+  // Get the items data to store in template
+  const db = (global as any).db;
+  const items = [];
+  
+  for (const itemId of itemIds) {
+    const item = db?.prepare(
+      `SELECT * FROM nutrition_items WHERE id = ?`
+    ).get(itemId);
+    if (item) {
+      items.push(item);
+    }
+  }
+
+  if (items.length === 0) {
+    throw new ApiError(404, "No items found");
+  }
+
+  // Create template record
+  const templateId = `template_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  db?.prepare(`
+    CREATE TABLE IF NOT EXISTS nutrition_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      meal_type TEXT,
+      items_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      created_date TEXT
+    )
+  `).run();
+
+  db?.prepare(`
+    INSERT INTO nutrition_templates (id, name, meal_type, items_json, created_at, created_date)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(templateId, name, mealType || 'meal', JSON.stringify(items), new Date().toISOString(), date);
+
+  res.json({
+    status: "template_saved",
+    templateId,
+    name,
+    itemCount: items.length
+  });
+});
+
+/**
+ * GET /api/nutrition/templates
+ * Get all saved meal templates
+ */
+export const getMealTemplates = asyncHandler(async (req: Request, res: Response) => {
+  const db = (global as any).db;
+  
+  const templates = db?.prepare(
+    `SELECT id, name, meal_type, created_at, created_date, items_json FROM nutrition_templates ORDER BY created_at DESC`
+  ).all() || [];
+
+  // Parse items_json for each template
+  const parsedTemplates = templates.map((t: any) => ({
+    ...t,
+    itemCount: JSON.parse(t.items_json || '[]').length
+  }));
+
+  res.json({
+    status: "templates_retrieved",
+    templates: parsedTemplates
+  });
+});
+
+/**
+ * POST /api/nutrition/template/:id/apply
+ * Apply a template (add items from template to a meal)
+ */
+export const applyMealTemplate = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { mealId } = req.body;
+
+  if (!mealId) {
+    throw new ApiError(400, "Missing 'mealId'");
+  }
+
+  const db = (global as any).db;
+  
+  // Get template
+  const template = db?.prepare(
+    `SELECT items_json FROM nutrition_templates WHERE id = ?`
+  ).get(id);
+
+  if (!template) {
+    throw new ApiError(404, "Template not found");
+  }
+
+  const items = JSON.parse(template.items_json || '[]');
+  const addedItems = [];
+
+  // Add each item from template to the meal
+  for (const item of items) {
+    const newItem = addItemToMeal(mealId, item.food_name, {
+      calories_kcal: item.calories_kcal,
+      protein_g: item.protein_g,
+      carbs_g: item.carbs_g,
+      fat_g: item.fat_g,
+      fiber_g: item.fiber_g,
+      sugar_g: item.sugar_g,
+      added_sugar_g: item.added_sugar_g,
+      sodium_mg: item.sodium_mg,
+      sat_fat_g: item.sat_fat_g,
+      cholesterol_mg: item.cholesterol_mg
+    }, {
+      serving_quantity: item.serving_quantity,
+      serving_unit: item.serving_unit,
+      serving_display: item.serving_display
+    });
+    addedItems.push(newItem);
+  }
+
+  res.json({
+    status: "template_applied",
+    itemsAdded: addedItems.length
+  });
+});
+
+/**
+ * DELETE /api/nutrition/template/:id
+ * Delete a meal template
+ */
+export const deleteMealTemplate = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const db = (global as any).db;
+  
+  const result = db?.prepare(
+    `DELETE FROM nutrition_templates WHERE id = ?`
+  ).run(id);
+
+  if (!result || result.changes === 0) {
+    throw new ApiError(404, "Template not found");
+  }
+
+  res.json({
+    status: "template_deleted",
+    success: true
+  });
+});

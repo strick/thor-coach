@@ -270,8 +270,16 @@
 
   <!-- Add Meal Modal -->
   <div id="addMealModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-    <div class="bg-white dark:bg-neutral-800 rounded-lg max-w-2xl w-full p-6 max-h-96 overflow-y-auto">
+    <div class="bg-white dark:bg-neutral-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6">
       <h2 class="text-xl font-bold mb-4">Add Items to Meal</h2>
+      
+      <!-- Saved Templates Section -->
+      <div id="templatesSection" class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg hidden">
+        <h3 class="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-3">📋 Saved Templates</h3>
+        <div id="templatesList" class="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <!-- Templates will be populated here -->
+        </div>
+      </div>
       
       <!-- Meal Selection (show after first meal added) -->
       <div id="mealSelectionSection" class="mb-6">

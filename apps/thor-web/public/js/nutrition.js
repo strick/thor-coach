@@ -223,10 +223,43 @@ function selectMealType(type) {
   currentMealType = type;
   
   // Update button styles
-  document.querySelectorAll('#addMealModal button[data-meal]').forEach(btn => {
+  document.querySelectorAll('#addMealModal .meal-type-btn').forEach(btn => {
     btn.classList.remove('ring-2', 'ring-indigo-500');
   });
   event.target.classList.add('ring-2', 'ring-indigo-500');
+  
+  // Create meal if it doesn't exist (this allows templates to be used immediately)
+  if (!currentMealId) {
+    createMealForTemplate(type);
+  }
+}
+
+/**
+ * Create a meal so templates can be applied
+ */
+async function createMealForTemplate(mealType) {
+  try {
+    const mealResponse = await fetch(`${API_BASE}/nutrition/meal`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: currentDate,
+        mealType: mealType,
+        timeLocal: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      })
+    });
+
+    if (!mealResponse.ok) {
+      throw new Error('Failed to create meal');
+    }
+
+    const mealResult = await mealResponse.json();
+    currentMealId = mealResult.meal.id;
+    console.log('[Nutrition] Created meal for template:', currentMealId);
+  } catch (error) {
+    console.error('Error creating meal:', error);
+    showError('Failed to create meal');
+  }
 }
 
 /**
@@ -307,6 +340,180 @@ async function deleteMeal(mealId) {
   } catch (error) {
     console.error('Error deleting meal:', error);
     showError('Failed to delete meal');
+  }
+}
+
+/**
+ * Load and display saved meal templates
+ */
+async function loadMealTemplates() {
+  try {
+    const response = await fetch(`${API_BASE}/nutrition/templates`);
+    const data = await response.json();
+    const templates = data.templates || [];
+
+    const templatesList = document.getElementById('templatesList');
+    const templatesSection = document.getElementById('templatesSection');
+
+    if (templates.length === 0) {
+      templatesSection.classList.add('hidden');
+      return;
+    }
+
+    templatesSection.classList.remove('hidden');
+    
+    templatesList.innerHTML = templates.map(template => `
+      <button 
+        type="button" 
+        class="apply-template-btn p-3 rounded-lg border-2 border-blue-300 dark:border-blue-600 bg-white dark:bg-neutral-900 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors text-left"
+        data-template-id="${template.id}"
+        title="Click to add items from this template"
+      >
+        <div class="font-medium text-sm">${template.name}</div>
+        <div class="text-xs text-neutral-500 dark:text-neutral-400">${template.itemCount} item${template.itemCount !== 1 ? 's' : ''}</div>
+      </button>
+    `).join('');
+
+    // Attach listeners to template buttons
+    document.querySelectorAll('.apply-template-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        applyTemplateToMeal(btn.getAttribute('data-template-id'));
+      });
+    });
+  } catch (error) {
+    console.error('Error loading templates:', error);
+  }
+}
+
+/**
+ * Apply a template to the current meal
+ */
+async function applyTemplateToMeal(templateId) {
+  if (!currentMealId) {
+    showError('Please create a meal first or select a meal type');
+    return;
+  }
+
+  try {
+    showProcessing(true);
+
+    const response = await fetch(`${API_BASE}/nutrition/template/${templateId}/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mealId: currentMealId
+      })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      showSuccess(`Added ${result.itemsAdded} item${result.itemsAdded !== 1 ? 's' : ''} from template!`);
+      addMealModal.classList.add('hidden');
+      currentMealId = null;
+      currentMealType = null;
+      await loadNutritionDay();
+    } else {
+      showError('Failed to apply template');
+    }
+  } catch (error) {
+    console.error('Error applying template:', error);
+    showError('Failed to apply template');
+  } finally {
+    showProcessing(false);
+  }
+}
+
+/**
+ * Delete a meal template
+ */
+async function deleteMealTemplate(templateId) {
+  if (!confirm('Delete this template?')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/nutrition/template/${templateId}`, {
+      method: 'DELETE'
+    });
+
+    if (response.ok) {
+      showSuccess('Template deleted!');
+      loadMealTemplates();
+    } else {
+      showError('Failed to delete template');
+    }
+  } catch (error) {
+    console.error('Error deleting template:', error);
+    showError('Failed to delete template');
+  }
+}
+
+/**
+ * Get selected items for a meal
+ */
+function getSelectedItemsForMeal(mealId) {
+  const checkboxes = document.querySelectorAll(`.meal-item-checkbox[data-meal-id="${mealId}"]:checked`);
+  const selectedIds = Array.from(checkboxes).map(cb => cb.getAttribute('data-item-id'));
+  return selectedIds;
+}
+
+/**
+ * Save meal as template
+ */
+async function saveMealAsTemplate(mealId) {
+  const dayData = window.currentDayData;
+  if (!dayData || !dayData.meals) {
+    showError('No meal data found');
+    return;
+  }
+
+  // Find the meal
+  const meal = dayData.meals.find(m => m.id === mealId);
+  if (!meal) {
+    showError('Meal not found');
+    return;
+  }
+
+  // Get selected items
+  const selectedItemIds = getSelectedItemsForMeal(mealId);
+
+  if (selectedItemIds.length === 0) {
+    showError('Please select at least one item to save as template');
+    return;
+  }
+
+  // Get template name from user
+  const templateName = prompt('Template name:', `${meal.meal_type} template`);
+  if (!templateName || !templateName.trim()) {
+    return;
+  }
+
+  try {
+    showProcessing(true);
+
+    const response = await fetch(`${API_BASE}/nutrition/template`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: templateName.trim(),
+        mealType: meal.meal_type,
+        itemIds: selectedItemIds,
+        date: currentDate
+      })
+    });
+
+    if (response.ok) {
+      showSuccess(`Template "${templateName}" saved!`);
+    } else {
+      const error = await response.json();
+      showError(error.message || 'Failed to save template');
+    }
+  } catch (error) {
+    console.error('Error saving template:', error);
+    showError('Failed to save template');
+  } finally {
+    showProcessing(false);
   }
 }
 
@@ -525,6 +732,9 @@ function displayNutritionDay(day) {
   console.log('[Nutrition] displayNutritionDay called with:', day);
   console.log('[Nutrition] mealsContainer element:', mealsContainer);
   
+  // Store day data globally for template saving
+  window.currentDayData = day;
+  
   if (!day || !day.meals) {
     console.log('[Nutrition] No meals found');
     mealsContainer.innerHTML = '<div class="text-center py-8 text-neutral-500 dark:text-neutral-400"><p>No meals logged yet. Add a meal to get started!</p></div>';
@@ -621,6 +831,15 @@ function displayNutritionDay(day) {
     });
   });
 
+  // Attach event listeners for save template buttons
+  document.querySelectorAll('.save-template-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const mealId = btn.getAttribute('data-meal-id');
+      saveMealAsTemplate(mealId);
+    });
+  });
+
   // Update chart
   updateChart(totals);
 }
@@ -643,9 +862,12 @@ function renderMealCard(meal) {
         <div class="text-xs font-medium text-neutral-500 dark:text-neutral-400">Items:</div>
         ${meal.items.map(item => `
           <div class="flex items-start justify-between bg-neutral-50 dark:bg-neutral-900 p-2 rounded text-sm">
-            <div>
-              <div class="font-medium">${item.food_name}</div>
-              <div class="text-xs text-neutral-500 dark:text-neutral-400">${item.serving_display || item.serving_quantity + ' ' + item.serving_unit}</div>
+            <div class="flex items-start gap-2 flex-1">
+              <input type="checkbox" class="meal-item-checkbox mt-1" data-meal-id="${meal.id}" data-item-id="${item.id}" />
+              <div>
+                <div class="font-medium">${item.food_name}</div>
+                <div class="text-xs text-neutral-500 dark:text-neutral-400">${item.serving_display || item.serving_quantity + ' ' + item.serving_unit}</div>
+              </div>
             </div>
             <div class="flex items-center gap-2">
               <div class="text-right text-xs">
@@ -666,11 +888,14 @@ function renderMealCard(meal) {
   }
 
   return `
-    <div class="border-l-4 border-indigo-500 bg-neutral-50 dark:bg-neutral-900 p-4 rounded">
+    <div class="border-l-4 border-indigo-500 bg-neutral-50 dark:bg-neutral-900 p-4 rounded" data-meal-id="${meal.id}">
       <div class="flex items-center justify-between mb-2">
         <h3 class="font-semibold capitalize">${emoji} ${meal.meal_type}</h3>
         <div class="flex items-center gap-2">
           <span class="text-sm text-neutral-500">${meal.time_local || '—'}</span>
+          <button class="save-template-btn text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-lg" data-meal-id="${meal.id}" title="Save as template">
+            ⭐
+          </button>
           <button class="delete-meal-btn text-red-500 hover:text-red-700 dark:hover:text-red-400 text-lg" data-meal-id="${meal.id}" title="Delete meal">
             🗑️
           </button>
@@ -903,6 +1128,8 @@ document.addEventListener('DOMContentLoaded', () => {
     currentMealType = null;
     foodInput.value = '';
     addMealModal.classList.remove('hidden');
+    // Load templates when modal opens
+    loadMealTemplates();
   });
 
   closeSettingsBtn.addEventListener('click', () => {
