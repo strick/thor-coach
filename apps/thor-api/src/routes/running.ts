@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { db } from "../db.js";
+import { syncStravaActivities, isStravaConfigured } from "../services/strava.js";
 
 const router = Router();
 
@@ -260,6 +261,104 @@ router.get("/stats/weekly", (req, res) => {
   } catch (error) {
     console.error("[Running] Error fetching weekly stats:", error);
     res.status(500).json({ error: "Failed to fetch weekly stats" });
+  }
+});
+
+/**
+ * POST /api/running/sync-strava - Sync Strava activities for a given date
+ * Body: { date: "YYYY-MM-DD" }
+ */
+router.post("/sync-strava", async (req, res) => {
+  try {
+    // Check if Strava is configured
+    if (!isStravaConfigured()) {
+      return res.status(400).json({
+        error: "Strava is not configured. Please set STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, and STRAVA_REFRESH_TOKEN environment variables.",
+      });
+    }
+
+    const { date } = req.body;
+
+    // Validate date
+    if (!date) {
+      return res.status(400).json({ error: "Date is required (format: YYYY-MM-DD)" });
+    }
+
+    // Validate date format
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
+    }
+
+    // Sync activities from Strava
+    const result = await syncStravaActivities(date);
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || "Failed to sync Strava activities" });
+    }
+
+    // Insert synced activities into database
+    const now = new Date().toISOString();
+    const insertedSessions = [];
+
+    for (const activity of result.activities) {
+      // Check if activity already exists
+      const existing = db.prepare(`SELECT id FROM running_sessions WHERE id = ?`).get(activity.id);
+
+      if (existing) {
+        console.log(`[Running] Skipping duplicate activity: ${activity.id}`);
+        continue;
+      }
+
+      // Get the full session data
+      const session = activity.session;
+      if (!session) continue;
+
+      // Insert the new activity
+      const stmt = db.prepare(`
+        INSERT INTO running_sessions (
+          id, session_date, start_time, end_time, distance_miles, duration_minutes,
+          pace_min_per_mile, elevation_gain_ft, elevation_loss_ft, avg_heart_rate,
+          max_heart_rate, calories_burned, weather, surface, effort_level, notes,
+          location, gps_file_url, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      stmt.run(
+        session.id,
+        session.session_date,
+        session.start_time,
+        session.end_time,
+        session.distance_miles,
+        session.duration_minutes,
+        session.pace_min_per_mile,
+        session.elevation_gain_ft,
+        session.elevation_loss_ft,
+        session.avg_heart_rate,
+        session.max_heart_rate,
+        session.calories_burned,
+        session.weather,
+        session.surface,
+        session.effort_level,
+        session.notes,
+        session.location,
+        session.gps_file_url,
+        session.created_at,
+        session.updated_at
+      );
+
+      insertedSessions.push(activity);
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully synced ${insertedSessions.length} activities from Strava`,
+      activitiesSynced: insertedSessions.length,
+      activities: insertedSessions,
+    });
+  } catch (error) {
+    console.error("[Running] Error syncing Strava activities:", error);
+    res.status(500).json({ error: "Failed to sync Strava activities" });
   }
 });
 

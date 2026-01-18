@@ -480,8 +480,7 @@ function escapeHtml(text) {
  */
 function showSuccess(message) {
   console.log("[Running]", message);
-  // Could be replaced with a toast notification
-  alert(message);
+  showToast(message, "success");
 }
 
 /**
@@ -489,8 +488,122 @@ function showSuccess(message) {
  */
 function showError(message) {
   console.error("[Running]", message);
-  // Could be replaced with a toast notification
-  alert(message);
+  showToast(message, "error");
+}
+
+/**
+ * Show toast notification
+ */
+function showToast(message, type = "success") {
+  const toast = document.getElementById("toast");
+  const toastContent = document.getElementById("toastContent");
+  
+  // Set styling based on type
+  if (type === "success") {
+    toastContent.className = "rounded-lg shadow-lg p-4 bg-green-600 text-white";
+  } else if (type === "error") {
+    toastContent.className = "rounded-lg shadow-lg p-4 bg-red-600 text-white";
+  } else {
+    toastContent.className = "rounded-lg shadow-lg p-4 bg-blue-600 text-white";
+  }
+  
+  toastContent.textContent = message;
+  toast.classList.remove("hidden");
+  
+  // Auto-hide after 5 seconds
+  setTimeout(() => {
+    toast.classList.add("hidden");
+  }, 5000);
+}
+
+/**
+ * Open Strava sync modal
+ */
+function openStravaSyncModal() {
+  const modal = document.getElementById("stravaSyncModal");
+  const dateInput = document.getElementById("stravaSyncDate");
+  
+  // Set default date to today
+  const today = new Date().toISOString().split("T")[0];
+  dateInput.value = today;
+  
+  modal.classList.remove("hidden");
+}
+
+/**
+ * Close Strava sync modal
+ */
+function closeStravaSyncModal() {
+  const modal = document.getElementById("stravaSyncModal");
+  modal.classList.add("hidden");
+  
+  // Reset form
+  document.getElementById("stravaSyncForm").reset();
+  document.getElementById("syncStatus").classList.add("hidden");
+  document.getElementById("syncButton").disabled = false;
+}
+
+/**
+ * Sync Strava data
+ */
+async function syncStravaData(event) {
+  event.preventDefault();
+  
+  const dateInput = document.getElementById("stravaSyncDate");
+  const syncStatus = document.getElementById("syncStatus");
+  const syncButton = document.getElementById("syncButton");
+  const date = dateInput.value;
+  
+  if (!date) {
+    showToast("Please select a date", "error");
+    return;
+  }
+  
+  // Show loading state
+  syncStatus.classList.remove("hidden");
+  syncButton.disabled = true;
+  
+  try {
+    const response = await fetch(`${API_BASE}/sync-strava`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ date }),
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to sync Strava data");
+    }
+    
+    // Success
+    const count = data.activitiesSynced || 0;
+    let message = "";
+    
+    if (count === 0) {
+      message = `No running activities found on Strava for ${date}`;
+    } else if (count === 1) {
+      message = `Successfully synced 1 activity from Strava`;
+    } else {
+      message = `Successfully synced ${count} activities from Strava`;
+    }
+    
+    showToast(message, "success");
+    
+    // Close modal and refresh data
+    closeStravaSyncModal();
+    await loadSessions();
+    await loadStats();
+    await loadWeeklyStats();
+  } catch (error) {
+    console.error("[Running] Error syncing Strava:", error);
+    showToast(error.message || "Failed to sync Strava data", "error");
+  } finally {
+    syncStatus.classList.add("hidden");
+    syncButton.disabled = false;
+  }
 }
 
 // Initialize on page load
