@@ -13,3 +13,8 @@ export const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.1:8b";
 
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 export const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+// Strava configuration
+export const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID || "";
+export const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET || "";
+export const STRAVA_REFRESH_TOKEN = process.env.STRAVA_REFRESH_TOKEN || "";
