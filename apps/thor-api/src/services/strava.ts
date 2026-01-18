@@ -114,7 +114,7 @@ async function fetchActivitiesByDate(date: string): Promise<StravaActivity[]> {
 function convertStravaActivityToSession(activity: StravaActivity) {
   const distanceMiles = activity.distance / 1609.34; // meters to miles
   const durationMinutes = Math.round(activity.moving_time / 60); // seconds to minutes
-  const paceMinPerMile = durationMinutes / distanceMiles;
+  const paceMinPerMile = distanceMiles > 0 ? durationMinutes / distanceMiles : 0;
   const elevationGainFt = Math.round(activity.total_elevation_gain * 3.28084); // meters to feet
 
   // Extract date and approximate times from start_date_local
@@ -125,6 +125,8 @@ function convertStravaActivityToSession(activity: StravaActivity) {
   const endDate = new Date(startDate.getTime() + activity.moving_time * 1000);
   const endTime = endDate.toTimeString().substring(0, 5);
 
+  // Use strava-prefixed ID to distinguish from manually logged sessions
+  // and prevent duplicate imports
   return {
     id: `strava-${activity.id}`,
     session_date: sessionDate,
