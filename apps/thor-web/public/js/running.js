@@ -552,12 +552,43 @@ async function syncStravaData(event) {
   const dateInput = document.getElementById("stravaSyncDate");
   const syncStatus = document.getElementById("syncStatus");
   const syncButton = document.getElementById("syncButton");
-  const date = dateInput.value;
+  let date = dateInput.value;
   
   if (!date) {
     showToast("Please select a date", "error");
     return;
   }
+  
+  // Debug: log what we received from the input
+  console.log("Raw date from input:", date);
+  console.log("Input type:", typeof date);
+  
+  // Handle different date formats
+  // If it's MM/DD/YYYY, convert to YYYY-MM-DD
+  if (date.includes("/")) {
+    const parts = date.split("/");
+    if (parts.length === 3) {
+      // Could be MM/DD/YYYY or DD/MM/YYYY depending on locale
+      date = `${parts[2]}-${parts[0].padStart(2, "0")}-${parts[1].padStart(2, "0")}`;
+    }
+  }
+  
+  // Ensure it's YYYY-MM-DD format
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(date)) {
+    // Try parsing as ISO string
+    const parsed = new Date(dateInput.value);
+    if (!isNaN(parsed)) {
+      date = parsed.toISOString().split("T")[0];
+    } else {
+      showToast("Invalid date format", "error");
+      syncButton.disabled = false;
+      syncStatus.classList.add("hidden");
+      return;
+    }
+  }
+  
+  console.log("Formatted date being sent:", date);
   
   // Show loading state
   syncStatus.classList.remove("hidden");

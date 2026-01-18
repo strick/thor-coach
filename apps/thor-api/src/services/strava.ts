@@ -80,17 +80,27 @@ async function getAccessToken(): Promise<string> {
 async function fetchActivitiesByDate(date: string): Promise<StravaActivity[]> {
   const accessToken = await getAccessToken();
 
-  // Parse the date and create start/end timestamps for the day
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(date);
-  endOfDay.setHours(23, 59, 59, 999);
+  // Parse the date in local timezone (not UTC)
+  // date format: YYYY-MM-DD
+  const [year, month, day] = date.split("-").map(Number);
+  
+  // Create start of day in local time (midnight)
+  const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
+  
+  // Create end of day in local time (23:59:59)
+  const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
 
+  // Convert to Unix timestamps (seconds since epoch)
   const after = Math.floor(startOfDay.getTime() / 1000);
   const before = Math.floor(endOfDay.getTime() / 1000);
 
+  // Query with a 48-hour window to account for timezone variations
+  // This ensures we catch activities even with timezone offset issues
+  const adjustedAfter = after - 86400; // 24 hours earlier
+  const adjustedBefore = before + 86400; // 24 hours later
+
   const response = await fetch(
-    `https://www.strava.com/api/v3/athlete/activities?after=${after}&before=${before}`,
+    `https://www.strava.com/api/v3/athlete/activities?after=${adjustedAfter}&before=${adjustedBefore}`,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -118,12 +128,19 @@ function convertStravaActivityToSession(activity: StravaActivity) {
   const elevationGainFt = Math.round(activity.total_elevation_gain * 3.28084); // meters to feet
 
   // Extract date and approximate times from start_date_local
-  const startDate = new Date(activity.start_date_local);
-  const sessionDate = startDate.toISOString().split("T")[0];
-  const startTime = startDate.toTimeString().substring(0, 5); // HH:MM format
+  // start_date_local is in ISO format but represents LOCAL time, not UTC
+  // Parse it as local time by extracting the date portion directly
+  const dateMatch = activity.start_date_local.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const sessionDate = dateMatch ? `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}` : new Date().toISOString().split("T")[0];
+  
+  const timeMatch = activity.start_date_local.match(/T(\d{2}):(\d{2}):(\d{2})/);
+  const startTime = timeMatch ? `${timeMatch[1]}:${timeMatch[2]}` : "00:00"; // HH:MM format
 
-  const endDate = new Date(startDate.getTime() + activity.moving_time * 1000);
-  const endTime = endDate.toTimeString().substring(0, 5);
+  // Calculate end time by adding duration
+  const [hours, minutes] = startTime.split(":").map(Number);
+  const endMinutes = minutes + durationMinutes;
+  const endHours = (hours + Math.floor(endMinutes / 60)) % 24;
+  const endTime = `${String(endHours).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
 
   // Use strava-prefixed ID to distinguish from manually logged sessions
   // and prevent duplicate imports

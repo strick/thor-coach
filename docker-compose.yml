@@ -19,6 +19,10 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:14b}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      # Strava Integration
+      - STRAVA_CLIENT_ID=${STRAVA_CLIENT_ID:-}
+      - STRAVA_CLIENT_SECRET=${STRAVA_CLIENT_SECRET:-}
+      - STRAVA_REFRESH_TOKEN=${STRAVA_REFRESH_TOKEN:-}
     volumes:
       # Persist SQLite database only, not the entire app directory
       - thor-data:/app/data
