@@ -175,7 +175,13 @@ export async function syncStravaActivities(date: string): Promise<RunningSyncRes
   try {
     const activities = await fetchActivitiesByDate(date);
 
-    if (activities.length === 0) {
+    // Filter to only activities from the requested date
+    const filteredActivities = activities.filter((activity) => {
+      const activityDate = activity.start_date_local.split("T")[0];
+      return activityDate === date;
+    });
+
+    if (filteredActivities.length === 0) {
       return {
         success: true,
         activitiesSynced: 0,
@@ -183,7 +189,7 @@ export async function syncStravaActivities(date: string): Promise<RunningSyncRes
       };
     }
 
-    const sessions = activities.map(convertStravaActivityToSession);
+    const sessions = filteredActivities.map(convertStravaActivityToSession);
 
     return {
       success: true,
