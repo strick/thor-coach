@@ -138,6 +138,9 @@ export function seedDatabase(database: Database.Database) {
     { name: "Dumbbell Thrusters", day: 5, aliases: ["thrusters"] },
     { name: "Dumbbell Renegade Rows", day: 5, aliases: ["renegade rows","plank rows"] },
     { name: "Dumbbell Swings", day: 5, aliases: ["kettlebell style swings"] },
+    { name: "Squat Jumps", day: 5, aliases: ["squat jump","jump squat"] },
+    { name: "Burpees", day: 5, aliases: ["burpee"] },
+    { name: "Mountain Climbers", day: 5, aliases: ["mountain climber"] },
   ];
 
   const all = [...D1, ...D2, ...D3, ...D4, ...D5];
@@ -457,6 +460,9 @@ export function ensureSchemaAndSeed() {
     { name: "Dumbbell Thrusters", day: 5, aliases: ["thrusters"] },
     { name: "Dumbbell Renegade Rows", day: 5, aliases: ["renegade rows","plank rows"] },
     { name: "Dumbbell Swings", day: 5, aliases: ["kettlebell style swings"] },
+    { name: "Squat Jumps", day: 5, aliases: ["squat jump","jump squat"] },
+    { name: "Burpees", day: 5, aliases: ["burpee"] },
+    { name: "Mountain Climbers", day: 5, aliases: ["mountain climber"] },
   ];
 
   const all = [...D1, ...D2, ...D3, ...D4, ...D5];
