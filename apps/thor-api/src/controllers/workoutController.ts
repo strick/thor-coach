@@ -1,4 +1,5 @@
 import express from "express";
+import { randomUUID } from "node:crypto";
 
 type Request = express.Request;
 type Response = express.Response;
@@ -188,4 +189,91 @@ export const getProgressSummary = asyncHandler(async (req: Request, res: Respons
 export const clearLogs = asyncHandler(async (req: Request, res: Response) => {
   db.exec("DELETE FROM exercise_logs; DELETE FROM workout_sessions; VACUUM;");
   res.json({ status: "cleared_logs" });
+});
+
+export const logManualExercise = asyncHandler(async (req: Request, res: Response) => {
+  const { exerciseName, sets, reps, weight, date } = req.body;
+  const { THOR_PLAN_ID } = await import("../config.js");
+  const { getDayExercises, getDOW, toISODate } = await import("../services/plans.js");
+
+  // Validate required fields
+  if (!exerciseName || sets === undefined || reps === undefined) {
+    throw new ApiError(400, "exerciseName, sets, and reps are required");
+  }
+
+  // Parse date
+  const logDate = date ? new Date(date + "T12:00:00") : new Date();
+  const dow = getDOW(logDate);
+  const sessionDate = toISODate(logDate);
+
+  // Get exercises for this day to find the exercise ID
+  const dayExercises = getDayExercises(THOR_PLAN_ID, dow);
+  const exerciseMatch = dayExercises.find(
+    e => e.name.toLowerCase() === exerciseName.toLowerCase()
+  );
+
+  if (!exerciseMatch) {
+    throw new ApiError(400, `Exercise "${exerciseName}" not found for ${sessionDate} (DOW ${dow})`);
+  }
+
+  // Check if session exists, otherwise create it
+  const getExistingSession = db.prepare(`
+    SELECT id FROM workout_sessions
+    WHERE plan_id = ? AND session_date = ?
+    LIMIT 1
+  `);
+
+  const insertSession = db.prepare(`
+    INSERT INTO workout_sessions (id, plan_id, session_date, day_of_week)
+    VALUES (@id, @plan_id, @session_date, @day_of_week)
+  `);
+
+  const insertLog = db.prepare(`
+    INSERT INTO exercise_logs (id, session_id, exercise_id, sets, reps_per_set, weight_lbs)
+    VALUES (@id, @session_id, @exercise_id, @sets, @reps_per_set, @weight_lbs)
+  `);
+
+  const tx = db.transaction(() => {
+    let sessionId: string;
+    const existingSession = getExistingSession.get(THOR_PLAN_ID, sessionDate) as { id: string } | undefined;
+
+    if (existingSession) {
+      sessionId = existingSession.id;
+    } else {
+      const sessionUUID = randomUUID();
+      insertSession.run({
+        id: sessionUUID,
+        plan_id: THOR_PLAN_ID,
+        session_date: sessionDate,
+        day_of_week: dow
+      });
+      sessionId = sessionUUID;
+    }
+
+    // Insert the exercise log
+    const logUUID = randomUUID();
+    insertLog.run({
+      id: logUUID,
+      session_id: sessionId,
+      exercise_id: exerciseMatch.id,
+      sets: sets,
+      reps_per_set: reps,
+      weight_lbs: weight || null
+    });
+
+    return { sessionId, logId: logUUID };
+  });
+
+  const result = tx();
+
+  res.json({
+    status: "logged",
+    exercise: exerciseName,
+    sets,
+    reps,
+    weight: weight || null,
+    date: sessionDate,
+    sessionId: result.sessionId,
+    logId: result.logId
+  });
 });

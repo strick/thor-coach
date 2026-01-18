@@ -88,11 +88,11 @@
             <div id="dayList" class="space-y-2"></div>
           </section>
 
-          <!-- Quick Log -->
+          <!-- Log Workout with AI -->
           <section class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
             <div class="flex items-center justify-between mb-4">
               <h2 class="text-lg font-semibold flex items-center gap-2">
-                <span>✍️</span> Log Workout
+                <span>✍️</span> Log Workout (AI)
               </h2>
               <button id="micBtn" class="px-3 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-700 hover:bg-neutral-200 dark:hover:bg-neutral-600 text-sm transition-colors">
                 🎤 Dictate
@@ -114,6 +114,24 @@
               </button>
             </div>
             <p id="micStatus" class="text-xs text-neutral-500 mt-2"></p>
+          </section>
+
+          <!-- Log Workout Manually -->
+          <section id="manualEntrySection" class="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+            <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+              <span>⚡</span> Log Workout (Manual)
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+              <select id="manualExercise" class="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">Select exercise...</option>
+              </select>
+              <input id="manualSets" type="number" inputmode="numeric" placeholder="Sets" min="1" class="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <input id="manualReps" type="number" inputmode="numeric" placeholder="Reps" min="1" class="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <input id="manualWeight" type="number" inputmode="decimal" placeholder="Weight (lbs)" min="0" step="0.5" class="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <button id="addManualBtn" class="px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-colors whitespace-nowrap">
+                Add
+              </button>
+            </div>
           </section>
         </div>
 

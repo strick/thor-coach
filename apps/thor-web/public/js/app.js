@@ -278,6 +278,7 @@ probeBackend();
   let recognition = null;
   let micActive = false;
   let transcriptBuffer = '';
+  let todayExercises = []; // Store exercises from today's plan for dropdown
 
   function setupSTT() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -329,6 +330,102 @@ probeBackend();
     $("updateText").value = '';
     $("ingestResult").innerHTML = '';
     hideValidationFeedback();
+  });
+
+  // Populate exercise dropdown from today's plan
+  function populateExerciseDropdown() {
+    const select = $("manualExercise");
+    select.innerHTML = '<option value="">Select exercise...</option>';
+    
+    todayExercises.forEach(exercise => {
+      const option = document.createElement('option');
+      option.value = exercise.name;
+      option.textContent = exercise.name;
+      select.appendChild(option);
+    });
+  }
+
+  // Handle clicking an exercise from today's plan
+  function selectExerciseFromPlan(exerciseName) {
+    // Set the exercise in the dropdown
+    $("manualExercise").value = exerciseName;
+    
+    // Scroll to the manual entry section
+    const manualEntrySection = $("manualEntrySection");
+    if (manualEntrySection) {
+      manualEntrySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    
+    // Focus on the Sets field for quicker entry
+    setTimeout(() => $("manualSets").focus(), 500);
+  }
+
+  // Handle manual entry form submission
+  $("addManualBtn").addEventListener('click', async () => {
+    const exercise = $("manualExercise").value.trim();
+    const sets = $("manualSets").value.trim();
+    const reps = $("manualReps").value.trim();
+    const weight = $("manualWeight").value.trim();
+
+    // Validate inputs
+    if (!exercise) {
+      showToast('Please select an exercise', 'warning');
+      return;
+    }
+    if (!sets || !reps) {
+      showToast('Please enter sets and reps', 'warning');
+      return;
+    }
+
+    const btn = $("addManualBtn");
+    setButtonLoading(btn, true, 'Saving...');
+
+    try {
+      const res = await fetch(apiBase() + '/log-manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exerciseName: exercise,
+          sets: parseInt(sets),
+          reps: parseInt(reps),
+          weight: weight ? parseFloat(weight) : null,
+          date: $("dateInput").value || undefined
+        })
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        showToast(`Failed to log exercise: ${res.status}`, 'error');
+        return;
+      }
+
+      const data = await res.json();
+
+      // Clear manual entry fields
+      $("manualExercise").value = '';
+      $("manualSets").value = '';
+      $("manualReps").value = '';
+      $("manualWeight").value = '';
+
+      // Show success feedback
+      showToast(`✓ ${exercise} logged!`, 'success');
+      
+      // Refresh data
+      refreshProgress();
+      loadTodaysWorkouts();
+    } catch (e) {
+      console.error('Failed to log exercise:', e);
+      showToast('Failed to log exercise', 'error');
+    } finally {
+      setButtonLoading(btn, false);
+    }
+  });
+
+  // Allow Enter key in manual weight field to add entry
+  $("manualWeight").addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      $("addManualBtn").click();
+    }
   });
 
   // ======= Form Validation =======
@@ -577,6 +674,10 @@ probeBackend();
       return;
     }
 
+    // Store exercises for the manual entry dropdown
+    todayExercises = data.exercises || [];
+    populateExerciseDropdown();
+
     const items = (data.exercises || []).map(e => {
       const lastSession = e.lastSession;
       const lastInfo = lastSession
@@ -588,7 +689,7 @@ probeBackend();
         : '<div class="text-xs text-neutral-400 dark:text-neutral-500 mt-1">First time!</div>';
 
       return `
-        <div class="border border-neutral-200 dark:border-neutral-700 rounded-lg p-3 hover:border-indigo-400 dark:hover:border-indigo-600 transition-colors">
+        <div class="exercise-plan-item cursor-pointer border border-neutral-200 dark:border-neutral-700 rounded-lg p-3 hover:border-indigo-400 dark:hover:border-indigo-600 transition-colors" data-exercise="${e.name}">
           <div class="font-medium text-neutral-800 dark:text-neutral-200">${e.name}</div>
           ${lastInfo}
         </div>
@@ -596,6 +697,14 @@ probeBackend();
     }).join('');
 
     $("dayList").innerHTML = items;
+    
+    // Add click handlers to exercise items
+    document.querySelectorAll('.exercise-plan-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const exerciseName = item.dataset.exercise;
+        selectExerciseFromPlan(exerciseName);
+      });
+    });
   }
 
   // ======= Progress =======

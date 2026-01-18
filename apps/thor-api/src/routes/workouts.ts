@@ -6,6 +6,9 @@ export const workoutRoutes = express.Router();
 // Workout ingestion
 workoutRoutes.post("/ingest", workoutController.ingestWorkout);
 
+// Log exercise manually (no AI parsing)
+workoutRoutes.post("/log-manual", workoutController.logManualExercise);
+
 // Get workouts (by date or recent)
 workoutRoutes.get("/workouts", workoutController.getWorkouts);
 
