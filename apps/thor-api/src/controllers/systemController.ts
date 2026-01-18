@@ -104,6 +104,61 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
+ * PATCH /api/system/users/:id
+ * Update a user
+ */
+export const updateUser = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { name, email } = req.body;
+
+  if (!name && !email) {
+    throw new ApiError(400, "At least one field (name or email) is required");
+  }
+
+  if (name && (typeof name !== 'string' || name.trim().length === 0)) {
+    throw new ApiError(400, "Name must be a non-empty string");
+  }
+
+  // Check if user exists
+  const existingUser = db.prepare(
+    `SELECT id FROM users WHERE id = ?`
+  ).get(id);
+
+  if (!existingUser) {
+    throw new ApiError(404, "User not found");
+  }
+
+  // Update fields
+  const updates = [];
+  const params = [];
+
+  if (name) {
+    updates.push("name = ?");
+    params.push(name.trim());
+  }
+
+  if (email !== undefined) {
+    updates.push("email = ?");
+    params.push(email || null);
+  }
+
+  params.push(id);
+
+  db.prepare(
+    `UPDATE users SET ${updates.join(', ')} WHERE id = ?`
+  ).run(...params);
+
+  const user = db.prepare(
+    `SELECT id, name, email, created_at FROM users WHERE id = ?`
+  ).get(id);
+
+  res.json({
+    status: "updated",
+    user
+  });
+});
+
+/**
  * DELETE /api/system/users/:id
  * Delete a user and all their data
  */

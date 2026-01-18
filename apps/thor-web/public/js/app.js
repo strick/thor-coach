@@ -1,4 +1,26 @@
 
+  // ======= Theme Management =======
+  // Apply light mode for ARELCI user (wife), dark mode for main user
+  function applyThemeBasedOnUser() {
+    const wifeUserId = '6365e445-593b-4c5f-8787-9c3afd6569f6';
+    const savedUserId = localStorage.getItem('selectedUserId');
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlUserId = urlParams.get('userId');
+    const currentUserId = urlUserId || savedUserId || 'user-main';
+    
+    const html = document.documentElement;
+    if (currentUserId === wifeUserId) {
+      // Light mode for ARELCI
+      html.classList.remove('dark');
+    } else {
+      // Dark mode for main user
+      html.classList.add('dark');
+    }
+  }
+
+  // Apply theme on load
+  applyThemeBasedOnUser();
+
   // ======= Helpers =======
   const $ = (id) => document.getElementById(id);
 

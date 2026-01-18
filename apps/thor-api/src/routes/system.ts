@@ -18,4 +18,5 @@ systemRoutes.post("/config/llm", systemController.updateLLMConfig);
 // User management endpoints
 systemRoutes.get("/users", systemController.getUsers);
 systemRoutes.post("/users", systemController.createUser);
+systemRoutes.patch("/users/:id", systemController.updateUser);
 systemRoutes.delete("/users/:id", systemController.deleteUser);

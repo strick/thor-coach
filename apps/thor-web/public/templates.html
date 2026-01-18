@@ -5,31 +5,69 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Template Management</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
-<body class="bg-white dark:bg-neutral-950 text-neutral-900 dark:text-white transition-colors">
-  <nav class="bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 sticky top-0 z-40 shadow-sm">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-8">
-        <a href="index.html" class="text-xl font-bold text-blue-600 dark:text-blue-400">Thor</a>
-        <div class="flex gap-6">
-          <a href="nutrition.html" class="text-sm font-medium hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Nutrition</a>
-          <a href="running.html" class="text-sm font-medium hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Running</a>
-          <a href="templates.html" class="text-sm font-medium text-blue-600 dark:text-blue-400">Templates</a>
-          <a href="health.html" class="text-sm font-medium hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Health</a>
+<body class="bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 min-h-screen">
+  <div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <header class="bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700">
+      <div class="px-4 sm:px-6 py-4 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">📋 Meal Templates</h1>
+          <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">Reusable meal templates for quick entry</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <label class="text-sm font-medium text-neutral-600 dark:text-neutral-400">User:</label>
+            <select id="userSelect" class="px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-sm font-medium">
+              <option>Loading users...</option>
+            </select>
+            <button id="addUserBtn" class="px-3 py-1.5 rounded-lg bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 text-sm font-medium transition-colors" title="Add new user">
+              +
+            </button>
+          </div>
+          <span id="cfgPill" class="text-xs px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">Connected</span>
         </div>
       </div>
-      <button id="themeToggleBtn" class="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
-        <span class="text-xl">🌙</span>
-      </button>
-    </div>
-  </nav>
 
-  <main class="max-w-6xl mx-auto px-4 py-8">
-    <div class="mb-8">
-      <h1 class="text-3xl font-bold mb-2">📋 Meal Templates</h1>
-      <p class="text-neutral-600 dark:text-neutral-400">Manage your saved meal templates</p>
-    </div>
+      <!-- Tab Navigation -->
+      <nav class="px-4 sm:px-6">
+        <div class="flex gap-1 border-b border-neutral-200 dark:border-neutral-700">
+          <a href="/index.html" class="nav-link px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors" data-tab="home">
+            🏠 Home
+          </a>
+          <a href="/nutrition.html" class="nav-link px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors" data-tab="nutrition">
+            🍎 Nutrition
+          </a>
+          <a href="/running.html" class="nav-link px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors" data-tab="running">
+            🏃 Running
+          </a>
+          <a href="/health.html" class="nav-link px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors" data-tab="health">
+            ❤️ Health
+          </a>
+          <span class="px-4 py-3 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400">
+            📋 Templates
+          </span>
+          <a href="/history.html" class="nav-link px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors" data-tab="history">
+            📖 History
+          </a>
+          <a href="/progress.html" class="nav-link px-4 py-3 text-sm font-medium border-b-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors" data-tab="progress">
+            📊 Progress
+          </a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="p-4 sm:p-6">
+      <div class="mb-6 flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-semibold text-neutral-900 dark:text-neutral-100">Manage Your Templates</h2>
+          <p class="text-sm text-neutral-600 dark:text-neutral-400 mt-1">Save and reuse your favorite meals</p>
+        </div>
+        <a id="backToNutrition" href="/nutrition.html" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-colors">
+          ← Back to Nutrition
+        </a>
+      </div>
 
     <!-- Loading State -->
     <div id="loadingState" class="text-center py-8">
@@ -40,7 +78,7 @@
     <div id="emptyState" class="hidden text-center py-16 bg-neutral-50 dark:bg-neutral-900/50 rounded-lg border border-neutral-200 dark:border-neutral-800">
       <p class="text-lg font-semibold mb-2">No templates yet</p>
       <p class="text-neutral-600 dark:text-neutral-400">Go to Nutrition and save a meal as a template to get started!</p>
-      <a href="nutrition.html" class="inline-block mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">Create Template</a>
+      <a id="createTemplateLink" href="/nutrition.html" class="inline-block mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors">Create Template</a>
     </div>
 
     <!-- Templates Grid -->
@@ -93,12 +131,97 @@
 
   <script>
     const API_BASE = 'http://localhost:3000/api';
+    
+    // Check if userId is provided in URL query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlUserId = urlParams.get('userId');
+    let currentUserId = urlUserId || localStorage.getItem('selectedUserId') || 'user-main';
+    
     let templates = [];
     let selectedTemplateId = null;
 
+    /**
+     * Apply theme based on current user
+     */
+    function applyTheme() {
+      const wifeUserId = '6365e445-593b-4c5f-8787-9c3afd6569f6';
+      const isWife = currentUserId === wifeUserId;
+      const html = document.documentElement;
+      
+      if (isWife) {
+        // Light mode for ARELCI
+        html.classList.remove('dark');
+      } else {
+        // Dark mode for main user
+        html.classList.add('dark');
+      }
+    }
+
+    /**
+     * Update navigation visibility based on current user
+     */
+    function updateNavVisibility() {
+      // Wife's user ID
+      const wifeUserId = '6365e445-593b-4c5f-8787-9c3afd6569f6';
+      const isWife = currentUserId === wifeUserId;
+      
+      // Get all nav links
+      const navLinks = document.querySelectorAll('.nav-link');
+      
+      navLinks.forEach(link => {
+        const tab = link.getAttribute('data-tab');
+        // Show only nutrition and templates for wife, show all for main user
+        if (isWife && tab !== 'templates' && tab !== 'nutrition') {
+          link.style.display = 'none';
+        } else {
+          link.style.display = '';
+        }
+      });
+    }
+
+    /**
+     * Load and populate users dropdown
+     */
+    async function loadUsers() {
+      try {
+        const response = await fetch(`${API_BASE}/users`);
+        const data = await response.json();
+        const users = data.users || data; // Handle both wrapped and unwrapped responses
+        
+        const userSelect = document.getElementById('userSelect');
+        if (!userSelect) return;
+        
+        userSelect.innerHTML = '';
+        users.forEach(user => {
+          const option = document.createElement('option');
+          option.value = user.id;
+          option.textContent = user.name;
+          userSelect.appendChild(option);
+        });
+        
+        // Set dropdown to current user (already set from URL or localStorage)
+        userSelect.value = currentUserId;
+        
+        // Update nav visibility
+        updateNavVisibility();
+        
+        // Update links to include userId
+        const backLink = document.getElementById('backToNutrition');
+        const createLink = document.getElementById('createTemplateLink');
+        const userIdParam = `?userId=${encodeURIComponent(currentUserId)}`;
+        if (backLink) backLink.href = `/nutrition.html${userIdParam}`;
+        if (createLink) createLink.href = `/nutrition.html${userIdParam}`;
+        
+        // Load templates
+        loadTemplates();
+      } catch (error) {
+        console.error('Error loading users:', error);
+      }
+    }
+
     async function loadTemplates() {
       try {
-        const response = await fetch(`${API_BASE}/nutrition/templates`);
+        const response = await fetch(`${API_BASE}/nutrition/templates?userId=${encodeURIComponent(currentUserId)}`);
         const data = await response.json();
         templates = data.templates || [];
 
@@ -256,6 +379,28 @@
     }
 
     // Event Listeners
+    const userSelect = document.getElementById('userSelect');
+    const addUserBtn = document.getElementById('addUserBtn');
+    
+    if (userSelect) {
+      userSelect.addEventListener('change', (e) => {
+        currentUserId = e.target.value;
+        localStorage.setItem('selectedUserId', currentUserId);
+        applyTheme(); // Apply theme for new user
+        updateNavVisibility(); // Update visible tabs
+        loadTemplates(); // Reload data for new user
+      });
+    }
+    
+    if (addUserBtn) {
+      addUserBtn.addEventListener('click', () => {
+        const userName = prompt('Enter new user name:');
+        if (!userName || userName.trim() === '') return;
+        // For now, just show an alert. This would need API implementation
+        alert('User creation not yet implemented on this page');
+      });
+    }
+
     document.getElementById('cancelDeleteBtn').addEventListener('click', hideDeleteModal);
     document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
     document.getElementById('closeItemsModal').addEventListener('click', hideItemsModal);
@@ -265,21 +410,12 @@
       alert('To apply this template, go to Nutrition page and open the Add Meal modal. The template will appear there!');
     });
 
-    // Theme toggle
-    const themeToggleBtn = document.getElementById('themeToggleBtn');
-    themeToggleBtn?.addEventListener('click', () => {
-      document.documentElement.classList.toggle('dark');
-      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
-    });
-
-    // Load theme preference
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      document.documentElement.classList.add('dark');
-    }
-
-    // Load templates on page load
-    loadTemplates();
+    // Load users and initialize on page load
+    loadUsers();
+    applyTheme(); // Apply theme on page load
   </script>
-</body>
+    </div>
+  </body>
 </html>
+
+```

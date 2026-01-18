@@ -4,7 +4,12 @@
 
 const API_BASE = `http://${window.location.hostname}:3000/api`;
 let currentDate = new Date().toISOString().slice(0, 10);
-let currentUserId = 'user-main'; // Default to main user, will load from dropdown
+
+// Check if userId is provided in URL query parameter
+const urlParams = new URLSearchParams(window.location.search);
+const urlUserId = urlParams.get('userId');
+let currentUserId = urlUserId || localStorage.getItem('selectedUserId') || 'user-main'; // Default to main user, will load from dropdown
+
 let nutritionChart = null;
 let currentMealId = null;
 let currentMealType = null;
@@ -714,7 +719,12 @@ async function saveEditedItem(event) {
 async function loadNutritionDay() {
   try {
     console.log('[Nutrition] Loading nutrition day for date:', currentDate);
-    const response = await fetch(buildApiUrl(`${API_BASE}/nutrition/day?date=${currentDate}`));
+    const url = buildApiUrl(`${API_BASE}/nutrition/day?date=${currentDate}`);
+    console.log('[Nutrition] Fetching from:', url);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
     const day = await response.json();
     console.log('[Nutrition] Received day data:', day);
     
@@ -1162,12 +1172,52 @@ function showError(message) {
 }
 
 /**
+ * Apply theme based on current user
+ */
+function applyTheme() {
+  const wifeUserId = '6365e445-593b-4c5f-8787-9c3afd6569f6';
+  const isWife = currentUserId === wifeUserId;
+  const html = document.documentElement;
+  
+  if (isWife) {
+    // Light mode for ARELCI
+    html.classList.remove('dark');
+  } else {
+    // Dark mode for main user
+    html.classList.add('dark');
+  }
+}
+
+/**
+ * Update navigation visibility based on current user
+ */
+function updateNavVisibility() {
+  // Wife's user ID
+  const wifeUserId = '6365e445-593b-4c5f-8787-9c3afd6569f6';
+  const isWife = currentUserId === wifeUserId;
+  
+  // Get all nav links
+  const navLinks = document.querySelectorAll('.nav-link');
+  
+  navLinks.forEach(link => {
+    const tab = link.getAttribute('data-tab');
+    // Show only nutrition and templates for wife, show all for main user
+    if (isWife && tab !== 'templates' && tab !== 'nutrition') {
+      link.style.display = 'none';
+    } else {
+      link.style.display = '';
+    }
+  });
+}
+
+/**
  * Load and populate users dropdown
  */
 async function loadUsers() {
   try {
     const response = await fetch(`${API_BASE}/users`);
-    const users = await response.json();
+    const data = await response.json();
+    const users = data.users || data; // Handle both wrapped and unwrapped responses
     
     const userSelect = document.getElementById('userSelect');
     if (!userSelect) return;
@@ -1180,10 +1230,14 @@ async function loadUsers() {
       userSelect.appendChild(option);
     });
     
-    // Set current user
-    const savedUserId = localStorage.getItem('selectedUserId') || 'user-main';
-    userSelect.value = savedUserId;
-    currentUserId = savedUserId;
+    // Set dropdown to current user (already set from URL or localStorage)
+    userSelect.value = currentUserId;
+    
+    // Update nav visibility
+    updateNavVisibility();
+    
+    // Reload nutrition data when users are loaded
+    loadNutritionDay();
   } catch (error) {
     console.error('Error loading users:', error);
     showError('Failed to load users');
@@ -1344,6 +1398,8 @@ document.addEventListener('DOMContentLoaded', () => {
     userSelect.addEventListener('change', (e) => {
       currentUserId = e.target.value;
       localStorage.setItem('selectedUserId', currentUserId);
+      applyTheme(); // Apply theme for new user
+      updateNavVisibility(); // Update visible tabs
       loadNutritionDay(); // Reload data for new user
     });
   }
@@ -1358,4 +1414,5 @@ document.addEventListener('DOMContentLoaded', () => {
   if (savedUserId) {
     currentUserId = savedUserId;
   }
+  applyTheme(); // Apply theme on page load
 });
