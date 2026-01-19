@@ -80,24 +80,23 @@ async function getAccessToken(): Promise<string> {
 async function fetchActivitiesByDate(date: string): Promise<StravaActivity[]> {
   const accessToken = await getAccessToken();
 
-  // Parse the date in local timezone (not UTC)
+  // Parse the date string - should be in YYYY-MM-DD format
+  // Query a 48-hour window around the requested date to account for timezone variations
+  // Strava's start_date_local is in the athlete's local timezone, so we need a wide range
   // date format: YYYY-MM-DD
   const [year, month, day] = date.split("-").map(Number);
   
-  // Create start of day in local time (midnight)
-  const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
-  
-  // Create end of day in local time (23:59:59)
-  const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
+  // Create timestamps using a simple approach: treat the date as a point in time
+  // Use noon UTC on the requested date as the reference point
+  const referenceDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+  const referenceTimestamp = Math.floor(referenceDate.getTime() / 1000);
 
-  // Convert to Unix timestamps (seconds since epoch)
-  const after = Math.floor(startOfDay.getTime() / 1000);
-  const before = Math.floor(endOfDay.getTime() / 1000);
+  // Query with a 36-hour window centered on the reference point
+  // This catches activities from ~midnight to midnight in most timezones
+  const adjustedAfter = referenceTimestamp - 64800; // ~18 hours before noon
+  const adjustedBefore = referenceTimestamp + 64800; // ~18 hours after noon
 
-  // Query with a 48-hour window to account for timezone variations
-  // This ensures we catch activities even with timezone offset issues
-  const adjustedAfter = after - 86400; // 24 hours earlier
-  const adjustedBefore = before + 86400; // 24 hours later
+  console.log(`[Strava] Fetching activities for date: ${date}, timestamp range: ${adjustedAfter} to ${adjustedBefore}`);
 
   const response = await fetch(
     `https://www.strava.com/api/v3/athlete/activities?after=${adjustedAfter}&before=${adjustedBefore}`,
@@ -142,6 +141,24 @@ function convertStravaActivityToSession(activity: StravaActivity) {
   const endHours = (hours + Math.floor(endMinutes / 60)) % 24;
   const endTime = `${String(endHours).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
 
+  // Calculate calories if not provided by Strava
+  // Use a formula based on distance and heart rate if available, otherwise use distance-based estimate
+  let caloriesBurned = activity.calories || null;
+  if (!caloriesBurned && distanceMiles > 0) {
+    // Estimate calories: ~100 calories per mile for average running
+    // This varies by body weight and intensity, but ~100/mile is a reasonable average
+    caloriesBurned = Math.round(distanceMiles * 100);
+    
+    // Adjust if heart rate data is available (higher HR = higher intensity = more calories)
+    if (activity.average_heartrate && activity.average_heartrate > 150) {
+      // High intensity running burns more calories
+      caloriesBurned = Math.round(caloriesBurned * 1.1);
+    } else if (activity.average_heartrate && activity.average_heartrate < 140) {
+      // Lower intensity burns fewer calories
+      caloriesBurned = Math.round(caloriesBurned * 0.9);
+    }
+  }
+
   // Use strava-prefixed ID to distinguish from manually logged sessions
   // and prevent duplicate imports
   return {
@@ -156,7 +173,7 @@ function convertStravaActivityToSession(activity: StravaActivity) {
     elevation_loss_ft: null,
     avg_heart_rate: activity.average_heartrate ? Math.round(activity.average_heartrate) : null,
     max_heart_rate: activity.max_heartrate ? Math.round(activity.max_heartrate) : null,
-    calories_burned: activity.calories || null,
+    calories_burned: caloriesBurned,
     weather: null,
     surface: null,
     effort_level: null,
@@ -175,11 +192,17 @@ export async function syncStravaActivities(date: string): Promise<RunningSyncRes
   try {
     const activities = await fetchActivitiesByDate(date);
 
+    console.log(`[Strava] Fetched ${activities.length} activities for date: ${date}`);
+    
     // Filter to only activities from the requested date
     const filteredActivities = activities.filter((activity) => {
       const activityDate = activity.start_date_local.split("T")[0];
-      return activityDate === date;
+      const matches = activityDate === date;
+      console.log(`[Strava] Activity ${activity.id}: ${activity.name}, start_date_local: ${activity.start_date_local}, extracted: ${activityDate}, matches requested ${date}: ${matches}`);
+      return matches;
     });
+
+    console.log(`[Strava] Filtered to ${filteredActivities.length} activities matching date ${date}`);
 
     if (filteredActivities.length === 0) {
       return {
@@ -190,6 +213,8 @@ export async function syncStravaActivities(date: string): Promise<RunningSyncRes
     }
 
     const sessions = filteredActivities.map(convertStravaActivityToSession);
+
+    console.log(`[Strava] Converted to sessions:`, sessions.map(s => ({ id: s.id, session_date: s.session_date, start_time: s.start_time })));
 
     return {
       success: true,
@@ -204,6 +229,7 @@ export async function syncStravaActivities(date: string): Promise<RunningSyncRes
       })),
     };
   } catch (error) {
+    console.error(`[Strava] Error syncing activities:`, error);
     return {
       success: false,
       activitiesSynced: 0,

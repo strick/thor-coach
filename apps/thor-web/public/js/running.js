@@ -84,7 +84,10 @@ function displaySessions() {
   container.innerHTML = sessions.map((session) => {
     const pace = formatPace(session.pace_min_per_mile || calculatePaceDecimal(session.distance_miles, session.duration_minutes));
     const duration = formatDuration(session.duration_minutes);
-    const date = new Date(session.session_date).toLocaleDateString();
+    // Parse date string as local date (not UTC) to avoid timezone shifts
+    const dateStr = session.session_date; // Format: YYYY-MM-DD
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day).toLocaleDateString();
     
     return `
       <div class="bg-gray-700 rounded-lg p-4 flex justify-between items-center">
@@ -95,6 +98,7 @@ function displaySessions() {
             <span class="text-gray-300">${duration}</span>
             <span class="text-gray-400">•</span>
             <span class="text-indigo-300">${pace} /mi</span>
+            ${session.calories_burned ? `<span class="text-gray-400">•</span><span class="text-orange-300">🔥 ${Math.round(session.calories_burned)} cal</span>` : ""}
           </div>
           <div class="text-sm text-gray-400">
             ${date} 
@@ -138,6 +142,10 @@ async function loadStats() {
       stats.total_duration ? (stats.total_duration / 60).toFixed(1) : "0";
     document.getElementById("avgPace").textContent = 
       stats.avg_pace ? parseFloat(stats.avg_pace).toFixed(2) : "--";
+
+    // Calculate total calories burned (all time)
+    const totalCalories = sessions.reduce((sum, s) => sum + (s.calories_burned || 0), 0);
+    document.getElementById("totalCalories").textContent = Math.round(totalCalories);
 
     console.log("[Running] Loaded stats:", stats);
   } catch (error) {
