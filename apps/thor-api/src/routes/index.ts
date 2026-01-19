@@ -7,6 +7,7 @@ import { testRoutes } from "./tests.js";
 import { healthRoutes } from "./health.js";
 import { nutritionRoutes } from "./nutrition.js";
 import { runningRouter } from "./running.js";
+import { dailySummaryRoutes } from "./dailySummary.js";
 
 export const router = express.Router();
 
@@ -19,3 +20,4 @@ router.use("/api", testRoutes);
 router.use("/api", healthRoutes);
 router.use("/api", nutritionRoutes);
 router.use("/api/running", runningRouter);
+router.use("/api/daily-summary", dailySummaryRoutes);

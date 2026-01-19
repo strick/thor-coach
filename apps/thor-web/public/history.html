@@ -167,6 +167,161 @@
       }
     }
 
+    async function loadDailySummary(date, container) {
+      try {
+        const response = await fetch(`http://localhost:3000/api/daily-summary/${date}`);
+        
+        if (!response.ok) {
+          container.innerHTML = '<p class="text-neutral-600 dark:text-neutral-400 italic">No summary yet. Generate one with the ✨ Summary button above.</p>';
+          return;
+        }
+        
+        const data = await response.json();
+        
+        if (!data.sections) {
+          container.innerHTML = '<p class="text-neutral-600 dark:text-neutral-400 italic">No summary data available.</p>';
+          return;
+        }
+        
+        const sections = data.sections;
+        
+        // Build sections HTML
+        let html = '';
+        
+        if (sections.highlights && sections.highlights.length > 0) {
+          html += `
+            <div class="mb-4">
+              <h5 class="font-semibold text-indigo-900 dark:text-indigo-100 mb-2">✨ Highlights</h5>
+              <div class="text-xs text-indigo-800 dark:text-indigo-200">${convertMarkdownToHTML(sections.highlights.join('\n'))}</div>
+            </div>
+          `;
+        }
+        
+        if (sections.dashHeartHealthy) {
+          html += `
+            <div>
+              <h5 class="font-semibold text-indigo-900 dark:text-indigo-100 mb-2">❤️ DASH & Heart-Healthy</h5>
+              <div class="text-xs text-indigo-800 dark:text-indigo-200">${convertMarkdownToHTML(sections.dashHeartHealthy)}</div>
+            </div>
+          `;
+        }
+        
+        if (sections.proteinRecovery) {
+          html += `
+            <div>
+              <h5 class="font-semibold text-indigo-900 dark:text-indigo-100 mb-2">💪 Protein & Recovery</h5>
+              <div class="text-xs text-indigo-800 dark:text-indigo-200">${convertMarkdownToHTML(sections.proteinRecovery)}</div>
+            </div>
+          `;
+        }
+        
+        if (sections.training) {
+          html += `
+            <div>
+              <h5 class="font-semibold text-indigo-900 dark:text-indigo-100 mb-2">🏋️ Training Review</h5>
+              <div class="text-xs text-indigo-800 dark:text-indigo-200">${convertMarkdownToHTML(sections.training)}</div>
+            </div>
+          `;
+        }
+        
+        if (sections.redFlags) {
+          html += `
+            <div>
+              <h5 class="font-semibold text-red-900 dark:text-red-100 mb-2">⚠️ Red Flags</h5>
+              <div class="text-xs text-red-800 dark:text-red-200">${convertMarkdownToHTML(sections.redFlags)}</div>
+            </div>
+          `;
+        }
+        
+        if (sections.tomorrowPriorities) {
+          html += `
+            <div>
+              <h5 class="font-semibold text-amber-900 dark:text-amber-100 mb-2">📋 Tomorrow's Priorities</h5>
+              <div class="text-xs text-amber-800 dark:text-amber-200">${convertMarkdownToHTML(sections.tomorrowPriorities)}</div>
+            </div>
+          `;
+        }
+        
+        container.innerHTML = html;
+      } catch (error) {
+        console.error('[History] Error loading summary:', error);
+        container.innerHTML = '<p class="text-neutral-600 dark:text-neutral-400 italic">Error loading summary.</p>';
+      }
+    }
+
+    function convertMarkdownToHTML(markdown) {
+      if (!markdown) return '';
+      
+      let html = markdown;
+      
+      // Bold: **text** → <strong>text</strong>
+      html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      
+      // Italic: *text* → <em>text</em> (but not inside bold)
+      html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+      
+      // Handle line breaks and lists
+      const lines = html.split('\n');
+      let result = [];
+      let inList = false;
+      let listType = null; // 'unordered' or 'ordered'
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        if (line === '') {
+          // Empty line - close list if open
+          if (inList) {
+            result.push(listType === 'ordered' ? '</ol>' : '</ul>');
+            inList = false;
+            listType = null;
+          }
+          continue;
+        }
+        
+        // Check for unordered list items (- or *)
+        if (line.match(/^[-*]\s+/)) {
+          if (!inList || listType !== 'unordered') {
+            if (inList) result.push(listType === 'ordered' ? '</ol>' : '</ul>');
+            result.push('<ul class="list-disc list-inside mt-1 space-y-0.5">');
+            inList = true;
+            listType = 'unordered';
+          }
+          const content = line.replace(/^[-*]\s+/, '');
+          result.push(`<li>${content}</li>`);
+        }
+        // Check for ordered list items (1., 2., etc.)
+        else if (line.match(/^\d+\.\s+/)) {
+          if (!inList || listType !== 'ordered') {
+            if (inList) result.push(listType === 'ordered' ? '</ol>' : '</ul>');
+            result.push('<ol class="list-decimal list-inside mt-1 space-y-0.5">');
+            inList = true;
+            listType = 'ordered';
+          }
+          const content = line.replace(/^\d+\.\s+/, '');
+          result.push(`<li>${content}</li>`);
+        }
+        // Regular paragraph
+        else {
+          if (inList) {
+            result.push(listType === 'ordered' ? '</ol>' : '</ul>');
+            inList = false;
+            listType = null;
+          }
+          if (line) {
+            result.push(`<p class="mt-1">${line}</p>`);
+          }
+        }
+      }
+      
+      // Close any open list
+      if (inList) {
+        result.push(listType === 'ordered' ? '</ol>' : '</ul>');
+      }
+      
+      return result.join('');
+    }
+
     function displayEventsByDate(workouts, running, health) {
       const container = document.getElementById('eventsByDate');
       const noEvents = document.getElementById('noEvents');
@@ -204,10 +359,21 @@
         dateSection.className = 'border-b border-neutral-200 dark:border-neutral-700 pb-6';
         
         const dateHeader = document.createElement('h3');
-        dateHeader.className = 'text-base font-semibold mb-4 flex items-center gap-2';
+        dateHeader.className = 'text-base font-semibold mb-4 flex items-center justify-between gap-2';
         const dateObj = new Date(date + 'T00:00:00');
         const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        dateHeader.innerHTML = `<span>📅</span> ${dateStr}`;
+        
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'flex items-center gap-2';
+        titleDiv.innerHTML = `<span>📅</span> ${dateStr}`;
+        
+        const summaryBtn = document.createElement('button');
+        summaryBtn.className = 'px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition-colors';
+        summaryBtn.textContent = '✨ Summary';
+        summaryBtn.onclick = () => generateDailySummaryForDate(date);
+        
+        dateHeader.appendChild(titleDiv);
+        dateHeader.appendChild(summaryBtn);
         dateSection.appendChild(dateHeader);
 
         const eventsList = document.createElement('div');
@@ -265,6 +431,44 @@
         });
 
         dateSection.appendChild(eventsList);
+
+        // Add stored daily summary section below workouts/running
+        const summaryContainer = document.createElement('div');
+        summaryContainer.className = 'mt-6 border-t border-neutral-200 dark:border-neutral-700 pt-4';
+        
+        const summaryHeader = document.createElement('div');
+        summaryHeader.className = 'flex items-center justify-between cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700/50 rounded-lg p-3 transition-colors';
+        
+        const summaryTitle = document.createElement('h4');
+        summaryTitle.className = 'font-semibold flex items-center gap-2';
+        summaryTitle.innerHTML = '<span>📋</span> Daily Summary';
+        
+        const summaryToggle = document.createElement('span');
+        summaryToggle.className = 'text-lg transition-transform duration-200';
+        summaryToggle.textContent = '▼';
+        summaryToggle.dataset.expanded = 'true';
+        
+        summaryHeader.appendChild(summaryTitle);
+        summaryHeader.appendChild(summaryToggle);
+        
+        const summaryContent = document.createElement('div');
+        summaryContent.className = 'bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4 mt-2 text-sm space-y-3 border border-indigo-200 dark:border-indigo-800';
+        summaryContent.id = `summary-${date}`;
+        
+        // Load and display summary for this date
+        loadDailySummary(date, summaryContent);
+        
+        summaryHeader.onclick = () => {
+          const isExpanded = summaryToggle.dataset.expanded === 'true';
+          summaryContent.classList.toggle('hidden', isExpanded);
+          summaryToggle.dataset.expanded = !isExpanded;
+          summaryToggle.style.transform = isExpanded ? 'rotate(-90deg)' : 'rotate(0deg)';
+        };
+        
+        summaryContainer.appendChild(summaryHeader);
+        summaryContainer.appendChild(summaryContent);
+        dateSection.appendChild(summaryContainer);
+
         container.appendChild(dateSection);
       });
     }
@@ -420,5 +624,39 @@
       });
     }
   </script>
-</body>
-</html>
+
+  <!-- Daily Summary Modal -->
+  <div id="summaryModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-white dark:bg-neutral-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div class="p-6 border-b border-neutral-200 dark:border-neutral-700 sticky top-0 bg-white dark:bg-neutral-800">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-bold flex items-center gap-2">
+            <span>✨</span> Daily Summary
+          </h2>
+          <button id="closeSummaryModalBtn" class="text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 text-2xl leading-none">×</button>
+        </div>
+        <p id="summaryDateLabel" class="text-sm text-neutral-600 dark:text-neutral-400 mt-1"></p>
+      </div>
+
+      <div id="summaryModalContent" class="p-6">
+        <div id="summaryModalLoading" class="text-center py-8">
+          <div class="inline-block animate-spin text-3xl">⏳</div>
+          <p class="text-sm text-neutral-600 dark:text-neutral-400 mt-3">Generating your daily summary...</p>
+        </div>
+        <div id="summaryModalError" class="hidden text-rose-600 dark:text-rose-400 text-sm p-4 rounded bg-rose-50 dark:bg-rose-900/10"></div>
+        <div id="summaryModalText" class="hidden prose dark:prose-invert max-w-none text-sm"></div>
+      </div>
+
+      <div id="summaryModalFooter" class="hidden p-6 border-t border-neutral-200 dark:border-neutral-700 flex gap-2 bg-neutral-50 dark:bg-neutral-900">
+        <button id="copySummaryModalBtn" class="flex-1 px-4 py-2 rounded-lg border border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20 text-sm font-medium transition-colors">
+          📋 Copy
+        </button>
+        <button id="closeModalBtn" class="flex-1 px-4 py-2 rounded-lg bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 text-sm font-medium transition-colors">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/history.js"></script>
+  <script src="/js/dailySummary.js"></script>

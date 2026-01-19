@@ -81,3 +81,122 @@ export type MetaRunnerResponse = {
   provider?: "ollama" | "openai"; // LLM provider used
   rawToolResults?: any;  // optional debug data
 };
+
+/**
+ * Daily Summary Types
+ */
+
+export type DailySummaryUserProfile = {
+  age: number;
+  sex: "male" | "female" | "other";
+  weight_lbs: number;
+  diet: string;
+  cholesterolNotes?: string;
+  goals: string[];
+};
+
+export type DailySummaryNutritionItem = {
+  name: string;
+  quantity: string;
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+  sat_fat_g?: number;
+  fiber_g?: number;
+  sodium_mg?: number;
+};
+
+export type DailySummaryMeal = {
+  time: string;
+  items: DailySummaryNutritionItem[];
+  notes?: string;
+};
+
+export type DailySummaryNutritionTotals = {
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  sat_fat_g: number;
+  fiber_g: number;
+  sodium_mg: number;
+  water_oz?: number;
+};
+
+export type DailySummaryNutrition = {
+  meals?: DailySummaryMeal[];
+  totals: DailySummaryNutritionTotals;
+};
+
+export type DailySummaryExerciseSet = {
+  reps?: number;
+  weight_lbs_each?: number;
+  rpe?: number;
+};
+
+export type DailySummaryExercise = {
+  name: string;
+  sets: DailySummaryExerciseSet[];
+  notes?: string;
+};
+
+export type DailySummaryWorkout = {
+  planName: string;
+  day: number;
+  title: string;
+  exercises: DailySummaryExercise[];
+  duration_min: number;
+};
+
+export type DailySummaryRun = {
+  distance_miles: number;
+  pace_min_per_mile?: string;
+  avg_hr?: number;
+  max_hr?: number;
+  duration_min: number;
+  conditions?: string;
+  notes?: string;
+};
+
+export type DailySummaryTraining = {
+  workout?: DailySummaryWorkout;
+  run?: DailySummaryRun;
+};
+
+export type DailySummaryActivity = {
+  steps?: number;
+  active_minutes?: number;
+};
+
+export type DailySummarySleep = {
+  duration_hours?: number;
+  quality?: string;
+};
+
+export type DailySummaryInput = {
+  date: string;
+  timezone?: string;
+  userProfile: DailySummaryUserProfile;
+  nutrition: DailySummaryNutrition;
+  training?: DailySummaryTraining;
+  activity?: DailySummaryActivity;
+  sleep?: DailySummarySleep;
+  notes?: string;
+};
+
+export type DailySummarySections = {
+  highlights: string[];
+  dashHeartHealthy: string;
+  proteinRecovery: string;
+  training: string;
+  redFlags: string;
+  tomorrowPriorities: string;
+};
+
+export type DailySummaryOutput = {
+  date: string;
+  markdown: string;
+  sections: DailySummarySections;
+  generatedAt: string;
+};

@@ -1294,6 +1294,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   dateInput.addEventListener('change', (e) => {
     currentDate = e.target.value;
+    console.log('[Nutrition] Date changed to:', currentDate);
     loadNutritionDay();
   });
 

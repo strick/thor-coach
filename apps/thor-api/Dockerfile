@@ -57,6 +57,9 @@ RUN npm ci --workspaces --omit=dev
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/apps/thor-api/dist ./apps/thor-api/dist
 
+# Copy migrations folder for database setup
+COPY apps/thor-api/migrations ./apps/thor-api/migrations
+
 # Copy shared package.json (needed for module resolution)
 COPY packages/shared/package.json ./packages/shared/
 

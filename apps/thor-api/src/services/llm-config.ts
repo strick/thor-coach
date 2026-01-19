@@ -8,7 +8,8 @@ export type LLMUsageKind =
   | "agent_simple_queries"     // Simple GET operations (get_plan, get_workouts, format results)
   | "workout_parsing"          // Workout text parsing
   | "weekly_summary"           // Weekly summary generation
-  | "nutrition_parsing";       // Nutrition text parsing
+  | "nutrition_parsing"        // Nutrition text parsing
+  | "daily_summary";           // Daily summary generation (low temp, deterministic)
 
 /**
  * LLM Provider Configuration
@@ -31,6 +32,7 @@ export interface RuntimeLLMConfig {
   workout_parsing: LLMProviderConfig;
   weekly_summary: LLMProviderConfig;
   nutrition_parsing: LLMProviderConfig;
+  daily_summary: LLMProviderConfig;
 }
 
 /**
@@ -73,7 +75,8 @@ function initializeFromEnv(): RuntimeLLMConfig {
     agent_simple_queries: { ...simpleQueryConfig },
     workout_parsing: { ...defaultConfig },
     weekly_summary: { ...defaultConfig },
-    nutrition_parsing: { ...defaultConfig }
+    nutrition_parsing: { ...defaultConfig },
+    daily_summary: { ...defaultConfig }
   };
 }
 

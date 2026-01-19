@@ -90,6 +90,16 @@ export function initializeDatabase(database: Database.Database) {
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_food_logs_date ON food_logs(log_date);
+
+  CREATE TABLE IF NOT EXISTS daily_summaries (
+    date TEXT PRIMARY KEY,
+    markdown TEXT NOT NULL,
+    sections JSON NOT NULL,
+    generated_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_daily_summaries_date ON daily_summaries(date DESC);
   `);
 }
 
