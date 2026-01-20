@@ -45,6 +45,9 @@ ${todayDataSection}
 
 Tasks:
 1) Produce a Daily Summary in MARKDOWN with these sections and exact headings:
+## Your Day (Goggins Mode)
+[2-3 sentences with a direct David Goggins / James Cameron vibe. Tell him how he did, what he crushed, what he left on the table. Be honest but motivating. Examples: "You put in solid work today with the strength session and the run—that's what consistency looks like. Protein was light, but the effort was there. Tomorrow's your chance to tighten up and dominate." Or "You showed up, but you know you can do better. The training was solid, but the nutrition discipline fell short. That's not who you are."]
+
 ## Highlights
 ## DASH & Heart-Healthy Check
 ## Protein & Recovery

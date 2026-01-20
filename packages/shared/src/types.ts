@@ -186,6 +186,7 @@ export type DailySummaryInput = {
 };
 
 export type DailySummarySections = {
+  yourDay: string;
   highlights: string[];
   dashHeartHealthy: string;
   proteinRecovery: string;

@@ -9,6 +9,7 @@ import type { DailySummarySections } from "@thor/shared";
  * Parse markdown response from LLM into structured sections
  */
 export function parseDailySummaryOutput(markdown: string): DailySummarySections {
+  const yourDay = extractSection(markdown, "## Your Day (Goggins Mode)");
   const highlights = extractSection(markdown, "## Highlights");
   const dashHeartHealthy = extractSection(markdown, "## DASH & Heart-Healthy Check");
   const proteinRecovery = extractSection(markdown, "## Protein & Recovery");
@@ -17,6 +18,7 @@ export function parseDailySummaryOutput(markdown: string): DailySummarySections 
   const tomorrowPriorities = extractSection(markdown, "## Tomorrow's Priorities");
 
   return {
+    yourDay: yourDay.trim(),
     highlights: parseHighlights(highlights),
     dashHeartHealthy: dashHeartHealthy.trim(),
     proteinRecovery: proteinRecovery.trim(),
@@ -70,6 +72,9 @@ function parseHighlights(content: string): string[] {
 export function validateSummaryOutput(sections: DailySummarySections): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
+  if (!sections.yourDay || sections.yourDay.length === 0) {
+    errors.push("Missing or empty Your Day section");
+  }
   if (!sections.highlights || sections.highlights.length === 0) {
     errors.push("Missing or empty highlights section");
   }
@@ -98,7 +103,10 @@ export function validateSummaryOutput(sections: DailySummarySections): { valid: 
 export function reconstructMarkdown(sections: DailySummarySections): string {
   const parts: string[] = [];
 
-  parts.push("## Highlights");
+  parts.push("## Your Day (Goggins Mode)");
+  parts.push(sections.yourDay);
+
+  parts.push("\n## Highlights");
   if (sections.highlights && sections.highlights.length > 0) {
     for (const highlight of sections.highlights) {
       parts.push(`- ${highlight}`);

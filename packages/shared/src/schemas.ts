@@ -173,6 +173,7 @@ export const DailySummaryInputSchema = z.object({
 });
 
 export const DailySummarySectionsSchema = z.object({
+  yourDay: z.string(),
   highlights: z.array(z.string()),
   dashHeartHealthy: z.string(),
   proteinRecovery: z.string(),

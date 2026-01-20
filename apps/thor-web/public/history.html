@@ -188,6 +188,16 @@
         // Build sections HTML
         let html = '';
         
+        // Your Day (Goggins Mode) at the top
+        if (sections.yourDay) {
+          html += `
+            <div class="mb-4 p-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-l-4 border-orange-600 dark:border-orange-400 rounded">
+              <h5 class="font-semibold text-orange-900 dark:text-orange-100 mb-2">💪 Your Day (Goggins Mode)</h5>
+              <div class="text-xs text-orange-800 dark:text-orange-200 italic">${convertMarkdownToHTML(sections.yourDay)}</div>
+            </div>
+          `;
+        }
+        
         if (sections.highlights && sections.highlights.length > 0) {
           html += `
             <div class="mb-4">
