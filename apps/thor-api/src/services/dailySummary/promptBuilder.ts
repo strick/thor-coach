@@ -30,7 +30,9 @@ function buildSystemPrompt(): string {
  * Build user message with profile and daily data
  */
 function buildUserPrompt(input: DailySummaryInput): string {
-  const proteinTarget = estimateProteinTarget(input.userProfile.weight_lbs);
+  // Use actual protein target from user profile if available, otherwise estimate
+  const proteinTarget = (input.userProfile as any).proteinTarget || 
+                        estimateProteinTarget(input.userProfile.weight_lbs);
 
   const userProfileSection = formatUserProfile(input.userProfile, proteinTarget);
   const todayDataSection = formatTodayData(input);

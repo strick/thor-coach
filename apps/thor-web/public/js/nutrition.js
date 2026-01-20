@@ -3,7 +3,11 @@
  */
 
 const API_BASE = `http://${window.location.hostname}:3000/api`;
-let currentDate = new Date().toISOString().slice(0, 10);
+// Use local date (not UTC) to match user's timezone
+const today = new Date();
+let currentDate = today.getFullYear() + '-' + 
+                   String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                   String(today.getDate()).padStart(2, '0');
 
 // Check if userId is provided in URL query parameter
 const urlParams = new URLSearchParams(window.location.search);
@@ -1288,7 +1292,8 @@ async function createNewUser(name) {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-  dateInput.valueAsDate = new Date();
+  // Set date input to today's local date
+  dateInput.value = currentDate;
   loadNutritionDay();
   loadGoals();
 

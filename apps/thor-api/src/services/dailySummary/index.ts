@@ -105,14 +105,22 @@ function collectDailyData(date: string): DailySummaryInput {
   // Collect sleep data
   const sleep = collectSleepData(date);
 
-  // Get user profile (hardcoded for now - in future could be from DB)
+  // Get user profile and goals from database
+  const userGoals = db.prepare(`
+    SELECT daily_protein_target_g, max_daily_sodium_mg, min_daily_fiber_g, max_daily_saturated_fat_g
+    FROM nutrition_goals
+    WHERE user_id = ?
+  `).get('user-main') as any;
+
   const userProfile = {
     age: 41,
     sex: "male" as const,
     weight_lbs: 195,
     diet: "DASH",
     cholesterolNotes: "genetically high cholesterol; LDL under 70 with meds",
-    goals: ["fat loss", "muscle building", "better consistency"]
+    goals: ["fat loss", "muscle building", "better consistency"],
+    // Use actual user goals from database if available
+    proteinTarget: userGoals?.daily_protein_target_g || 195 * 1.8
   };
 
   return {
