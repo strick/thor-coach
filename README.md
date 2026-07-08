@@ -7,23 +7,43 @@ OpenAI SDK, Docker, and the agent/MCP containers.
 
 ## Run
 
+First, create your `.env`:
+
 ```bash
 cp .env.example .env   # fill in OPENAI_API_KEY (and Strava creds if you use sync)
+```
+
+Then pick either way to run it:
+
+**Bare Node 24** — no install, no build:
+
+```bash
 npm start              # → http://localhost:3100
 ```
 
-No `npm install`. No build. No Docker.
+**Docker** — Node 24 pinned, restarts on boot, `America/New_York` timezone:
+
+```bash
+docker compose up -d --build   # → http://localhost:3100
+docker compose logs -f         # follow logs
+docker compose down            # stop
+```
+
+The image is a single `node:24-slim` container (still zero npm deps) that bind-mounts
+`./data`, so the SQLite database and backups live on the host and survive rebuilds.
 
 ### Runs automatically
 
-Installed as a systemd user service (`~/.config/systemd/user/thor.service`, lingering
-enabled) so it starts whenever the distro boots, and a silent Windows Startup script
-(`thor-wsl.vbs`) boots the distro at logon. Manage it with:
+- **Docker:** `docker-compose.yml` sets `restart: unless-stopped`, so the container
+  comes back after reboots and crashes as long as the Docker daemon is running.
+- **Bare Node:** installed as a systemd user service (`~/.config/systemd/user/thor.service`,
+  lingering enabled) so it starts whenever the distro boots, with a silent Windows
+  Startup script (`thor-wsl.vbs`) booting the distro at logon. Manage it with:
 
-```bash
-systemctl --user status|restart|stop thor
-journalctl --user -u thor -f     # logs
-```
+  ```bash
+  systemctl --user status|restart|stop thor
+  journalctl --user -u thor -f     # logs
+  ```
 
 ## What replaced what
 
@@ -32,7 +52,7 @@ journalctl --user -u thor -f     # logs
 | thor-api (Express + better-sqlite3) | `server.js` + `src/` (node:http + node:sqlite) |
 | thor-web (static server) | same process, `public/` |
 | thor-agent, health-agent, meta-runner, health-mcp | one tool-calling loop: `src/services/chat.js` → `/api/chat` |
-| docker-compose, 6 Dockerfiles | `npm start` |
+| docker-compose, 6 Dockerfiles | `npm start` — or one optional container |
 
 ## Features
 
@@ -64,7 +84,13 @@ SQLite at `data/workout.db` (WAL mode). Schema is created/seeded automatically o
 boot; the database migrated from the old stack works as-is. `data/` is gitignored.
 
 A consistent snapshot (`VACUUM INTO`) is written to `data/backups/workout-YYYY-MM-DD.db`
-once per day (checked hourly, in-process — no external cron), keeping the last 14.
+once per day (checked hourly, in-process — no external cron), keeping the last 14. Each
+snapshot is also mirrored off-machine to `THOR_BACKUP_MIRROR` (default
+`/mnt/g/backups/thor`) when that path is mounted; it no-ops silently otherwise.
+
+Under Docker the bind-mounted `./data` keeps the database and local snapshots on the
+host. To keep the off-machine mirror working too, mount its drive into the container
+(e.g. add `- /mnt/g/backups/thor:/mnt/g/backups/thor` to `docker-compose.yml`).
 
 ## Security notes
 
