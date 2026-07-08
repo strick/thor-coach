@@ -1,0 +1,22 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Database
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+
+# Node
+node_modules/
+*.log
+
+# Claude Code — machine-local settings
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db

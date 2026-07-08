@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Thor — Running</title>
+  <meta name="theme-color" content="#0b0f17" />
+  <link rel="stylesheet" href="css/app.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
+</head>
+<body>
+  <main class="container">
+    <div class="page-head">
+      <h1>Running</h1>
+      <span class="sub" id="strava-status"></span>
+    </div>
+
+    <div class="grid cols-4 mb">
+      <div class="card"><div class="stat" id="s-runs">–</div><div class="stat-label">Total runs</div></div>
+      <div class="card"><div class="stat" id="s-miles">–</div><div class="stat-label">Total miles</div></div>
+      <div class="card"><div class="stat" id="s-pace">–</div><div class="stat-label">Avg pace (min/mi)</div></div>
+      <div class="card"><div class="stat" id="s-cal">–</div><div class="stat-label">Calories burned</div></div>
+    </div>
+
+    <div class="grid cols-2 mb">
+      <div class="card">
+        <h2><span class="accent">🟠</span> Strava sync</h2>
+        <div class="row">
+          <div class="fit" style="width:160px"><label>Date</label><input type="date" id="sync-date" /></div>
+          <button id="btn-sync" class="btn-gold fit">Sync from Strava</button>
+          <button id="btn-backfill" class="btn-ghost fit">⏪ Backfill 30 days</button>
+        </div>
+        <div id="sync-result" class="mt"></div>
+        <details class="mt"><summary>Sync history</summary><div id="sync-history" class="list mt"></div></details>
+      </div>
+
+      <div class="card">
+        <h2>Log run manually</h2>
+        <div class="row">
+          <div><label>Date</label><input type="date" id="r-date" /></div>
+          <div><label>Distance (mi)</label><input type="number" id="r-dist" step="0.01" /></div>
+          <div><label>Duration (min)</label><input type="number" id="r-dur" /></div>
+        </div>
+        <div class="row">
+          <div><label>Avg HR</label><input type="number" id="r-hr" /></div>
+          <div><label>Effort</label><select id="r-effort"><option value="">—</option><option>easy</option><option>moderate</option><option>hard</option><option>tempo</option></select></div>
+          <div><label>Surface</label><select id="r-surface"><option value="">—</option><option>road</option><option>trail</option><option>track</option><option>treadmill</option><option>mixed</option></select></div>
+        </div>
+        <label>Notes</label><input id="r-notes" />
+        <button id="btn-run" class="btn-ghost mt">Add run</button>
+      </div>
+    </div>
+
+    <div class="card mb">
+      <h2>Sessions</h2>
+      <div id="sessions" class="list"></div>
+    </div>
+
+    <div class="card">
+      <h2>Weekly mileage</h2>
+      <div id="weekly"></div>
+    </div>
+  </main>
+  <script type="module" src="js/running.js"></script>
+</body>
+</html>

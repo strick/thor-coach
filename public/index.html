@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Thor — Dashboard</title>
+  <meta name="theme-color" content="#0b0f17" />
+  <link rel="stylesheet" href="css/app.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
+</head>
+<body>
+  <main class="container">
+    <div class="page-head">
+      <h1 id="greeting">Today</h1>
+      <span class="sub"><span id="streak"></span> <span id="today-label"></span></span>
+    </div>
+
+    <div class="grid cols-4 mb" id="stat-cards">
+      <div class="card"><div class="stat" id="stat-workouts">–</div><div class="stat-label">Workouts this week</div></div>
+      <div class="card"><div class="stat" id="stat-volume">–</div><div class="stat-label">Volume this week (lbs)</div></div>
+      <div class="card"><div class="stat" id="stat-miles">–</div><div class="stat-label">Miles this week</div></div>
+      <div class="card"><div class="stat" id="stat-protein">–</div><div class="stat-label">Protein today (g)</div></div>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h2><span class="accent">⚡</span> Quick log workout</h2>
+        <p class="muted small">Type it like you'd say it — "3x12 floor press @45, then 20 15 10 pushups, brutal"</p>
+        <textarea id="quick-log" placeholder="What did you lift?"></textarea>
+        <div class="row mt">
+          <button id="btn-log" class="fit">Log it</button>
+          <span class="muted small" id="log-status"></span>
+        </div>
+        <div id="log-results" class="list mt"></div>
+        <div class="row mt" style="align-items:center">
+          <h2 style="margin:0" class="fit">Rest timer</h2>
+          <span id="timer-display" class="pill gray fit" style="font-size:16px;min-width:64px;justify-content:center">—</span>
+          <button class="btn-ghost btn-sm fit" data-timer="60">60s</button>
+          <button class="btn-ghost btn-sm fit" data-timer="90">90s</button>
+          <button class="btn-ghost btn-sm fit" data-timer="120">2m</button>
+          <button class="btn-ghost btn-sm fit" id="timer-stop" style="display:none">✕</button>
+        </div>
+        <h2 class="mt">Today's plan</h2>
+        <div id="today-plan" class="list"></div>
+      </div>
+
+      <div class="card">
+        <h2>Nutrition today</h2>
+        <div id="nutrition-today"><div class="empty">Loading…</div></div>
+        <a class="btn btn-ghost btn-sm mt" href="nutrition.html">Open nutrition →</a>
+      </div>
+    </div>
+
+    <div class="grid cols-2 mt">
+      <div class="card">
+        <h2><span class="accent">🔥</span> Daily summary</h2>
+        <div class="row mb">
+          <button id="btn-summary" class="btn-gold fit">Generate for today</button>
+          <span class="muted small" id="summary-status"></span>
+        </div>
+        <div id="daily-summary" class="md"><div class="empty">No summary yet for today.</div></div>
+      </div>
+      <div class="card">
+        <h2>Weigh-in</h2>
+        <div class="row" style="align-items:center">
+          <div class="fit" style="width:110px"><input type="number" id="weigh-in" step="0.1" placeholder="lbs" /></div>
+          <button id="btn-weight" class="btn-ghost btn-sm fit">Save</button>
+          <span class="muted small" id="weight-trend"></span>
+        </div>
+        <h2 class="mt">Reflection</h2>
+        <textarea id="reflection" placeholder="How did today feel?"></textarea>
+        <button id="btn-reflection" class="btn-ghost btn-sm mt">Save reflection</button>
+        <h2 class="mt">Latest run <button id="btn-sync-now" class="btn-ghost btn-sm" style="float:right;margin-top:-4px">🟠 Sync Strava</button></h2>
+        <div id="latest-run"><div class="empty">No runs yet.</div></div>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+services:
+  thor:
+    build: .
+    image: thor:2.0.0
+    container_name: thor
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    env_file:
+      - .env
+    environment:
+      # Authoritative inside the container; overrides anything in .env.
+      TZ: America/New_York
+      HOST: 0.0.0.0
+      THOR_DB_PATH: /data/workout.db
+    volumes:
+      # Existing DB + backups on the host carry straight over.
+      - ./data:/data

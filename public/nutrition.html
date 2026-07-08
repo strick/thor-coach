@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Thor — Nutrition</title>
+  <meta name="theme-color" content="#0b0f17" />
+  <link rel="stylesheet" href="css/app.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
+</head>
+<body>
+  <main class="container">
+    <div class="page-head">
+      <h1>Nutrition</h1>
+      <span class="sub">
+        <select id="user" style="width:auto;display:inline-block"></select>
+        <input type="date" id="date" style="width:auto;display:inline-block" />
+      </span>
+    </div>
+
+    <div class="grid cols-2 mb">
+      <div class="card">
+        <h2><span class="accent">⚡</span> Log food with AI</h2>
+        <textarea id="food-text" placeholder='"2 eggs, greek yogurt with blueberries and a slice of whole wheat toast for breakfast"'></textarea>
+        <div class="row mt">
+          <div class="fit" style="width:140px">
+            <label>Meal</label>
+            <select id="meal-type">
+              <option value="">auto</option>
+              <option>breakfast</option><option>lunch</option><option>dinner</option><option>snack</option>
+            </select>
+          </div>
+          <button id="btn-food" class="fit">Parse & log</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Day totals vs targets</h2>
+        <div id="totals"><div class="empty">Loading…</div></div>
+      </div>
+    </div>
+
+    <div class="card mb">
+      <h2><span class="accent">🥗</span> Food library — build a meal from real numbers</h2>
+      <div id="frequent-row" class="mb"></div>
+      <div class="row">
+        <div><label>Search</label><input id="lib-search" placeholder="chicken, rice, banana, pizza…" /></div>
+        <div class="fit" style="width:180px"><label>Category</label><select id="lib-category"><option value="">all</option></select></div>
+        <button id="btn-barcode" class="btn-ghost fit">📷 Barcode</button>
+      </div>
+      <div id="barcode-panel" class="mt" style="display:none">
+        <div class="row">
+          <div><label>Barcode digits</label><input id="bc-code" inputmode="numeric" placeholder="e.g. 038000138416" /></div>
+          <button id="bc-lookup" class="fit">Look up</button>
+          <button id="bc-scan" class="btn-gold fit" style="display:none">Use camera</button>
+        </div>
+        <video id="bc-video" style="display:none;width:100%;max-height:260px;border-radius:12px;margin-top:10px" muted playsinline></video>
+        <div id="bc-result" class="list mt"></div>
+      </div>
+      <div id="lib-results" class="list mt"></div>
+
+      <div id="draft-wrap" style="display:none">
+        <h2 class="mt">Your picks</h2>
+        <div id="draft" class="list"></div>
+        <div id="draft-totals" class="muted small mt"></div>
+        <div class="row mt">
+          <div class="fit" style="width:140px">
+            <label>Meal</label>
+            <select id="lib-meal-type"><option value="">auto</option><option>breakfast</option><option>lunch</option><option>dinner</option><option>snack</option></select>
+          </div>
+          <button id="btn-lib-log" class="fit">Log to this day</button>
+          <button id="btn-lib-template" class="btn-gold fit">Save as template</button>
+          <button id="btn-lib-clear" class="btn-ghost fit btn-sm">Clear</button>
+        </div>
+      </div>
+
+      <details class="mt"><summary>Add a custom food to the library</summary>
+        <div class="row mt">
+          <div><label>Name</label><input id="cf-name" placeholder="Mom's lasagna" /></div>
+          <div class="fit" style="width:140px"><label>Serving</label><input id="cf-serving" placeholder="1 slice" /></div>
+        </div>
+        <div class="row">
+          <div><label>Calories</label><input type="number" id="cf-cal" /></div>
+          <div><label>Protein g</label><input type="number" id="cf-protein" /></div>
+          <div><label>Carbs g</label><input type="number" id="cf-carbs" /></div>
+          <div><label>Fat g</label><input type="number" id="cf-fat" /></div>
+        </div>
+        <div class="row">
+          <div><label>Fiber g</label><input type="number" id="cf-fiber" /></div>
+          <div><label>Sodium mg</label><input type="number" id="cf-sodium" /></div>
+          <div><label>Sat fat g</label><input type="number" id="cf-satfat" /></div>
+          <div><label>Chol mg</label><input type="number" id="cf-chol" /></div>
+        </div>
+        <button id="btn-custom-food" class="btn-ghost mt btn-sm">Add to library</button>
+      </details>
+    </div>
+
+    <div class="card mb">
+      <h2>Meals <button id="btn-copy-yesterday" class="btn-ghost btn-sm" style="float:right;margin-top:-4px">⧉ Copy previous day</button></h2>
+      <div id="meals" class="list"></div>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h2>Templates</h2>
+        <div id="templates" class="list"></div>
+      </div>
+      <div class="card">
+        <h2>Goals</h2>
+        <div class="row">
+          <div><label>Protein target (g)</label><input type="number" id="g-protein" /></div>
+          <div><label>Fiber min (g)</label><input type="number" id="g-fiber" /></div>
+        </div>
+        <div class="row">
+          <div><label>Sodium max (mg)</label><input type="number" id="g-sodium" /></div>
+          <div><label>Sat fat max (g)</label><input type="number" id="g-satfat" /></div>
+        </div>
+        <div class="row">
+          <div><label>Cholesterol max (mg)</label><input type="number" id="g-chol" /></div>
+          <div><label>Added sugar max (g)</label><input type="number" id="g-sugar" /></div>
+        </div>
+        <button id="btn-goals" class="btn-ghost mt">Save goals</button>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="js/nutrition.js"></script>
+</body>
+</html>

@@ -1,0 +1,76 @@
+# ⚡ Thor v2
+
+AI-native workout, nutrition, running and health tracker. Complete rewrite of the old
+6-container `thor-stack` as **one Node 24 process with zero npm dependencies** —
+built-in `node:sqlite`, `fetch`, and `http` replace better-sqlite3, Express, the
+OpenAI SDK, Docker, and the agent/MCP containers.
+
+## Run
+
+```bash
+cp .env.example .env   # fill in OPENAI_API_KEY (and Strava creds if you use sync)
+npm start              # → http://localhost:3100
+```
+
+No `npm install`. No build. No Docker.
+
+### Runs automatically
+
+Installed as a systemd user service (`~/.config/systemd/user/thor.service`, lingering
+enabled) so it starts whenever the distro boots, and a silent Windows Startup script
+(`thor-wsl.vbs`) boots the distro at logon. Manage it with:
+
+```bash
+systemctl --user status|restart|stop thor
+journalctl --user -u thor -f     # logs
+```
+
+## What replaced what
+
+| Old (6 containers) | New |
+| --- | --- |
+| thor-api (Express + better-sqlite3) | `server.js` + `src/` (node:http + node:sqlite) |
+| thor-web (static server) | same process, `public/` |
+| thor-agent, health-agent, meta-runner, health-mcp | one tool-calling loop: `src/services/chat.js` → `/api/chat` |
+| docker-compose, 6 Dockerfiles | `npm start` |
+
+## Features
+
+- **Dashboard** — activity streak, week stats, AI quick-log, **tap-to-log today's plan** (prefilled with your last session, one-tap "Same as last", updates in place mid-workout), macro bars, Goggins-mode daily insights (auto-generated in the evening, with a "What You're Doing Wrong" section built from your last 7 days), Strava one-tap + auto-sync, reflections
+- **Trends** — weekly lifting volume, per-exercise weight progression, weekly mileage, pace trend, protein vs target and calories for the last 14 logged days (zero-dep SVG charts)
+- **Workouts** — natural-language logging via LLM (`"3x12 floor press @45"`), manual logging, history with inline edit/delete, progression trends, weekly AI summaries
+- **Nutrition** — natural-language food logging with USDA-style estimates, meals/items, DASH-oriented targets (sodium, sat fat, cholesterol, fiber), templates, per-user goals
+- **Food library** — 131 seeded common foods with exact USDA-style per-serving values (searchable, categorized); tap to build a picks tray with serving steppers and live totals, then log it as a meal or save it straight as a template. Add/delete your own custom foods. Library logging bypasses the LLM entirely — consistent numbers every time.
+- **Running** — manual logs + **Strava sync** (refresh token persisted & rotated in DB, single-day or 30/90-day backfill), stats, weekly mileage
+- **Body** — daily weigh-ins from the dashboard, 60-day trend chart, fed into daily insights
+- **Goals** — weekly workout/mileage/volume targets with live progress on the dashboard stats
+- **Mid-workout** — rest timer with beep (auto-starts after each logged set), progressive-overload nudges ("50 lbs for 6 sessions — load 55 today"), editable workout plan (add/rename/move/delete exercises per day)
+- **Health** — migraine/sleep/activity events with intensity tracking
+- **Barcode scanning** — camera (Chrome BarcodeDetector) or manual entry → OpenFoodFacts lookup → picks tray or library
+- **Export** — one-click CSV (workouts, nutrition, running, body) and full JSON dump from Settings
+- **Coach** — chat with tool-calling over all of the above (OpenAI or Ollama)
+- **Settings** — connection status, per-usage LLM routing (openai/ollama per job), users
+
+## Configuration
+
+All via `.env` (see `.env.example`). LLM provider defaults to OpenAI when
+`OPENAI_API_KEY` is set; any usage (parsing, summaries, chat) can be routed to a
+local Ollama model from the Settings page. Ollama is reached through its
+OpenAI-compatible `/v1` endpoint.
+
+## Data & backups
+
+SQLite at `data/workout.db` (WAL mode). Schema is created/seeded automatically on
+boot; the database migrated from the old stack works as-is. `data/` is gitignored.
+
+A consistent snapshot (`VACUUM INTO`) is written to `data/backups/workout-YYYY-MM-DD.db`
+once per day (checked hourly, in-process — no external cron), keeping the last 14.
+
+## Security notes
+
+- All `/api/*` routes (except `/api/health`) require the shared PIN from `THOR_PIN`
+  in `.env`, sent as the `X-Thor-Pin` header. The browser prompts once and remembers
+  it in localStorage. Blank `THOR_PIN` disables auth.
+- API responses carry CSP/nosniff/frame-deny headers; request bodies capped at 1 MB.
+- The server binds 0.0.0.0 so phones on your LAN can reach it. PIN or not,
+  don't port-forward it to the internet.

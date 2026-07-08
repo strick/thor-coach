@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Thor — Trends</title>
+  <meta name="theme-color" content="#0b0f17" />
+  <link rel="stylesheet" href="css/app.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
+</head>
+<body>
+  <main class="container">
+    <div class="page-head">
+      <h1>Trends</h1>
+      <span class="sub" id="headline"></span>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card chart-card">
+        <h2>Lifting volume by week (lbs)</h2>
+        <div id="c-volume"></div>
+      </div>
+      <div class="card chart-card">
+        <h2 style="display:flex;justify-content:space-between;align-items:center">Exercise progression
+          <select id="ex-select"></select></h2>
+        <div id="c-exercise"></div>
+        <div id="ex-meta" class="muted small mt"></div>
+      </div>
+      <div class="card chart-card">
+        <h2>Running — weekly miles</h2>
+        <div id="c-miles"></div>
+      </div>
+      <div class="card chart-card">
+        <h2>Running — pace per run (min/mi, lower is better)</h2>
+        <div id="c-pace"></div>
+      </div>
+      <div class="card chart-card">
+        <h2>Body weight (last 60 days)</h2>
+        <div id="c-weight"></div>
+        <div id="weight-meta" class="muted small mt"></div>
+      </div>
+      <div class="card chart-card">
+        <h2>Protein — last 14 logged days vs target</h2>
+        <div id="c-protein"></div>
+      </div>
+      <div class="card chart-card">
+        <h2>Calories — last 14 logged days</h2>
+        <div id="c-cal"></div>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="js/trends.js"></script>
+</body>
+</html>
