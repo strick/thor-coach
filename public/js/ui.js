@@ -5,6 +5,21 @@ function pinHeaders() {
   return pin ? { "X-Thor-Pin": pin } : {};
 }
 
+// A single shared PIN prompt: when the page fires many calls at once and they
+// all 401, only one prompt appears and every caller waits on it (instead of a
+// stack of dialogs the browser suppresses, leaving the page blank).
+let pinPrompt = null;
+function askPin() {
+  if (!pinPrompt) {
+    pinPrompt = new Promise((resolve) => {
+      const pin = prompt("🔒 Enter your Thor PIN:");
+      if (pin) localStorage.setItem("thor_pin", pin.trim());
+      resolve(Boolean(pin));
+    }).finally(() => { pinPrompt = null; });
+  }
+  return pinPrompt;
+}
+
 export async function api(path, options = {}, retried = false) {
   const opts = { ...options, headers: { ...pinHeaders(), ...(options.headers || {}) } };
   if (opts.body && typeof opts.body !== "string") {
@@ -13,11 +28,7 @@ export async function api(path, options = {}, retried = false) {
   }
   const resp = await fetch(path, opts);
   if (resp.status === 401 && !retried) {
-    const pin = prompt("🔒 Enter your Thor PIN:");
-    if (pin) {
-      localStorage.setItem("thor_pin", pin.trim());
-      return api(path, options, true);
-    }
+    if (await askPin()) return api(path, options, true);
   }
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) throw new Error(data.error || `${resp.status} ${resp.statusText}`);

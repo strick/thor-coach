@@ -19,9 +19,12 @@ function gatherDayData(date) {
   const runs = db.prepare("SELECT * FROM running_sessions WHERE session_date = ?").all(date);
   const healthEvents = db.prepare("SELECT * FROM health_events WHERE date = ?").all(date);
   const reflection = db.prepare("SELECT body FROM daily_reflections WHERE date = ?").get(date)?.body || null;
+  const water = db.prepare("SELECT glasses FROM water_intake WHERE date = ?").get(date)?.glasses ?? 0;
+  const waterGoal = Number(getSetting("goals.water_glasses") || 8);
   return {
     date,
     nutrition: nutrition.exists ? { totals: nutrition.totals, targets: nutrition.targets, meals: nutrition.meals.map((m) => ({ type: m.meal_type, items: m.items.map((i) => i.food_name) })) } : null,
+    water: { glasses: water, goal: waterGoal, oz: water * 8 },
     training: workouts.map((w) => ({ date: w.session_date, total_volume: w.total_volume, exercises: w.logs.map((l) => ({ name: l.exercise, sets: l.sets, reps: l.reps, weight: l.weight_lbs, notes: l.notes })) })),
     runs: runs.map((r) => ({ miles: r.distance_miles, minutes: r.duration_minutes, pace: r.pace_min_per_mile, avg_hr: r.avg_heart_rate })),
     health_events: healthEvents,

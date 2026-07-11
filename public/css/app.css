@@ -183,6 +183,20 @@ tr:last-child td { border-bottom: none; }
 }
 @keyframes pop { from { opacity: 0; transform: translateY(-4px); } }
 
+/* --- Water tracker --- */
+.water-glasses { display: flex; flex-wrap: wrap; gap: 7px; }
+.water-glasses .glass {
+  width: 26px; height: 32px; border-radius: 4px 4px 8px 8px;
+  border: 2px solid var(--border); background: var(--panel-2);
+  cursor: pointer; transition: 0.15s; position: relative; overflow: hidden;
+}
+.water-glasses .glass:hover { border-color: var(--accent); transform: translateY(-2px); }
+.water-glasses .glass.full {
+  border-color: var(--accent);
+  background: linear-gradient(to top, var(--accent) 0%, var(--accent) 78%, color-mix(in srgb, var(--accent) 45%, transparent) 100%);
+}
+.water-glasses .glass.over { border-color: var(--gold); background: var(--gold); }
+
 /* --- Charts --- */
 .chart-card svg { display: block; margin-top: 6px; }
 .chart-card select { width: auto; }

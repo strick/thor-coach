@@ -108,6 +108,33 @@ const TOOLS = [
       db.prepare("SELECT * FROM body_metrics WHERE date BETWEEN ? AND ? ORDER BY date").all(start || "0000-01-01", end || "9999-12-31"),
   },
   {
+    name: "log_water",
+    description: "Add glasses of water (8 oz each) for a date, or set an absolute count. Positive delta adds, negative removes.",
+    parameters: {
+      type: "object",
+      properties: { date: { type: "string" }, delta: { type: "integer" }, glasses: { type: "integer" } },
+    },
+    run: ({ date, delta, glasses }) => {
+      const d = date || todayISO();
+      const current = db.prepare("SELECT glasses FROM water_intake WHERE date = ?").get(d)?.glasses ?? 0;
+      const next = Math.max(0, glasses != null ? glasses : current + (delta != null ? delta : 1));
+      db.prepare(
+        `INSERT INTO water_intake (date, glasses, updated_at) VALUES (?, ?, datetime('now'))
+         ON CONFLICT(date) DO UPDATE SET glasses = excluded.glasses, updated_at = excluded.updated_at`
+      ).run(d, next);
+      return { date: d, glasses: next, oz: next * 8 };
+    },
+  },
+  {
+    name: "get_water",
+    description: "Get water intake (glasses) for a date, defaults to today.",
+    parameters: { type: "object", properties: { date: { type: "string" } } },
+    run: ({ date }) => {
+      const d = date || todayISO();
+      return { date: d, glasses: db.prepare("SELECT glasses FROM water_intake WHERE date = ?").get(d)?.glasses ?? 0 };
+    },
+  },
+  {
     name: "get_health_events",
     description: "Get health events between two dates.",
     parameters: { type: "object", properties: { start: { type: "string" }, end: { type: "string" } } },

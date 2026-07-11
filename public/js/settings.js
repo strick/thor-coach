@@ -93,6 +93,7 @@ async function loadGoals() {
   $("goal-workouts").value = g.weekly_workouts ?? "";
   $("goal-miles").value = g.weekly_miles ?? "";
   $("goal-volume").value = g.weekly_volume_lbs ?? "";
+  $("goal-water").value = g.water_glasses ?? 8;
 }
 
 $("btn-goals").addEventListener("click", async () => {
@@ -100,7 +101,7 @@ $("btn-goals").addEventListener("click", async () => {
   try {
     await api("/api/goals", {
       method: "POST",
-      body: { weekly_workouts: num("goal-workouts"), weekly_miles: num("goal-miles"), weekly_volume_lbs: num("goal-volume") },
+      body: { weekly_workouts: num("goal-workouts"), weekly_miles: num("goal-miles"), weekly_volume_lbs: num("goal-volume"), water_glasses: num("goal-water") },
     });
     toast("Goals saved — dashboard will show progress");
   } catch (err) { toast(err.message, true); }

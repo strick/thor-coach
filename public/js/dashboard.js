@@ -343,6 +343,45 @@ $("btn-weight").addEventListener("click", async () => {
   } catch (err) { toast(err.message, true); }
 });
 
+// --- Water tracker ---
+
+let waterState = { glasses: 0, goal: 8 };
+
+function renderWater() {
+  const { glasses, goal } = waterState;
+  const cells = Math.max(goal, glasses);
+  let html = "";
+  for (let i = 1; i <= cells; i += 1) {
+    const cls = i <= glasses ? (i > goal ? "over" : "full") : "";
+    html += `<div class="glass ${cls}" data-set="${i}" title="${i} glass${i > 1 ? "es" : ""}"></div>`;
+  }
+  $("water-glasses").innerHTML = html;
+  $("water-label").innerHTML = `${glasses} / ${goal} glasses · ${glasses * 8} oz` +
+    (glasses >= goal ? ' <span class="pill green">goal hit 💧</span>' : "");
+  $("water-glasses").querySelectorAll("[data-set]").forEach((g) =>
+    g.addEventListener("click", () => {
+      // tapping the current level clears it back one; otherwise set to tapped level
+      const n = Number(g.dataset.set);
+      setWater(n === waterState.glasses ? n - 1 : n);
+    })
+  );
+}
+
+async function loadWater() {
+  waterState = await api(`/api/water?date=${today}`);
+  renderWater();
+}
+
+async function setWater(glasses) {
+  try {
+    waterState = await api("/api/water", { method: "POST", body: { date: today, glasses: Math.max(0, glasses) } });
+    renderWater();
+  } catch (err) { toast(err.message, true); }
+}
+
+$("water-plus").addEventListener("click", () => setWater(waterState.glasses + 1));
+$("water-minus").addEventListener("click", () => setWater(waterState.glasses - 1));
+
 const hour = new Date().getHours();
 $("greeting").textContent = hour < 12 ? "Morning. Go earn it." : hour < 17 ? "Afternoon check-in" : "Evening review";
 
@@ -355,4 +394,5 @@ loadSummary().then((hasToday) => {
 loadReflection().catch(() => {});
 loadLatestRun().catch(() => {});
 loadWeight().catch(() => {});
+loadWater().catch(() => {});
 autoSyncStrava();

@@ -63,6 +63,7 @@ The image is a single `node:24-slim` container (still zero npm deps) that bind-m
 - **Food library** — 131 seeded common foods with exact USDA-style per-serving values (searchable, categorized); tap to build a picks tray with serving steppers and live totals, then log it as a meal or save it straight as a template. Add/delete your own custom foods. Library logging bypasses the LLM entirely — consistent numbers every time.
 - **Running** — manual logs + **Strava sync** (refresh token persisted & rotated in DB, single-day or 30/90-day backfill), stats, weekly mileage
 - **Body** — daily weigh-ins from the dashboard, 60-day trend chart, fed into daily insights
+- **Water** — tap-to-fill glass tracker on the dashboard (8 oz each, configurable daily goal), logged by date, fed to the coach and CSV export
 - **Goals** — weekly workout/mileage/volume targets with live progress on the dashboard stats
 - **Mid-workout** — rest timer with beep (auto-starts after each logged set), progressive-overload nudges ("50 lbs for 6 sessions — load 55 today"), editable workout plan (add/rename/move/delete exercises per day)
 - **Health** — migraine/sleep/activity events with intensity tracking

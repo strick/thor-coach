@@ -138,8 +138,32 @@ export function registerRoutes(app) {
     return { deleted: params.date };
   });
 
+  // --- Water intake (glasses = 8 oz each) ---
+  const waterGoal = () => Number(getSetting("goals.water_glasses") || 8);
+  const waterFor = (date) => ({
+    date,
+    glasses: db.prepare("SELECT glasses FROM water_intake WHERE date = ?").get(date)?.glasses ?? 0,
+    goal: waterGoal(),
+  });
+  app.get("/api/water", ({ query }) => {
+    if (query.date || (!query.start && !query.end)) return waterFor(query.date || todayISO());
+    return db.prepare("SELECT date, glasses FROM water_intake WHERE date BETWEEN ? AND ? ORDER BY date")
+      .all(query.start || "0000-01-01", query.end || "9999-12-31");
+  });
+  // Adjust by delta (default +1) or set an absolute count; result never goes below 0.
+  app.post("/api/water", ({ body }) => {
+    const date = body.date || todayISO();
+    const current = db.prepare("SELECT glasses FROM water_intake WHERE date = ?").get(date)?.glasses ?? 0;
+    const next = Math.max(0, body.glasses != null ? Number(body.glasses) : current + (body.delta != null ? Number(body.delta) : 1));
+    db.prepare(
+      `INSERT INTO water_intake (date, glasses, updated_at) VALUES (?, ?, datetime('now'))
+       ON CONFLICT(date) DO UPDATE SET glasses = excluded.glasses, updated_at = excluded.updated_at`
+    ).run(date, next);
+    return waterFor(date);
+  });
+
   // --- Weekly goals ---
-  app.get("/api/goals", () => JSON.parse(getSetting("goals.weekly") || "{}"));
+  app.get("/api/goals", () => ({ ...JSON.parse(getSetting("goals.weekly") || "{}"), water_glasses: waterGoal() }));
   app.post("/api/goals", ({ body }) => {
     const goals = {
       weekly_workouts: body.weekly_workouts != null ? Number(body.weekly_workouts) : null,
@@ -147,7 +171,8 @@ export function registerRoutes(app) {
       weekly_volume_lbs: body.weekly_volume_lbs != null ? Number(body.weekly_volume_lbs) : null,
     };
     setSetting("goals.weekly", JSON.stringify(goals));
-    return goals;
+    if (body.water_glasses != null) setSetting("goals.water_glasses", String(Math.max(1, Number(body.water_glasses))));
+    return { ...goals, water_glasses: waterGoal() };
   });
 
   // --- Data export ---
@@ -155,7 +180,7 @@ export function registerRoutes(app) {
     "users", "plans", "exercises", "workout_sessions", "exercise_logs", "weekly_summaries",
     "health_events", "nutrition_goals", "nutrition_days", "nutrition_day_targets", "nutrition_day_totals",
     "nutrition_meals", "nutrition_meal_items", "nutrition_meal_totals", "nutrition_templates",
-    "running_sessions", "body_metrics", "daily_summaries", "daily_reflections", "food_catalog",
+    "running_sessions", "body_metrics", "water_intake", "daily_summaries", "daily_reflections", "food_catalog",
   ];
   app.get("/api/export", () => ({
     exported_at: new Date().toISOString(),
@@ -178,6 +203,7 @@ export function registerRoutes(app) {
                 JOIN nutrition_days d ON d.id = m.nutrition_day_id ORDER BY d.date_local, m.created_at`,
     running: "SELECT session_date AS date, distance_miles, duration_minutes, pace_min_per_mile, avg_heart_rate, max_heart_rate, calories_burned, elevation_gain_ft, notes FROM running_sessions ORDER BY session_date",
     body: "SELECT date, weight_lbs, waist_in, body_fat_pct, notes FROM body_metrics ORDER BY date",
+    water: "SELECT date, glasses, glasses * 8 AS ounces FROM water_intake ORDER BY date",
   };
   app.get("/api/export/csv/:name", ({ params, res }) => {
     const sql = CSV_QUERIES[params.name];

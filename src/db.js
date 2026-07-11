@@ -304,6 +304,12 @@ export function ensureSchemaAndSeed() {
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS water_intake (
+    date TEXT PRIMARY KEY,
+    glasses INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS food_catalog (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
