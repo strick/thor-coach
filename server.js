@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { createApp } from "./src/http.js";
 import { ensureSchemaAndSeed, runDailyBackup } from "./src/db.js";
 import { registerRoutes } from "./src/routes.js";
+import * as auth from "./src/auth.js";
 import { PORT, HOST, LLM_PROVIDER } from "./src/config.js";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -15,9 +16,11 @@ const tryBackup = () => { try { runDailyBackup(); } catch (err) { console.error(
 tryBackup();
 setInterval(tryBackup, 60 * 60 * 1000).unref();
 
-const app = createApp({ staticDir: path.join(root, "public"), pin: process.env.THOR_PIN || "" });
+const app = createApp({ staticDir: path.join(root, "public"), pin: process.env.THOR_PIN || "", auth });
+auth.registerAuthRoutes(app);
 registerRoutes(app);
 
 app.listen(PORT, HOST, () => {
-  console.log(`⚡ Thor v2 — http://localhost:${PORT} (LLM: ${LLM_PROVIDER})`);
+  const gate = auth.enabled ? "Microsoft sign-in" : process.env.THOR_PIN ? "PIN" : "open";
+  console.log(`⚡ Thor v2 — http://localhost:${PORT} (LLM: ${LLM_PROVIDER}, auth: ${gate})`);
 });

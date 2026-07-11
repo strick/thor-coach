@@ -15,6 +15,17 @@ export const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID || "";
 export const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET || "";
 export const STRAVA_REFRESH_TOKEN = process.env.STRAVA_REFRESH_TOKEN || "";
 
+// --- Microsoft-account sign-in (src/auth.js; active when both MS_* are set) ---
+export const MS_CLIENT_ID = process.env.MS_CLIENT_ID || "";
+export const MS_CLIENT_SECRET = process.env.MS_CLIENT_SECRET || "";
+export const MS_TENANT = process.env.MS_TENANT || "consumers"; // personal Microsoft accounts
+export const ALLOWED_EMAILS = (process.env.THOR_ALLOWED_EMAILS || "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+export const BASE_URL = (process.env.THOR_BASE_URL || "").replace(/\/+$/, "");
+export const SESSION_DAYS = Number(process.env.THOR_SESSION_DAYS || 30);
+
 export const todayISO = (d = new Date()) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");

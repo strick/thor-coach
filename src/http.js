@@ -25,7 +25,7 @@ export class HttpError extends Error {
 const sha = (s) => createHash("sha256").update(String(s)).digest();
 const pinMatches = (given, expected) => timingSafeEqual(sha(given), sha(expected));
 
-export function createApp({ staticDir, pin = "" }) {
+export function createApp({ staticDir, pin = "", auth = null }) {
   const routes = [];
 
   function add(method, pattern, handler) {
@@ -95,13 +95,33 @@ export function createApp({ staticDir, pin = "" }) {
       "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'"
     );
     try {
-      // Shared-PIN gate for the API (static pages stay open; data does not).
-      if (pin && url.pathname.startsWith("/api/") && url.pathname !== "/api/health") {
-        if (!pinMatches(req.headers["x-thor-pin"] || "", pin)) {
+      // API gate: a Microsoft session cookie or the shared PIN, whichever is
+      // configured (both count when both are). /api/health stays open for
+      // uptime checks; /api/auth/me is what the UI asks *whether* to sign in.
+      const OPEN_API = url.pathname === "/api/health" || url.pathname === "/api/auth/me";
+      if ((pin || auth?.enabled) && url.pathname.startsWith("/api/") && !OPEN_API) {
+        const sessionOk = auth?.enabled ? Boolean(auth.getSession(req)) : false;
+        const pinOk = pin ? pinMatches(req.headers["x-thor-pin"] || "", pin) : false;
+        if (!sessionOk && !pinOk) {
           res.writeHead(401, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "PIN required" }));
+          res.end(
+            JSON.stringify(auth?.enabled ? { error: "Sign-in required", login: "/auth/login" } : { error: "PIN required" })
+          );
           return;
         }
+      }
+      // Page gate: with sign-in active, HTML navigations go to the login page
+      // until there's a session (assets stay open — they contain no data).
+      if (
+        auth?.enabled &&
+        req.method === "GET" &&
+        (url.pathname === "/" || url.pathname.endsWith(".html")) &&
+        url.pathname !== "/login.html" &&
+        !auth.getSession(req)
+      ) {
+        res.writeHead(302, { Location: `/login.html?next=${encodeURIComponent(url.pathname + url.search)}` });
+        res.end();
+        return;
       }
       for (const r of routes) {
         if (r.method !== req.method) continue;

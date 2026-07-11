@@ -11,7 +11,19 @@ const dbPath = process.env.THOR_DB_PATH || path.join(root, "data", "workout.db")
 mkdirSync(path.dirname(dbPath), { recursive: true });
 
 export const db = new DatabaseSync(dbPath);
-db.exec("PRAGMA journal_mode = WAL");
+// WAL needs shared memory, which network filesystems (Azure App Service /home,
+// SMB mounts) don't provide — fall back rather than fail to boot there.
+// THOR_SQLITE_JOURNAL forces a mode explicitly (WAL | DELETE | TRUNCATE | PERSIST).
+const journal = ["WAL", "DELETE", "TRUNCATE", "PERSIST"].includes((process.env.THOR_SQLITE_JOURNAL || "").toUpperCase())
+  ? process.env.THOR_SQLITE_JOURNAL.toUpperCase()
+  : "WAL";
+try {
+  db.exec(`PRAGMA journal_mode = ${journal}`);
+} catch (err) {
+  console.error(`[db] journal_mode ${journal} unavailable (${err.message}); using DELETE`);
+  db.exec("PRAGMA journal_mode = DELETE");
+}
+db.exec("PRAGMA busy_timeout = 5000");
 db.exec("PRAGMA foreign_keys = ON");
 
 export const uuid = () => randomUUID();
@@ -34,6 +46,8 @@ export function ensureSchemaAndSeed() {
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT,
+    ms_oid TEXT,
+    last_login_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -344,6 +358,12 @@ export function ensureSchemaAndSeed() {
     finished_at TEXT
   );
   `);
+
+  // Additive migration for databases created before Microsoft sign-in existed
+  // (CREATE TABLE IF NOT EXISTS never alters an existing table).
+  const userCols = new Set(db.prepare("PRAGMA table_info(users)").all().map((c) => c.name));
+  if (!userCols.has("ms_oid")) db.exec("ALTER TABLE users ADD COLUMN ms_oid TEXT");
+  if (!userCols.has("last_login_at")) db.exec("ALTER TABLE users ADD COLUMN last_login_at TEXT");
 
   const userCount = db.prepare("SELECT COUNT(*) AS n FROM users").get().n;
   if (userCount === 0) {

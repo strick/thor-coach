@@ -27,10 +27,15 @@ export async function api(path, options = {}, retried = false) {
     opts.headers["Content-Type"] = "application/json";
   }
   const resp = await fetch(path, opts);
-  if (resp.status === 401 && !retried) {
-    if (await askPin()) return api(path, options, true);
-  }
   const data = await resp.json().catch(() => ({}));
+  if (resp.status === 401) {
+    // Microsoft sign-in mode: bounce to the login page (and come back here).
+    if (data.login) {
+      location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.search)}`;
+      return new Promise(() => {}); // navigating away — never settle
+    }
+    if (!retried && (await askPin())) return api(path, options, true);
+  }
   if (!resp.ok) throw new Error(data.error || `${resp.status} ${resp.statusText}`);
   return data;
 }
@@ -127,6 +132,20 @@ export function renderNav(active) {
     `<a class="brand" href="index.html"><span class="bolt">⚡</span> THOR</a>` +
     pages.map(([key, label, href]) => `<a class="link${key === active ? " active" : ""}" href="${href}">${label}</a>`).join("");
   document.body.prepend(nav);
+  // With Microsoft sign-in active, offer a sign-out link (fire-and-forget; the
+  // endpoint is public so this never triggers a PIN prompt or redirect).
+  fetch("/api/auth/me")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((me) => {
+      if (me?.auth === "microsoft" && me.signed_in) {
+        const a = document.createElement("a");
+        a.className = "link";
+        a.href = "/auth/logout";
+        a.textContent = "Sign out";
+        nav.appendChild(a);
+      }
+    })
+    .catch(() => {});
 }
 
 /**
