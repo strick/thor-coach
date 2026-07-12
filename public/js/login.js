@@ -14,6 +14,6 @@ if (error) {
 }
 
 const next = params.get("next");
-if (next && next.startsWith("/") && !next.startsWith("//")) {
+if (next && next.startsWith("/") && !next.startsWith("//") && !next.includes("\\")) {
   document.getElementById("ms-btn").href = `/auth/login?next=${encodeURIComponent(next)}`;
 }

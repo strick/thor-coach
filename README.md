@@ -109,16 +109,21 @@ group `rg-thor`, all consumption tier, scale-to-zero when idle):
   SMB; safe because max replicas = 1). `THOR_SQLITE_JOURNAL=DELETE` — WAL doesn't
   work on network filesystems. Daily snapshots land in `/data/backups` on the share.
 - **Image**: built in the auto-created registry `caad62479b7facr` (Basic tier).
+  The app pulls with its system-assigned managed identity (AcrPull); the
+  registry admin user is disabled.
 - **Sign-in**: Microsoft account only (see below); Entra app registration
   "Thor Fitness Tracker", allowlisted via `THOR_ALLOWED_EMAILS`.
 - **Secrets** (OpenAI, Strava, session, client secret) live as Container App
   secrets; config as env vars on the app.
 
-Redeploy after a code change (builds remotely from source, no local Docker):
+Redeploy after a code change (builds remotely from source, no local Docker).
+Don't use `az containerapp up --source` — it re-enables the registry admin
+user and rewrites the pull credentials; build and update explicitly instead:
 
 ```bash
-az containerapp up -g rg-thor -n thor --environment cae-thor --source . \
-  --ingress external --target-port 3100 --location eastus2
+tag=$(git rev-parse --short HEAD)
+az acr build -r caad62479b7facr -t "thor:$tag" .
+az containerapp update -g rg-thor -n thor --image "caad62479b7facr.azurecr.io/thor:$tag"
 ```
 
 First request after idle is a cold start (a few seconds). The in-process daily
@@ -129,7 +134,7 @@ backup runs on boot, so snapshots happen whenever the app wakes on a new day.
 - **Microsoft sign-in** (when `MS_CLIENT_ID` + `MS_CLIENT_SECRET` are set):
   OAuth authorization-code + PKCE against the personal-accounts endpoint,
   zero-dep id_token verification (JWKS/RS256, iss/aud/nonce/exp), stateless
-  HMAC-signed session cookie (30 days). Only emails in `THOR_ALLOWED_EMAILS`
+  HMAC-signed session cookie (7 days). Only emails in `THOR_ALLOWED_EMAILS`
   may sign in; the first sign-in claims the seeded default DB user (`user-main`)
   and links it by immutable Microsoft object id. Pages redirect to `/login.html`;
   `/api/*` returns 401 with a login pointer. The PIN (below) still works in

@@ -24,7 +24,7 @@ export const ALLOWED_EMAILS = (process.env.THOR_ALLOWED_EMAILS || "")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 export const BASE_URL = (process.env.THOR_BASE_URL || "").replace(/\/+$/, "");
-export const SESSION_DAYS = Number(process.env.THOR_SESSION_DAYS || 30);
+export const SESSION_DAYS = Number(process.env.THOR_SESSION_DAYS || 7);
 
 export const todayISO = (d = new Date()) => {
   const y = d.getFullYear();

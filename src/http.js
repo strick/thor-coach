@@ -90,6 +90,8 @@ export function createApp({ staticDir, pin = "", auth = null }) {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Referrer-Policy", "no-referrer");
+    // Browsers only honor HSTS over TLS, so this is inert for plain-http LAN use.
+    res.setHeader("Strict-Transport-Security", "max-age=31536000");
     res.setHeader(
       "Content-Security-Policy",
       "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'"

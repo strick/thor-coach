@@ -91,8 +91,10 @@ function redirect(res, location) {
 const baseUrl = (req) => BASE_URL || `${isSecure(req) ? "https" : "http"}://${req.headers.host || "localhost"}`;
 const redirectUri = (req) => `${baseUrl(req)}/auth/callback`;
 
-// Only allow same-site relative paths as post-login destinations.
-const safeNext = (n) => (typeof n === "string" && n.startsWith("/") && !n.startsWith("//") ? n : "/");
+// Only allow same-site relative paths as post-login destinations. Backslashes
+// are rejected too: browsers normalize "/\evil.com" to "//evil.com" (offsite).
+const safeNext = (n) =>
+  typeof n === "string" && n.startsWith("/") && !n.startsWith("//") && !n.includes("\\") ? n : "/";
 
 /** Verified session payload ({uid, email, name, iat, exp}) or null. */
 export function getSession(req) {
