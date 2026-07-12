@@ -98,8 +98,12 @@ host. To keep the off-machine mirror working too, mount its drive into the conta
 Thor runs in Azure Container Apps (subscription "Azure subscription 1", resource
 group `rg-thor`, all consumption tier, scale-to-zero when idle):
 
-- **App**: `thor` on environment `cae-thor` —
-  <https://thor.kindpebble-2a366f60.eastus2.azurecontainerapps.io>
+- **App**: `thor` on environment `cae-thor` — canonical URL
+  <https://thor.brian-strickland.com> (custom domain + free ACA managed cert;
+  DNS is a CNAME + `asuid.thor` TXT in the Route 53 zone `brian-strickland.com`).
+  The platform URL <https://thor.kindpebble-2a366f60.eastus2.azurecontainerapps.io>
+  still resolves, but sign-in lands on the custom domain — the OAuth callback
+  (`THOR_BASE_URL`) is absolute.
 - **Data**: SQLite on an Azure Files share (`stthorbstrick/thordata`) mounted at
   `/data` with `nobrl,uid=1000,gid=1000` (SQLite needs local byte-range locks over
   SMB; safe because max replicas = 1). `THOR_SQLITE_JOURNAL=DELETE` — WAL doesn't
