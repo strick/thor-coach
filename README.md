@@ -93,11 +93,47 @@ Under Docker the bind-mounted `./data` keeps the database and local snapshots on
 host. To keep the off-machine mirror working too, mount its drive into the container
 (e.g. add `- /mnt/g/backups/thor:/mnt/g/backups/thor` to `docker-compose.yml`).
 
+## Cloud deployment (Azure)
+
+Thor runs in Azure Container Apps (subscription "Azure subscription 1", resource
+group `rg-thor`, all consumption tier, scale-to-zero when idle):
+
+- **App**: `thor` on environment `cae-thor` —
+  <https://thor.kindpebble-2a366f60.eastus2.azurecontainerapps.io>
+- **Data**: SQLite on an Azure Files share (`stthorbstrick/thordata`) mounted at
+  `/data` with `nobrl,uid=1000,gid=1000` (SQLite needs local byte-range locks over
+  SMB; safe because max replicas = 1). `THOR_SQLITE_JOURNAL=DELETE` — WAL doesn't
+  work on network filesystems. Daily snapshots land in `/data/backups` on the share.
+- **Image**: built in the auto-created registry `caad62479b7facr` (Basic tier).
+- **Sign-in**: Microsoft account only (see below); Entra app registration
+  "Thor Fitness Tracker", allowlisted via `THOR_ALLOWED_EMAILS`.
+- **Secrets** (OpenAI, Strava, session, client secret) live as Container App
+  secrets; config as env vars on the app.
+
+Redeploy after a code change (builds remotely from source, no local Docker):
+
+```bash
+az containerapp up -g rg-thor -n thor --environment cae-thor --source . \
+  --ingress external --target-port 3100 --location eastus2
+```
+
+First request after idle is a cold start (a few seconds). The in-process daily
+backup runs on boot, so snapshots happen whenever the app wakes on a new day.
+
 ## Security notes
 
-- All `/api/*` routes (except `/api/health`) require the shared PIN from `THOR_PIN`
-  in `.env`, sent as the `X-Thor-Pin` header. The browser prompts once and remembers
-  it in localStorage. Blank `THOR_PIN` disables auth.
+- **Microsoft sign-in** (when `MS_CLIENT_ID` + `MS_CLIENT_SECRET` are set):
+  OAuth authorization-code + PKCE against the personal-accounts endpoint,
+  zero-dep id_token verification (JWKS/RS256, iss/aud/nonce/exp), stateless
+  HMAC-signed session cookie (30 days). Only emails in `THOR_ALLOWED_EMAILS`
+  may sign in; the first sign-in claims the seeded default DB user (`user-main`)
+  and links it by immutable Microsoft object id. Pages redirect to `/login.html`;
+  `/api/*` returns 401 with a login pointer. The PIN (below) still works in
+  parallel for LAN/scripted access if set.
+- All `/api/*` routes (except `/api/health` and `/api/auth/me`) otherwise require
+  the shared PIN from `THOR_PIN` in `.env`, sent as the `X-Thor-Pin` header. The
+  browser prompts once and remembers it in localStorage. Blank `THOR_PIN` (and no
+  Microsoft config) disables auth.
 - API responses carry CSP/nosniff/frame-deny headers; request bodies capped at 1 MB.
 - The server binds 0.0.0.0 so phones on your LAN can reach it. PIN or not,
   don't port-forward it to the internet.
