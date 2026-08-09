@@ -370,23 +370,31 @@ export function ensureSchemaAndSeed() {
     db.prepare("INSERT INTO users (id, name, email) VALUES (?, ?, ?)").run(DEFAULT_USER_ID, "Main User", null);
   }
 
-  // Seed the food catalog once (user-added foods have source='custom' and survive re-seeds)
-  const foodCount = db.prepare("SELECT COUNT(*) AS n FROM food_catalog WHERE source = 'seed'").get().n;
-  if (foodCount === 0) {
-    const insFood = db.prepare(
-      `INSERT INTO food_catalog (id, name, category, serving_display, calories_kcal, protein_g, carbs_g, fat_g,
-         fiber_g, sugar_g, added_sugar_g, sodium_mg, sat_fat_g, cholesterol_mg, potassium_mg, calcium_mg, aliases)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
+  // Reconcile built-in foods on every boot. Earlier builds seeded these rows
+  // only once, so corrected macro values never reached an existing database.
+  // Custom foods are deliberately excluded and remain entirely user-owned.
+  const foodValues = (f) => [
+    f.category, f.serving_display, f.calories_kcal, f.protein_g, f.carbs_g, f.fat_g,
+    f.fiber_g, f.sugar_g, f.added_sugar_g, f.sodium_mg, f.sat_fat_g, f.cholesterol_mg,
+    f.potassium_mg, f.calcium_mg, JSON.stringify(f.aliases || []),
+  ];
+  const updateFood = db.prepare(
+    `UPDATE food_catalog SET category = ?, serving_display = ?, calories_kcal = ?, protein_g = ?, carbs_g = ?, fat_g = ?,
+       fiber_g = ?, sugar_g = ?, added_sugar_g = ?, sodium_mg = ?, sat_fat_g = ?, cholesterol_mg = ?,
+       potassium_mg = ?, calcium_mg = ?, aliases = ?
+     WHERE source = 'seed' AND name = ?`
+  );
+  const insertFood = db.prepare(
+    `INSERT INTO food_catalog (id, name, category, serving_display, calories_kcal, protein_g, carbs_g, fat_g,
+       fiber_g, sugar_g, added_sugar_g, sodium_mg, sat_fat_g, cholesterol_mg, potassium_mg, calcium_mg, aliases, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'seed')`
+  );
+  tx(() => {
     for (const f of FOOD_CATALOG) {
-      insFood.run(
-        randomUUID(), f.name, f.category, f.serving_display, f.calories_kcal, f.protein_g, f.carbs_g, f.fat_g,
-        f.fiber_g, f.sugar_g, f.added_sugar_g, f.sodium_mg, f.sat_fat_g, f.cholesterol_mg, f.potassium_mg, f.calcium_mg,
-        JSON.stringify(f.aliases || [])
-      );
+      const result = updateFood.run(...foodValues(f), f.name);
+      if (!result.changes) insertFood.run(randomUUID(), f.name, ...foodValues(f));
     }
-    console.log(`[seed] food catalog: ${FOOD_CATALOG.length} items`);
-  }
+  });
 
   const planExists = db.prepare("SELECT 1 FROM plans WHERE id = ?").get(THOR_PLAN_ID);
   if (planExists) return;

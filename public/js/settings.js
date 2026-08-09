@@ -12,7 +12,7 @@ async function loadConnections() {
     <div class="item"><div class="main"><div class="title">OpenAI</div><div class="meta">chat, parsing, summaries</div></div>
       ${cfg.openai_configured ? '<span class="pill green">configured</span>' : '<span class="pill red">missing OPENAI_API_KEY</span>'}</div>
     <div class="item"><div class="main"><div class="title">Strava</div><div class="meta">run sync${cfg.strava.configured ? ` · token: ${cfg.strava.token_source}` : ""}</div></div>
-      ${cfg.strava.configured ? '<span class="pill green">configured</span>' : `<span class="pill red">missing ${esc(cfg.strava.missing.join(", "))}</span>`}</div>
+      ${cfg.strava.configured ? '<span class="pill green">authorized</span>' : cfg.strava.can_connect ? '<a class="pill gold" href="running.html">connect</a>' : `<span class="pill red">missing ${esc(cfg.strava.missing.join(", "))}</span>`}</div>
     <div class="item"><div class="main"><div class="title">Ollama</div><div class="meta" id="ollama-meta">checking…</div></div>
       <span class="pill gray" id="ollama-pill">local</span></div>
     <div class="item"><div class="main"><div class="title">Backups</div><div class="meta" id="backup-meta">checking…</div></div>

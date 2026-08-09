@@ -85,6 +85,7 @@ export function registerRoutes(app) {
   app.post("/api/nutrition/meal", ({ body }) => nutrition.addMeal(body.user_id || DEFAULT_USER_ID, body.date || todayISO(), body.meal_type, body.time_local));
   app.post("/api/nutrition/item", ({ body }) => nutrition.addItems(body.user_id || DEFAULT_USER_ID, body.meal_id, body.items || [body.item])) ;
   app.put("/api/nutrition/item/:id", ({ params, body }) => nutrition.updateItem(params.id, body));
+  app.patch("/api/nutrition/item/:id/servings", ({ params, body }) => nutrition.setItemServings(params.id, body.servings));
   app.delete("/api/nutrition/item/:id", ({ params }) => nutrition.deleteItem(params.id));
   app.delete("/api/nutrition/meal/:id", ({ params }) => nutrition.deleteMeal(params.id));
   app.get("/api/nutrition/templates", ({ query }) => nutrition.listTemplates(query.user_id || DEFAULT_USER_ID));
@@ -102,6 +103,17 @@ export function registerRoutes(app) {
   app.get("/api/running/stats", ({ query }) => running.stats(query.start, query.end));
   app.get("/api/running/stats/weekly", () => running.weeklyStats());
   app.get("/api/running/strava/status", () => strava.stravaStatus());
+  app.get("/api/running/strava/connect-url", ({ req }) => strava.stravaConnectUrl(req));
+  app.get("/auth/strava/callback", async ({ req, res, query }) => {
+    try {
+      await strava.finishStravaConnect(req, query);
+      res.writeHead(302, { Location: "/running.html?strava=connected" });
+    } catch (err) {
+      const message = String(err.message || "Strava connection failed").slice(0, 180);
+      res.writeHead(302, { Location: `/running.html?strava_error=${encodeURIComponent(message)}` });
+    }
+    res.end();
+  });
   app.get("/api/running/strava/sync-history", () => strava.syncHistory());
   app.post("/api/running/sync-strava", ({ body }) => strava.syncStrava(body.date || todayISO()));
   app.post("/api/running/auto-sync", ({ body }) => strava.autoSync(body.date || todayISO()));

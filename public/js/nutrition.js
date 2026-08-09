@@ -13,6 +13,8 @@ async function loadUsers() {
 }
 
 const MEAL_ICONS = { breakfast: "🌅", lunch: "🥪", dinner: "🍽", snack: "🥜" };
+const qtyText = (value) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+const qtyValue = (value) => String(Math.round(Number(value) * 100) / 100);
 
 async function loadDay() {
   const day = await api(`/api/nutrition/day?user_id=${encodeURIComponent(userId())}&date=${date()}`);
@@ -38,24 +40,51 @@ async function loadDay() {
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
         <div class="title">${MEAL_ICONS[m.meal_type] || ""} ${esc(m.meal_type)} <span class="muted small">${esc(m.time_local || "")}</span>
           <span class="pill">${Math.round(m.totals?.calories_kcal || 0)} kcal</span>
-          <span class="pill gold">${Math.round(m.totals?.protein_g || 0)}g protein</span></div>
+          <span class="pill gold">${qtyText(m.totals?.protein_g || 0)}g protein</span></div>
         <div style="white-space:nowrap">
           <button class="btn-ghost btn-sm" data-save-template="${m.id}">Save as template</button>
           <button class="btn-danger" data-del-meal="${m.id}">✕</button>
         </div>
       </div>
-      <table class="mt"><thead><tr><th>Food</th><th>Serving</th><th>kcal</th><th>Protein</th><th>Sodium</th><th></th></tr></thead>
+      <div class="table-scroll"><table class="mt meal-table"><thead><tr><th>Food</th><th>Quantity</th><th>kcal</th><th>Protein</th><th>Sodium</th><th></th></tr></thead>
       <tbody>${m.items.map((i) => `
         <tr data-item-row="${i.id}">
           <td>${esc(i.food_name)}</td>
-          <td class="muted small">${esc(i.serving_display || "")}</td>
+          <td><div class="quantity-control quantity-control-sm">
+            <button class="qty-button" data-item-minus="${i.id}" aria-label="Decrease ${esc(i.food_name)}">−</button>
+            <input type="number" data-item-qty="${i.id}" value="${qtyValue(i.serving_quantity || 1)}" min="0.01" step="0.25" aria-label="Servings of ${esc(i.food_name)}" />
+            <button class="qty-button" data-item-plus="${i.id}" aria-label="Increase ${esc(i.food_name)}">+</button>
+          </div><div class="muted serving-base">${esc(i.serving_unit || i.serving_display || "1 serving")} each</div></td>
           <td>${Math.round(i.calories_kcal)}</td>
-          <td>${Math.round(i.protein_g)}g</td>
+          <td>${qtyText(i.protein_g)}g</td>
           <td>${Math.round(i.sodium_mg)}mg</td>
           <td style="white-space:nowrap"><button class="btn-ghost btn-sm" data-edit-item="${i.id}">✎</button><button class="btn-danger" data-del-item="${i.id}">✕</button></td>
         </tr>`).join("")}
-      </tbody></table>
+      </tbody></table></div>
     </div>`).join("");
+
+  const itemById = (id) => day.meals.flatMap((m) => m.items).find((i) => i.id === id);
+  const saveServings = async (id, value) => {
+    const servings = Number(value);
+    if (!Number.isFinite(servings) || servings <= 0) return toast("Quantity must be greater than zero", true);
+    try {
+      await api(`/api/nutrition/item/${id}/servings`, { method: "PATCH", body: { servings } });
+      await loadDay();
+    } catch (err) { toast(err.message, true); }
+  };
+  $("meals").querySelectorAll("[data-item-minus], [data-item-plus]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const id = b.dataset.itemMinus || b.dataset.itemPlus;
+      const item = itemById(id);
+      const current = Number(item?.serving_quantity) || 1;
+      const delta = b.dataset.itemPlus ? 0.25 : -0.25;
+      saveServings(id, Math.max(0.25, Math.round((current + delta) * 100) / 100));
+    })
+  );
+  $("meals").querySelectorAll("[data-item-qty]").forEach((input) => {
+    input.addEventListener("change", () => saveServings(input.dataset.itemQty, input.value));
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter") input.blur(); });
+  });
 
   $("meals").querySelectorAll("[data-del-meal]").forEach((b) =>
     b.addEventListener("click", async () => {
@@ -139,7 +168,7 @@ function templateEditor(t) {
     box.innerHTML = work.map((w, i) => w.removed ? "" : `
       <div class="item">
         <div class="main"><div class="title">${esc(w.item.food_name)}</div>
-          <div class="meta">${esc(w.item.serving_display || "1 serving")} · ${Math.round((w.item.calories_kcal || 0) * w.scale)} kcal · ${Math.round((w.item.protein_g || 0) * w.scale)}g protein</div></div>
+          <div class="meta">${esc(w.item.serving_display || "1 serving")} · ${Math.round((w.item.calories_kcal || 0) * w.scale)} kcal · ${qtyText((w.item.protein_g || 0) * w.scale)}g protein</div></div>
         <div style="white-space:nowrap;display:flex;align-items:center;gap:6px">
           <label style="margin:0">×</label>
           <input type="number" data-scale="${i}" value="${w.scale}" step="0.25" min="0.25" style="width:70px" />
@@ -149,7 +178,7 @@ function templateEditor(t) {
     const live = work.filter((w) => !w.removed);
     el.querySelector(".te-total").textContent =
       `${live.length} items · ${Math.round(live.reduce((a, w) => a + (w.item.calories_kcal || 0) * w.scale, 0))} kcal · ` +
-      `${Math.round(live.reduce((a, w) => a + (w.item.protein_g || 0) * w.scale, 0))}g protein`;
+      `${qtyText(live.reduce((a, w) => a + (w.item.protein_g || 0) * w.scale, 0))}g protein`;
     box.querySelectorAll("[data-rm]").forEach((b) =>
       b.addEventListener("click", () => { work[b.dataset.rm].removed = true; renderItems(); }));
     box.querySelectorAll("[data-scale]").forEach((inp) =>
@@ -200,7 +229,7 @@ async function loadTemplates() {
     row.className = "item";
     row.innerHTML = `
       <div class="main"><div class="title">${esc(t.name)}</div>
-        <div class="meta">${esc(t.meal_type || "any")} · ${t.items.length} items · ${Math.round(t.items.reduce((a, i) => a + (i.calories_kcal || 0), 0))} kcal · ${Math.round(t.items.reduce((a, i) => a + (i.protein_g || 0), 0))}g protein</div></div>
+        <div class="meta">${esc(t.meal_type || "any")} · ${t.items.length} items · ${Math.round(t.items.reduce((a, i) => a + (i.calories_kcal || 0), 0))} kcal · ${qtyText(t.items.reduce((a, i) => a + (i.protein_g || 0), 0))}g protein</div></div>
       <div style="white-space:nowrap">
         <button class="btn-sm" data-apply>Add to day</button>
         <button class="btn-ghost btn-sm" data-edit>✎</button>
@@ -297,19 +326,32 @@ async function searchLibrary() {
   const foods = await api(`/api/foods?q=${encodeURIComponent(q)}&category=${encodeURIComponent(cat)}`);
   $("lib-results").innerHTML = foods.length
     ? foods.map((f) => `
-      <div class="item">
+      <div class="item food-result" data-food-row="${f.id}">
         <div class="main"><div class="title">${esc(f.name)}${f.source === "custom" ? ' <span class="pill gray">mine</span>' : ""}</div>
-          <div class="meta">${esc(f.serving_display)} · ${Math.round(f.calories_kcal)} kcal · ${Math.round(f.protein_g)}g protein · ${Math.round(f.sodium_mg)}mg sodium</div></div>
-        <div style="white-space:nowrap"><button class="btn-sm" data-add="${f.id}">+ Add</button>${f.source === "custom" ? `<button class="btn-danger" data-del-food="${f.id}">✕</button>` : ""}</div>
+          <div class="meta">per ${esc(f.serving_display)}</div>
+          <div class="macro-row"><span>${Math.round(f.calories_kcal)} kcal</span><span class="macro-protein">${qtyText(f.protein_g)}g protein</span><span>${qtyText(f.carbs_g)}g carbs</span><span>${qtyText(f.fat_g)}g fat</span></div></div>
+        <div class="food-add-controls"><div class="quantity-control">
+          <button class="qty-button" data-result-minus aria-label="Decrease quantity">−</button>
+          <input type="number" class="result-qty" value="1" min="0.01" step="0.25" aria-label="Quantity" />
+          <button class="qty-button" data-result-plus aria-label="Increase quantity">+</button>
+        </div><button class="btn-sm" data-add="${f.id}">Add</button>${f.source === "custom" ? `<button class="btn-danger" data-del-food="${f.id}">✕</button>` : ""}</div>
       </div>`).join("")
     : `<div class="empty">No match — add it as a custom food below.</div>`;
   $("lib-results").querySelectorAll("[data-add]").forEach((b) =>
     b.addEventListener("click", () => {
       const food = foods.find((f) => f.id === b.dataset.add);
+      const servings = Math.max(0.01, Number(b.closest("[data-food-row]").querySelector(".result-qty").value) || 1);
       const existing = draft.find((d) => d.food.id === food.id);
-      if (existing) existing.servings += 1;
-      else draft.push({ food, servings: 1 });
+      if (existing) existing.servings += servings;
+      else draft.push({ food, servings });
       renderDraft();
+    })
+  );
+  $("lib-results").querySelectorAll("[data-result-minus], [data-result-plus]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const input = b.closest(".quantity-control").querySelector("input");
+      const delta = b.hasAttribute("data-result-plus") ? 0.25 : -0.25;
+      input.value = qtyValue(Math.max(0.25, (Number(input.value) || 1) + delta));
     })
   );
   $("lib-results").querySelectorAll("[data-del-food]").forEach((b) =>
@@ -323,29 +365,40 @@ async function searchLibrary() {
 }
 
 function renderDraft() {
-  $("draft-wrap").style.display = draft.length ? "" : "none";
-  if (!draft.length) return;
+  $("draft-count").textContent = draft.length ? `${draft.length} selected` : "Nothing selected";
+  if (!draft.length) {
+    $("draft").innerHTML = `<div class="empty compact">Choose a food, set the quantity, then add it here.</div>`;
+    $("draft-totals").innerHTML = "";
+    $("btn-lib-log").disabled = true;
+    $("btn-lib-template").disabled = true;
+    return;
+  }
+  $("btn-lib-log").disabled = false;
+  $("btn-lib-template").disabled = false;
   $("draft").innerHTML = draft.map((d, i) => `
     <div class="item">
       <div class="main"><div class="title">${esc(d.food.name)}</div>
-        <div class="meta">${d.servings} × ${esc(d.food.serving_display)} · ${Math.round(d.food.calories_kcal * d.servings)} kcal · ${Math.round(d.food.protein_g * d.servings)}g protein</div></div>
-      <div style="white-space:nowrap">
-        <button class="btn-ghost btn-sm" data-minus="${i}">−</button>
-        <button class="btn-ghost btn-sm" data-plus="${i}">＋</button>
+        <div class="meta">${qtyText(d.servings)} × ${esc(d.food.serving_display)} · ${Math.round(d.food.calories_kcal * d.servings)} kcal · ${qtyText(d.food.protein_g * d.servings)}g protein</div></div>
+      <div class="food-add-controls">
+        <div class="quantity-control"><button class="qty-button" data-minus="${i}">−</button>
+        <input type="number" data-draft-qty="${i}" value="${qtyValue(d.servings)}" min="0.01" step="0.25" aria-label="Quantity of ${esc(d.food.name)}" />
+        <button class="qty-button" data-plus="${i}">+</button></div>
         <button class="btn-danger" data-remove="${i}">✕</button>
       </div>
     </div>`).join("");
-  const sum = (k) => draft.reduce((a, d) => a + d.food[k] * d.servings, 0);
-  $("draft-totals").textContent =
-    `Total: ${Math.round(sum("calories_kcal"))} kcal · ${Math.round(sum("protein_g"))}g protein · ` +
-    `${Math.round(sum("carbs_g"))}g carbs · ${Math.round(sum("fat_g"))}g fat · ${Math.round(sum("fiber_g"))}g fiber · ` +
-    `${Math.round(sum("sodium_mg"))}mg sodium · ${Math.round(sum("sat_fat_g"))}g sat fat`;
+  const sum = (k) => draft.reduce((a, d) => a + (Number(d.food[k]) || 0) * d.servings, 0);
+  $("draft-totals").innerHTML = `<strong>${Math.round(sum("calories_kcal"))}</strong> kcal <span><strong>${qtyText(sum("protein_g"))}g</strong> protein</span><span>${qtyText(sum("carbs_g"))}g carbs</span><span>${qtyText(sum("fat_g"))}g fat</span><span>${qtyText(sum("fiber_g"))}g fiber</span>`;
   $("draft").querySelectorAll("[data-plus]").forEach((b) =>
-    b.addEventListener("click", () => { draft[b.dataset.plus].servings += draft[b.dataset.plus].servings >= 1 ? 1 : 0.5; renderDraft(); }));
+    b.addEventListener("click", () => { draft[b.dataset.plus].servings += 0.25; renderDraft(); }));
   $("draft").querySelectorAll("[data-minus]").forEach((b) =>
     b.addEventListener("click", () => {
       const d = draft[b.dataset.minus];
-      d.servings = Math.max(0.5, d.servings - (d.servings > 1 ? 1 : 0.5));
+      d.servings = Math.max(0.25, d.servings - 0.25);
+      renderDraft();
+    }));
+  $("draft").querySelectorAll("[data-draft-qty]").forEach((input) =>
+    input.addEventListener("change", () => {
+      draft[input.dataset.draftQty].servings = Math.max(0.01, Number(input.value) || 1);
       renderDraft();
     }));
   $("draft").querySelectorAll("[data-remove]").forEach((b) =>
@@ -421,7 +474,7 @@ async function handleBarcode(code) {
     $("bc-result").innerHTML = `
       <div class="item">
         <div class="main"><div class="title">${esc(f.name)}</div>
-          <div class="meta">${esc(f.serving_display)} · ${Math.round(f.calories_kcal)} kcal · ${Math.round(f.protein_g)}g protein · ${Math.round(f.sodium_mg)}mg sodium${res.basis === "per_100g" ? " · per 100g" : ""}</div></div>
+          <div class="meta">${esc(f.serving_display)} · ${Math.round(f.calories_kcal)} kcal · ${qtyText(f.protein_g)}g protein · ${Math.round(f.sodium_mg)}mg sodium${res.basis === "per_100g" ? " · per 100g" : ""}</div></div>
         <div style="white-space:nowrap">
           <button class="btn-sm" id="bc-add">+ Picks</button>
           <button class="btn-gold btn-sm" id="bc-save">Save to library</button>
@@ -527,6 +580,7 @@ $("btn-custom-food").addEventListener("click", async () => {
 
 loadCategories().catch(() => {});
 searchLibrary().catch(() => {});
+renderDraft();
 
 $("date").addEventListener("change", () => loadDay().catch((e) => toast(e.message, true)));
 $("user").addEventListener("change", () => { loadDay(); loadTemplates(); loadGoals(); loadFrequent(); });

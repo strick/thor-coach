@@ -158,6 +158,26 @@ export function updateItem(itemId, patch) {
   });
 }
 
+/** Change an item's serving count while keeping every nutrient in proportion. */
+export function setItemServings(itemId, servings) {
+  const item = db.prepare("SELECT * FROM nutrition_meal_items WHERE id = ?").get(itemId);
+  if (!item) throw new HttpError(404, "Item not found");
+  const next = Number(servings);
+  if (!Number.isFinite(next) || next < 0.01 || next > 1000) {
+    throw new HttpError(400, "servings must be between 0.01 and 1000");
+  }
+  const current = Number(item.serving_quantity) > 0 ? Number(item.serving_quantity) : 1;
+  const factor = next / current;
+  const baseServing = item.serving_unit || item.serving_display || "1 serving";
+  const servingDisplay = Math.abs(next - 1) < 0.0001 ? baseServing : `${next} × ${baseServing}`;
+  return updateItem(itemId, {
+    serving_quantity: next,
+    serving_unit: baseServing,
+    serving_display: servingDisplay,
+    ...Object.fromEntries(NUTRIENTS.map((n) => [n, (Number(item[n]) || 0) * factor])),
+  });
+}
+
 export function deleteItem(itemId) {
   const item = db.prepare("SELECT * FROM nutrition_meal_items WHERE id = ?").get(itemId);
   if (!item) throw new HttpError(404, "Item not found");

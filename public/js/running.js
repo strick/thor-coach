@@ -10,9 +10,30 @@ const fmtPace = (p) => (p ? `${Math.floor(p)}:${String(Math.round((p % 1) * 60))
 async function loadStatus() {
   const s = await api("/api/running/strava/status");
   $("strava-status").innerHTML = s.configured
-    ? `<span class="pill green">Strava connected (${s.token_source})</span>`
-    : `<span class="pill red">Strava not configured</span> <span class="muted small">set ${s.missing.join(", ")} in .env</span>`;
+    ? `<span class="pill green">Strava authorized (${s.token_source})</span>`
+    : `<span class="pill red">Strava not authorized</span> <span class="muted small">${s.can_connect ? "connect below" : `set ${s.missing.join(", ")} in .env`}</span>`;
+  $("btn-strava-connect").disabled = !s.can_connect;
   if (!s.configured) { $("btn-sync").disabled = true; $("btn-backfill").disabled = true; }
+}
+
+$("btn-strava-connect").addEventListener("click", async () => {
+  $("btn-strava-connect").disabled = true;
+  try {
+    const { url } = await api("/api/running/strava/connect-url");
+    location.href = url;
+  } catch (err) {
+    toast(err.message, true);
+    $("btn-strava-connect").disabled = false;
+  }
+});
+
+const connectionParams = new URLSearchParams(location.search);
+if (connectionParams.get("strava") === "connected") {
+  toast("Strava reconnected — you can sync now");
+  history.replaceState({}, "", location.pathname);
+} else if (connectionParams.get("strava_error")) {
+  toast(connectionParams.get("strava_error"), true);
+  history.replaceState({}, "", location.pathname);
 }
 
 async function loadStats() {
