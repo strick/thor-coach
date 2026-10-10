@@ -265,6 +265,45 @@ tr:last-child td { border-bottom: none; }
   .meal-table th:nth-child(5), .meal-table td:nth-child(5) { display: none; }
 }
 
+/* --- Chips, segmented scales, steppers --- */
+input[type="checkbox"] { width: auto; }
+input[type="range"] { padding: 0; accent-color: var(--accent); background: transparent; border: none; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  background: var(--panel-2); color: var(--muted); border: 1px solid var(--border);
+  border-radius: 999px; padding: 5px 11px; font-size: 12.5px; font-weight: 600;
+}
+.chip.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.seg { display: flex; gap: 4px; }
+.seg button {
+  flex: 1; justify-content: center; background: var(--panel-2); color: var(--muted);
+  border: 1px solid var(--border); padding: 7px 0; font-size: 13px; min-width: 0;
+}
+.seg button.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.scale-legend { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 3px; }
+.check-row {
+  display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; margin: 7px 0;
+  text-transform: none; letter-spacing: 0; color: var(--text); font-weight: 500;
+}
+.check-row input { margin-top: 3px; }
+.med-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) 92px minmax(0, 0.9fr) auto; gap: 6px; margin-bottom: 6px; }
+@media (max-width: 560px) { .med-row { grid-template-columns: 1fr 1fr; } }
+
+/* --- Banners --- */
+.banner { border-radius: 12px; padding: 12px 14px; font-size: 14px; border: 1px solid; margin-bottom: 14px; }
+.banner.red { background: rgba(255, 93, 93, 0.12); border-color: var(--danger); }
+.banner.gold { background: rgba(255, 176, 46, 0.1); border-color: var(--gold); }
+.banner.blue { background: var(--accent-soft); border-color: var(--accent); }
+.banner strong { display: block; margin-bottom: 3px; }
+.banner .row { margin-top: 8px; }
+
+/* --- Headache patterns --- */
+.factor { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.factor:last-child { border-bottom: none; }
+.factor .head { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: 14px; font-weight: 600; }
+.rate-row { display: grid; grid-template-columns: 74px 1fr 110px; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 5px; }
+.rate-row .bar { height: 7px; }
+
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .row-between h2 { margin-bottom: 4px; }
 .row-between p { margin: 0; }

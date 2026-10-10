@@ -15,6 +15,8 @@
       <span class="sub"><span id="streak"></span> <span id="today-label"></span></span>
     </div>
 
+    <div id="ongoing-headache"></div>
+
     <div class="grid cols-4 mb" id="stat-cards">
       <div class="card"><div class="stat" id="stat-workouts">–</div><div class="stat-label">Workouts this week</div></div>
       <div class="card"><div class="stat" id="stat-volume">–</div><div class="stat-label">Volume this week (lbs)</div></div>
@@ -68,7 +70,12 @@
         <div id="daily-summary" class="md"><div class="empty">No summary yet for today.</div></div>
       </div>
       <div class="card">
-        <h2>Weigh-in</h2>
+        <div class="row-between">
+          <h2>Daily check-in</h2>
+          <a class="btn btn-ghost btn-sm" href="health.html#headache">Log a headache</a>
+        </div>
+        <div id="checkin"><div class="empty">Loading…</div></div>
+        <h2 class="mt">Weigh-in</h2>
         <div class="row" style="align-items:center">
           <div class="fit" style="width:110px"><input type="number" id="weigh-in" step="0.1" placeholder="lbs" /></div>
           <button id="btn-weight" class="btn-ghost btn-sm fit">Save</button>

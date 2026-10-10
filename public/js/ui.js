@@ -127,6 +127,14 @@ export const todayISO = (d = new Date()) => {
   return `${y}-${m}-${day}`;
 };
 
+/** Local "YYYY-MM-DDTHH:MM" (the value format of <input type="datetime-local">). */
+export const localDateTime = (d = new Date()) =>
+  `${todayISO(d)}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+/** "2:10 PM" from a local "YYYY-MM-DDTHH:MM". */
+export const fmtTime = (dt) =>
+  dt ? new Date(dt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "";
+
 export const addDays = (iso, n) => {
   const d = new Date(iso + "T12:00:00");
   d.setDate(d.getDate() + n);

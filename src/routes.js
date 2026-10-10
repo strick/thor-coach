@@ -9,6 +9,7 @@ import * as strava from "./services/strava.js";
 import * as summary from "./services/dailySummary.js";
 import { chat } from "./services/chat.js";
 import * as profileApi from "./api/profile.js";
+import * as headachesApi from "./api/headaches.js";
 
 export function registerRoutes(app) {
   // --- System ---
@@ -32,6 +33,9 @@ export function registerRoutes(app) {
 
   // --- Health profile, medications & supplements ---
   profileApi.register(app);
+
+  // --- Headaches, daily check-ins, headache patterns ---
+  headachesApi.register(app);
   app.get("/api/backups", () => backupStatus());
   app.post("/api/backups/run", () => runDailyBackup({ force: true }));
 
@@ -200,7 +204,7 @@ export function registerRoutes(app) {
     "health_events", "nutrition_goals", "nutrition_days", "nutrition_day_targets", "nutrition_day_totals",
     "nutrition_meals", "nutrition_meal_items", "nutrition_meal_totals", "nutrition_templates",
     "running_sessions", "body_metrics", "water_intake", "daily_summaries", "daily_reflections", "food_catalog",
-    "health_profile", "medications",
+    "health_profile", "medications", "headaches", "daily_checkins",
   ];
   app.get("/api/export", () => ({
     exported_at: new Date().toISOString(),
@@ -224,6 +228,10 @@ export function registerRoutes(app) {
     running: "SELECT session_date AS date, distance_miles, duration_minutes, pace_min_per_mile, avg_heart_rate, max_heart_rate, calories_burned, elevation_gain_ft, notes FROM running_sessions ORDER BY session_date",
     body: "SELECT date, weight_lbs, waist_in, body_fat_pct, notes FROM body_metrics ORDER BY date",
     water: "SELECT date, glasses, glasses * 8 AS ounces FROM water_intake ORDER BY date",
+    headaches: `SELECT date, started_at, ended_at, duration_minutes, peak_severity, type, locations, aura, symptoms,
+                meds, triggers, red_flags, notes FROM headaches ORDER BY date, started_at`,
+    checkins: `SELECT date, sleep_hours, sleep_quality, stress, energy, caffeine_servings, alcohol_drinks, notes
+               FROM daily_checkins ORDER BY date`,
   };
   app.get("/api/export/csv/:name", ({ params, res }) => {
     const sql = CSV_QUERIES[params.name];
@@ -236,13 +244,16 @@ export function registerRoutes(app) {
     res.end(csv);
   });
 
-  // --- Health events ---
+  // --- Other health events (migraines moved to /api/headaches) ---
   app.get("/api/health-events", ({ query }) =>
-    db.prepare("SELECT * FROM health_events WHERE date BETWEEN ? AND ? ORDER BY date DESC, created_at DESC")
-      .all(query.start || "0000-01-01", query.end || "9999-12-31")
+    db.prepare(
+      `SELECT * FROM health_events WHERE date BETWEEN ? AND ? ${query.include_legacy ? "" : "AND category != 'migraine'"}
+       ORDER BY date DESC, created_at DESC`
+    ).all(query.start || "0000-01-01", query.end || "9999-12-31")
   );
   app.post("/api/health-events", ({ body }) => {
     if (!body.category) throw new HttpError(400, "category is required");
+    if (body.category === "migraine") throw new HttpError(400, "Log migraines and other headaches with POST /api/headaches");
     const id = uuid();
     db.prepare("INSERT INTO health_events (id, date, category, intensity, duration_minutes, notes) VALUES (?, ?, ?, ?, ?, ?)").run(
       id, body.date || todayISO(), body.category, body.intensity ?? null, body.duration_minutes ?? null, body.notes ?? null
@@ -268,6 +279,8 @@ export function registerRoutes(app) {
         `SELECT session_date AS d FROM workout_sessions
          UNION SELECT session_date FROM running_sessions
          UNION SELECT date FROM health_events
+         UNION SELECT date FROM headaches
+         UNION SELECT date FROM daily_checkins
          UNION SELECT d.date_local FROM nutrition_days d JOIN nutrition_meals m ON m.nutrition_day_id = d.id`
       ).all().map((r) => r.d)
     );

@@ -402,6 +402,50 @@ export function ensureSchemaAndSeed() {
     FOREIGN KEY(user_id) REFERENCES users(id)
   );
   CREATE INDEX IF NOT EXISTS idx_medications_user ON medications(user_id, active);
+
+  -- Headaches: structured entries. Enum-like columns (type, locations,
+  -- symptoms, red_flags, triggers) are validated in the service, not by CHECK.
+  -- started_at / ended_at are local 'YYYY-MM-DDTHH:MM'; ended_at NULL with a
+  -- start = still going. date is the local onset date (drives correlations).
+  CREATE TABLE IF NOT EXISTS headaches (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    date TEXT NOT NULL,
+    started_at TEXT,
+    ended_at TEXT,
+    duration_minutes INTEGER,
+    peak_severity INTEGER CHECK(peak_severity BETWEEN 0 AND 10),
+    type TEXT NOT NULL DEFAULT 'unknown',
+    locations TEXT NOT NULL DEFAULT '[]',
+    aura INTEGER NOT NULL DEFAULT 0,
+    symptoms TEXT NOT NULL DEFAULT '[]',
+    red_flags TEXT NOT NULL DEFAULT '[]',
+    meds TEXT NOT NULL DEFAULT '[]',
+    triggers TEXT NOT NULL DEFAULT '[]',
+    notes TEXT,
+    legacy_event_id TEXT UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_headaches_date ON headaches(user_id, date);
+
+  -- Daily check-in: sleep_hours is the night that ended on the morning of date.
+  CREATE TABLE IF NOT EXISTS daily_checkins (
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    date TEXT NOT NULL,
+    sleep_hours REAL CHECK(sleep_hours BETWEEN 0 AND 24),
+    sleep_quality INTEGER CHECK(sleep_quality BETWEEN 1 AND 5),
+    stress INTEGER CHECK(stress BETWEEN 1 AND 5),
+    energy INTEGER CHECK(energy BETWEEN 1 AND 5),
+    caffeine_servings REAL CHECK(caffeine_servings >= 0),
+    alcohol_drinks REAL CHECK(alcohol_drinks >= 0),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, date),
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
   `);
 
   // Additive migration for databases created before Microsoft sign-in existed
@@ -513,6 +557,20 @@ function runDataMigrations() {
     db.prepare(
       `INSERT OR IGNORE INTO health_profile (user_id, conditions, goals, diet_style) VALUES (?, ?, ?, ?)`
     ).run(DEFAULT_USER_ID, "High cholesterol (watching)", "Fat loss while keeping muscle\nConsistency", dietStyle);
+  });
+
+  // Migraines logged as generic health events become structured headaches.
+  // The originals stay in health_events (hidden from that list). The flag
+  // means a migrated headache you later delete never comes back.
+  once("headaches_from_events", () => {
+    if (!db.prepare("SELECT id FROM users WHERE id = ?").get(DEFAULT_USER_ID)) return;
+    const ins = db.prepare(
+      `INSERT OR IGNORE INTO headaches (id, user_id, date, duration_minutes, peak_severity, type, notes, legacy_event_id, created_at)
+       VALUES (?, ?, ?, ?, ?, 'migraine', ?, ?, ?)`
+    );
+    for (const e of db.prepare("SELECT * FROM health_events WHERE category = 'migraine'").all()) {
+      ins.run(randomUUID(), DEFAULT_USER_ID, e.date, e.duration_minutes, e.intensity, e.notes, e.id, e.created_at);
+    }
   });
 }
 

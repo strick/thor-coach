@@ -12,31 +12,89 @@
   <main class="container">
     <div class="page-head"><h1>Health</h1><a class="btn btn-ghost btn-sm" href="profile.html">Profile &amp; meds →</a></div>
 
-    <div class="grid cols-2 mb">
+    <div id="ongoing"></div>
+
+    <div class="grid cols-2">
       <div class="card">
-        <h2>Log event</h2>
-        <div class="row">
-          <div><label>Date</label><input type="date" id="e-date" /></div>
-          <div><label>Category</label>
-            <select id="e-cat"><option>migraine</option><option>sleep</option><option>yardwork</option><option>run</option><option>other</option></select></div>
+        <div class="row-between">
+          <h2>Daily check-in</h2>
+          <input type="date" id="ci-date" style="width:auto" />
         </div>
-        <div class="row">
-          <div><label>Intensity (1–10)</label><input type="number" id="e-int" min="1" max="10" /></div>
-          <div><label>Duration (min)</label><input type="number" id="e-dur" /></div>
-        </div>
-        <label>Notes</label><input id="e-notes" />
-        <button id="btn-event" class="mt">Log event</button>
+        <div id="checkin"><div class="empty">Loading…</div></div>
       </div>
-      <div class="card">
-        <h2>Last 90 days</h2>
-        <div id="cat-stats"></div>
+
+      <div class="card" id="headache">
+        <div class="row-between">
+          <h2 id="h-title">Log a headache</h2>
+          <button class="btn-ghost btn-sm fit" id="h-cancel" style="display:none">Cancel edit</button>
+        </div>
+        <div id="h-alert"></div>
+        <div class="row">
+          <div><label for="h-start">Started</label><input type="datetime-local" id="h-start" /></div>
+          <div><label for="h-end">Ended <span class="muted">(blank = still going)</span></label><input type="datetime-local" id="h-end" /></div>
+        </div>
+        <div class="row">
+          <div><label for="h-sev">Worst pain <span id="h-sev-val" class="muted"></span></label><input type="range" id="h-sev" min="0" max="10" value="5" /></div>
+          <div class="fit" style="min-width:150px"><label for="h-type">Type</label><select id="h-type"></select></div>
+        </div>
+        <label>Where</label><div class="chips" id="h-locations"></div>
+        <label class="check-row"><input type="checkbox" id="h-aura" /> Aura before or during (visual changes, tingling)</label>
+        <label>Other symptoms</label><div class="chips" id="h-symptoms"></div>
+        <label>Medicine taken</label>
+        <div id="h-meds"></div>
+        <button type="button" class="btn-ghost btn-sm" id="h-add-med">+ Add medicine</button>
+        <label>Suspected triggers</label><div class="chips" id="h-triggers"></div>
+        <input id="h-trigger-other" class="mt" placeholder="Other triggers, comma separated (e.g. red wine, long drive)" />
+        <details class="mt" id="h-redflags-wrap">
+          <summary>Warning signs — check any that apply</summary>
+          <div id="h-redflags"></div>
+        </details>
+        <label for="h-notes">Notes</label><textarea id="h-notes" rows="2"></textarea>
+        <div class="row mt"><button id="h-save" class="fit">Save headache</button></div>
+        <datalist id="med-options"></datalist>
       </div>
     </div>
 
-    <div class="card">
-      <h2>Recent events</h2>
-      <div id="events" class="list"></div>
+    <div class="card mt">
+      <div class="row-between">
+        <h2>Patterns</h2>
+        <span class="muted small" id="coverage"></span>
+      </div>
+      <div id="overuse"></div>
+      <div id="patterns"><div class="empty">Loading…</div></div>
+      <p class="muted small mt" id="caveat"></p>
     </div>
+
+    <div class="grid cols-2 mt">
+      <div class="card chart-card">
+        <h2>Headache days per week</h2>
+        <div id="weekly-chart"></div>
+      </div>
+      <div class="card">
+        <h2>History</h2>
+        <div id="history" class="list"></div>
+      </div>
+    </div>
+
+    <details class="card mt">
+      <summary>Other health events (sleep, yardwork, …)</summary>
+      <div class="grid cols-2 mt">
+        <div>
+          <div class="row">
+            <div><label>Date</label><input type="date" id="e-date" /></div>
+            <div><label>Category</label>
+              <select id="e-cat"><option>sleep</option><option>yardwork</option><option>run</option><option>other</option></select></div>
+          </div>
+          <div class="row">
+            <div><label>Intensity (1–10)</label><input type="number" id="e-int" min="1" max="10" /></div>
+            <div><label>Duration (min)</label><input type="number" id="e-dur" /></div>
+          </div>
+          <label>Notes</label><input id="e-notes" />
+          <button id="btn-event" class="mt btn-ghost">Log event</button>
+        </div>
+        <div id="events" class="list"></div>
+      </div>
+    </details>
   </main>
   <script type="module" src="js/health.js"></script>
 </body>

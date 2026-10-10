@@ -3,40 +3,13 @@
 // so prompts pick only the sections they need and new domains just add one.
 import { db, getSetting } from "../db.js";
 import { DEFAULT_USER_ID, todayISO } from "../config.js";
+import { addDays, weekStartOf, round, median, avg, isHardRun, daysBetween } from "../util.js";
 import { getDay, getGoals } from "./nutrition.js";
 import { getWorkouts } from "./workouts.js";
+import { hrMaxEstimate } from "./running.js";
 import { getProfile, profileForPrompt, medicationsForPrompt } from "./profile.js";
-
-export const addDays = (iso, n) => {
-  const d = new Date(iso + "T12:00:00");
-  d.setDate(d.getDate() + n);
-  return todayISO(d);
-};
-
-/** Monday of the week containing `iso`. */
-export function weekStartOf(iso) {
-  const d = new Date(iso + "T12:00:00");
-  d.setDate(d.getDate() - ((d.getDay() || 7) - 1));
-  return todayISO(d);
-}
-
-export const round = (n, digits = 0) => {
-  if (n == null || !Number.isFinite(Number(n))) return null;
-  const f = 10 ** digits;
-  return Math.round(Number(n) * f) / f;
-};
-
-export function median(values) {
-  const v = values.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
-  if (!v.length) return null;
-  const mid = Math.floor(v.length / 2);
-  return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
-}
-
-const avg = (values) => {
-  const v = values.filter((x) => Number.isFinite(x));
-  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
-};
+import { headachesContext } from "./headaches.js";
+import { checkinsContext } from "./checkins.js";
 
 // --- Sections -------------------------------------------------------------
 
@@ -194,27 +167,8 @@ function training4wSection({ end }) {
     window: `${start}..${end}`,
     by_week: Object.values(weeks).sort((a, b) => a.week_of.localeCompare(b.week_of)),
     last_session: last,
-    days_since_last: Math.round((new Date(end + "T12:00:00") - new Date(last + "T12:00:00")) / 86_400_000),
+    days_since_last: daysBetween(last, end),
   };
-}
-
-/** Max heart rate for effort classification: observed max, else 220 - age. */
-function hrMaxEstimate() {
-  const observed = db.prepare("SELECT MAX(max_heart_rate) AS m FROM running_sessions").get()?.m;
-  if (observed) return observed;
-  const age = getProfile().age;
-  return age ? 220 - age : null;
-}
-
-/**
- * Strava never sets effort_level, so "hard" comes from heart rate (avg ≥ 85%
- * of max) or, without HR, pace at least 8% faster than the runner's median.
- */
-export function isHardRun(run, { hrMax, medianPace }) {
-  if (run.effort_level) return ["hard", "tempo"].includes(run.effort_level);
-  if (hrMax && run.avg_heart_rate) return run.avg_heart_rate >= 0.85 * hrMax;
-  if (medianPace && run.pace_min_per_mile) return run.pace_min_per_mile <= medianPace * 0.92;
-  return false;
 }
 
 function running8wSection({ end }) {
@@ -287,6 +241,8 @@ const SECTIONS = {
   training_4w: training4wSection,
   running_8w: running8wSection,
   body: bodySection,
+  headaches_90d: ({ end }) => headachesContext(end),
+  checkins_14d: ({ end }) => checkinsContext(end),
 };
 
 export const SECTION_NAMES = Object.keys(SECTIONS);

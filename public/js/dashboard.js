@@ -1,4 +1,5 @@
-import { api, toast, esc, renderMarkdown, todayISO, addDays, fmtDate, renderNav, bar } from "./ui.js";
+import { api, toast, esc, renderMarkdown, todayISO, addDays, fmtDate, fmtTime, localDateTime, renderNav, bar } from "./ui.js";
+import { mountCheckin } from "./checkin.js";
 
 renderNav("index");
 
@@ -383,6 +384,28 @@ async function setWater(glasses) {
 $("water-plus").addEventListener("click", () => setWater(waterState.glasses + 1));
 $("water-minus").addEventListener("click", () => setWater(waterState.glasses - 1));
 
+// --- Headache still going? ---
+
+async function loadOngoingHeadache() {
+  const { ongoing } = await api("/api/headaches/ongoing");
+  const box = $("ongoing-headache");
+  if (!ongoing) {
+    box.innerHTML = "";
+    return;
+  }
+  box.innerHTML = `<div class="banner blue"><strong>Headache still going?</strong>
+    Started ${fmtTime(ongoing.started_at)}${ongoing.date !== today ? ` on ${fmtDate(ongoing.date)}` : ""} · worst pain ${ongoing.peak_severity ?? "?"}/10
+    <div class="row"><button class="btn-sm fit" id="end-headache">It's over — end it now</button>
+    <a class="btn btn-ghost btn-sm fit" href="health.html#headache">Update</a></div></div>`;
+  $("end-headache").addEventListener("click", async () => {
+    try {
+      await api(`/api/headaches/${ongoing.id}`, { method: "PATCH", body: { ended_at: localDateTime() } });
+      toast("Headache marked as ended");
+      loadOngoingHeadache();
+    } catch (err) { toast(err.message, true); }
+  });
+}
+
 const hour = new Date().getHours();
 $("greeting").textContent = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
@@ -396,4 +419,8 @@ loadReflection().catch(() => {});
 loadLatestRun().catch(() => {});
 loadWeight().catch(() => {});
 loadWater().catch(() => {});
+loadOngoingHeadache().catch(() => {});
+mountCheckin($("checkin"), { date: today, compact: true }).catch(() => {
+  $("checkin").innerHTML = `<div class="empty">Couldn't load the check-in.</div>`;
+});
 autoSyncStrava();
