@@ -399,8 +399,11 @@ export function latestResults(userId = DEFAULT_USER_ID) {
       latest, previous, delta, out_of_range: OUT.has(rows[0].flag), count: rows.length,
     };
   });
+  markers.sort((a, b) => CATALOG_ORDER[a.key] - CATALOG_ORDER[b.key]);
   return PANELS.map((panel) => ({ panel, markers: markers.filter((x) => x.panel === panel) })).filter((p) => p.markers.length);
 }
+
+const CATALOG_ORDER = Object.fromEntries(LAB_MARKERS.map((m, i) => [m.key, i]));
 
 /** Confirmed series for one marker (canonical units where convertible). */
 export function trend(markerKey, userId = DEFAULT_USER_ID) {

@@ -238,11 +238,11 @@ export function chartLine(points, { height = 140, unit = "", color = "var(--acce
       bandVals.map((v) => `<line x1="0" x2="${W}" y1="${yOf(v).toFixed(2)}" y2="${yOf(v).toFixed(2)}" stroke="var(--success)" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" opacity="0.6"/>`).join("");
   }
   const first = points[0], lastP = points[points.length - 1];
-  return `<svg viewBox="0 0 ${W} ${height}" width="100%" height="${height}" preserveAspectRatio="none" style="overflow:visible">
+  // The SVG stretches to the card width, so labels live in HTML (SVG text would distort).
+  return `<svg viewBox="0 0 ${W} ${height - 18}" width="100%" height="${height - 18}" preserveAspectRatio="none" style="overflow:visible">
     ${bandSvg}<path d="${path}" fill="none" stroke="${color}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>${dots}
-    <text x="0" y="${height - 4}" font-size="7" fill="var(--muted)">${esc(first.label)}</text>
-    <text x="${W}" y="${height - 4}" font-size="7" fill="var(--muted)" text-anchor="end">${esc(lastP.label)}</text>
-  </svg>`;
+  </svg>
+  <div class="chart-labels"><span>${esc(first.label)}</span><span>${points.length > 1 ? esc(lastP.label) : ""}</span></div>`;
 }
 
 /**
