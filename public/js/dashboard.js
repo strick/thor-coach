@@ -406,6 +406,25 @@ async function loadOngoingHeadache() {
   });
 }
 
+// --- Weekly review: written Sunday evening, or Monday if it's still missing ---
+
+async function loadWeeklyReview() {
+  const [latest] = await api("/api/guides?kind=weekly_review&limit=1");
+  const dow = new Date().getDay(); // 0 = Sunday
+  const reviewWeek = dow === 0 ? weekStart() : addDays(weekStart(), -7);
+  const due = (dow === 0 && new Date().getHours() >= 18) || dow === 1;
+  let review = latest;
+  if (due && (!latest || latest.period_start < reviewWeek)) {
+    try {
+      review = await api("/api/guides/weekly-review", { method: "POST", body: {} });
+    } catch { /* silent — the button on Guides/Workouts still works */ }
+  }
+  if (review && review.period_start >= addDays(reviewWeek, -7)) {
+    $("weekly-review-link").innerHTML =
+      `<a class="btn btn-ghost btn-sm" href="guides.html#${review.id}">📘 ${esc(review.title)} — read your weekly review →</a>`;
+  }
+}
+
 const hour = new Date().getHours();
 $("greeting").textContent = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
@@ -420,6 +439,7 @@ loadLatestRun().catch(() => {});
 loadWeight().catch(() => {});
 loadWater().catch(() => {});
 loadOngoingHeadache().catch(() => {});
+loadWeeklyReview().catch(() => {});
 mountCheckin($("checkin"), { date: today, compact: true }).catch(() => {
   $("checkin").innerHTML = `<div class="empty">Couldn't load the check-in.</div>`;
 });

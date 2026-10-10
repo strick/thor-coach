@@ -12,13 +12,26 @@
   <main class="container">
     <div class="page-head">
       <h1>Ask Thor</h1>
-      <span class="sub">Questions about your health and training, or log things in plain English</span>
-    </div>
-    <div class="card chat-box">
-      <div class="chat-log" id="log">
-        <div class="msg bot">Hi, I'm Thor, your health pal. I can read and log your workouts, food, runs, weight and health notes, and I know your profile and meds. Try:
-"how's my protein this week?" · "log 3x12 goblet squats at 50" · "what does my running look like lately?" · "sync strava"</div>
+      <div class="row fit" style="gap:8px">
+        <button class="btn-ghost btn-sm fit" id="btn-memory">What Thor remembers</button>
+        <button class="btn-ghost btn-sm fit" id="btn-new">New conversation</button>
       </div>
+    </div>
+
+    <div class="card mb" id="memory-card" hidden>
+      <div class="row-between">
+        <h2>What Thor remembers</h2>
+        <span class="muted small">Used in every answer and summary. Say "remember…" in chat, or add one here.</span>
+      </div>
+      <div id="memories" class="list"></div>
+      <div class="row mt">
+        <div><input id="memory-new" maxlength="500" placeholder="e.g. My doctor wants my LDL under 100 by next spring" /></div>
+        <button class="btn-ghost fit" id="btn-memory-add">Add</button>
+      </div>
+    </div>
+
+    <div class="card chat-box">
+      <div class="chat-log" id="log"></div>
       <div class="chat-input">
         <textarea id="input" placeholder="Ask anything…" rows="2"></textarea>
         <button id="send" class="fit">Send</button>

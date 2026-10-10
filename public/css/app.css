@@ -328,6 +328,10 @@ input[type="range"] { padding: 0; accent-color: var(--accent); background: trans
 .file-chip { display: inline-flex; align-items: center; gap: 6px; }
 @media (max-width: 640px) { .lab-marker { grid-template-columns: 1fr 1fr; } .lab-marker .rb { grid-column: 1 / -1; } }
 
+/* --- Guides --- */
+.grid.guides-layout { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.4fr); align-items: start; }
+@media (max-width: 860px) { .grid.guides-layout { grid-template-columns: 1fr; } }
+
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .row-between h2 { margin-bottom: 4px; }
 .row-between p { margin: 0; }

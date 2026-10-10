@@ -2,7 +2,6 @@ import { db, uuid, tx } from "../db.js";
 import { chatJSON } from "../llm.js";
 import { THOR_PLAN_ID, todayISO, getDOW } from "../config.js";
 import { HttpError } from "../http.js";
-import { systemPrompt } from "./persona.js";
 
 export function getDayExercises(dow, planId = THOR_PLAN_ID) {
   return db.prepare("SELECT * FROM exercises WHERE plan_id = ? AND day_of_week = ? ORDER BY rowid").all(planId, dow);
@@ -328,52 +327,7 @@ const addDays = (iso, n) => {
   return todayISO(d);
 };
 
-export async function generateWeeklySummary(weekStart) {
-  // Default to the Monday of the current week
-  let start = weekStart;
-  if (!start) {
-    const now = new Date();
-    const back = (getDOW(now) - 1) % 7;
-    now.setDate(now.getDate() - back);
-    start = todayISO(now);
-  }
-  const end = addDays(start, 6);
-  const sessions = getWorkouts(start, end);
-  const totalVolume = Math.round(sessions.reduce((a, x) => a + x.total_volume, 0));
-  const runs = db.prepare("SELECT * FROM running_sessions WHERE session_date BETWEEN ? AND ?").all(start, end);
-
-  const metrics = {
-    sessions: sessions.length,
-    exercises_logged: sessions.reduce((a, x) => a + x.logs.length, 0),
-    total_volume_lbs: totalVolume,
-    runs: runs.length,
-    run_miles: Number(runs.reduce((a, r) => a + (r.distance_miles || 0), 0).toFixed(1)),
-    long_run_miles: Number(Math.max(0, ...runs.map((r) => r.distance_miles || 0)).toFixed(1)),
-  };
-
-  const { data } = await chatJSON(
-    "weekly_review",
-    systemPrompt(
-      `Review the user's training week (lifting and running) from the JSON numbers. Return JSON: {"summary": string} — 3-5 plain sentences (no headings): what went well, any pattern worth noticing, and one focus for next week.`,
-      { json: true }
-    ),
-    JSON.stringify({
-      week_start: start,
-      week_end: end,
-      metrics,
-      sessions: sessions.map((s) => ({ date: s.session_date, exercises: s.logs.map((l) => ({ name: l.exercise, sets: l.sets, reps: l.reps, weight: l.weight_lbs })) })),
-      runs: runs.map((r) => ({ date: r.session_date, miles: r.distance_miles, pace: r.pace_min_per_mile, avg_hr: r.avg_heart_rate })),
-    })
-  );
-
-  const id = uuid();
-  db.prepare(
-    `INSERT INTO weekly_summaries (id, plan_id, week_start_date, week_end_date, total_sessions, total_volume, summary_text, metrics_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, THOR_PLAN_ID, start, end, metrics.sessions, totalVolume, data.summary || "", JSON.stringify(metrics));
-  return db.prepare("SELECT * FROM weekly_summaries WHERE id = ?").get(id);
-}
-
+/** Legacy lifting-only weekly summaries (replaced by the weekly health review in guides.js). */
 export function listWeeklySummaries(limit = 12) {
   return db.prepare("SELECT * FROM weekly_summaries ORDER BY week_start_date DESC LIMIT ?").all(limit);
 }

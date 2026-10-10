@@ -7,8 +7,8 @@ import * as nutrition from "./services/nutrition.js";
 import * as running from "./services/running.js";
 import * as strava from "./services/strava.js";
 import * as summary from "./services/dailySummary.js";
-import { chat } from "./services/chat.js";
 import * as profileApi from "./api/profile.js";
+import * as guidesApi from "./api/guides.js";
 import * as headachesApi from "./api/headaches.js";
 import * as labsApi from "./api/labs.js";
 
@@ -74,7 +74,7 @@ export function registerRoutes(app) {
   app.delete("/api/exercise-logs/:id", ({ params }) => workouts.deleteExerciseLog(params.id));
   app.get("/api/progress/summary", ({ query }) => workouts.progressSummary(query.start, query.end));
   app.get("/api/weekly-summaries", () => workouts.listWeeklySummaries());
-  app.post("/api/weekly-summaries/generate", ({ body }) => workouts.generateWeeklySummary(body.week_start));
+  // POST /api/weekly-summaries/generate now makes a weekly health review (src/api/guides.js).
 
   // --- Food catalog ---
   app.get("/api/foods", ({ query }) => nutrition.searchFoods(query.q || "", query.category || ""));
@@ -209,7 +209,7 @@ export function registerRoutes(app) {
     "nutrition_meals", "nutrition_meal_items", "nutrition_meal_totals", "nutrition_templates",
     "running_sessions", "body_metrics", "water_intake", "daily_summaries", "daily_reflections", "food_catalog",
     "health_profile", "medications", "headaches", "daily_checkins",
-    "lab_reports", "lab_report_files", "lab_results", "guides",
+    "lab_reports", "lab_report_files", "lab_results", "guides", "chat_messages", "user_memories",
   ];
   app.get("/api/export", () => ({
     exported_at: new Date().toISOString(),
@@ -308,9 +308,6 @@ export function registerRoutes(app) {
     return { streak, today_active: todayActive, total_active_days: active.size };
   });
 
-  // --- Chat ---
-  app.post("/api/chat", ({ body }) => {
-    if (!Array.isArray(body.messages) || !body.messages.length) throw new HttpError(400, "messages array is required");
-    return chat(body.messages);
-  });
+  // --- Guides library, weekly review, Ask Thor (chat), long-term memory ---
+  guidesApi.register(app);
 }

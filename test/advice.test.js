@@ -60,13 +60,15 @@ test("chat: persona + profile in the system prompt, profile tool available", asy
   assert.match(toolResult.content, /High cholesterol/);
 });
 
-test("weekly summary uses the persona and the weekly_review job", async () => {
+test("the old weekly-summary button now makes a weekly health review", async () => {
   env.stub.reset();
-  env.stub.replyJSON({ summary: "Solid week." });
+  env.stub.replyJSON({ markdown: "## The week in brief\nSolid week." });
   const r = await env.request("/api/weekly-summaries/generate", { method: "POST", body: {} });
-  assert.equal(r.status, 200);
-  assert.equal(r.json.summary_text, "Solid week.");
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.json.kind, "weekly_review");
+  assert.match(r.json.markdown, /Solid week/);
   assert.match(env.stub.last.messages[0].content, /health pal/);
+  assert.match(env.stub.last.messages[0].content, /## Focus for next week/);
   assert.doesNotMatch(env.stub.last.messages[0].content, BANNED);
   assert.match(env.stub.last.messages[1].content, /long_run_miles/);
 });

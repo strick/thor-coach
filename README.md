@@ -70,10 +70,12 @@ The image is a single `node:24-slim` container (still zero npm deps) that bind-m
 - **Water** — tap-to-fill glass tracker on the dashboard (8 oz each, configurable daily goal), logged by date, used in summaries and CSV export
 - **Goals** — weekly workout/mileage/volume targets with live progress on the dashboard stats
 - **Mid-workout** — rest timer with beep (auto-starts after each logged set), progressive-overload nudges ("50 lbs for 6 sessions — load 55 today"), editable workout plan (add/rename/move/delete exercises per day)
-- **Health** — migraine/sleep/activity events with intensity tracking
+- **Health** — structured headache log (start/end, severity, type, location, aura, symptoms, medicine taken and whether it helped, suspected triggers) with a fixed "get care now" alert for red-flag symptoms; a ~20-second daily check-in (sleep, stress, energy, caffeine, alcohol); a **patterns** view that compares headache-day rates with and without each factor (sleep, stress, caffeine, alcohol, sodium, water, meal timing, heavy lifting, long/hard runs) using simple statistics with minimum-sample guards — the AI only narrates it; and a medication-overuse check based on ICHD-3 thresholds
+- **Labs** — upload a lab PDF or photos, or paste from your patient portal; the AI transcribes every row and you review/edit before anything counts. ~60 markers with aliases, unit conversion to US units (A1c, lipids, glucose, creatinine, vitamin D…), latest values with range bars, trends, and an automatic plain-English explainer per report (out of range, what changed, levers you control, questions for your doctor). Critical values get a fixed server-side banner.
+- **Guides** — a library of explainers written from your own data: a weekly health review (training, running, food, headaches, sleep — written Sunday evening/Monday, or on demand), lab explainers, and deep dives on any question you ask. Each stores the data snapshot the model saw.
 - **Barcode scanning** — camera (Chrome BarcodeDetector) or manual entry → OpenFoodFacts lookup → picks tray or library
-- **Export** — one-click CSV (workouts, nutrition, running, body) and full JSON dump from Settings
-- **Ask Thor** — chat with tool-calling over all of the above, aware of your profile and meds (OpenAI or Ollama)
+- **Export** — one-click CSV (workouts, nutrition, running, body, water, headaches, check-ins, labs) and full JSON dump from Settings
+- **Ask Thor** — chat with tool-calling over all of the above (logging, labs, headache patterns, guides), aware of your profile and meds. History is kept server-side across reloads ("New conversation" starts fresh), and long-term **memory** ("remember my doctor wants LDL under 100") is visible and deletable on the Ask Thor and Profile pages
 - **Settings** — connection status, AI model per job (persisted), users, link to your health profile
 
 ## Configuration
@@ -124,6 +126,11 @@ A consistent snapshot (`VACUUM INTO`) is written to `data/backups/workout-YYYY-M
 once per day (checked hourly, in-process — no external cron), keeping the last 14. Each
 snapshot is also mirrored off-machine to `THOR_BACKUP_MIRROR` (default
 `/mnt/g/backups/thor`) when that path is mounted; it no-ops silently otherwise.
+
+Uploaded lab files live next to the database in `data/uploads/labs/` (names are
+random UUIDs; the original filename is only kept for display). They aren't inside the
+SQLite snapshot, so each backup also copies any new upload files to
+`<mirror>/uploads/labs/` (incremental, never pruned).
 
 Under Docker the bind-mounted `./data` keeps the database and local snapshots on the
 host. To keep the off-machine mirror working too, mount its drive into the container
@@ -179,6 +186,11 @@ backup runs on boot, so snapshots happen whenever the app wakes on a new day.
   the shared PIN from `THOR_PIN` in `.env`, sent as the `X-Thor-Pin` header. The
   browser prompts once and remembers it in localStorage. Blank `THOR_PIN` (and no
   Microsoft config) disables auth.
-- API responses carry CSP/nosniff/frame-deny headers; request bodies capped at 1 MB.
+- API responses carry CSP/nosniff/frame-deny headers; JSON request bodies are capped at
+  1 MB. Lab uploads are the one raw-body route: 15 MB per file (30 MB per report, 6 files),
+  refused from `Content-Length` before the body is read, with the file type sniffed from
+  its bytes (PDF/JPEG/PNG/WebP) rather than trusted from the client. Downloads are
+  `attachment` + `no-store`. Lab explainers only ever see the reviewed rows, never the raw
+  report text.
 - The server binds 0.0.0.0 so phones on your LAN can reach it. PIN or not,
   don't port-forward it to the internet.

@@ -99,5 +99,36 @@ $("btn-add-med").addEventListener("click", async () => {
   } catch (err) { toast(err.message, true); }
 });
 
+// --- Long-term memory ---
+
+async function loadMemories() {
+  const list = await api("/api/memories");
+  $("memories").innerHTML = list.length
+    ? list.map((m) => `
+      <div class="item">
+        <div class="main"><div class="title" style="font-weight:600">${esc(m.content)}</div>
+          <div class="meta">${m.category ? `${esc(m.category)} · ` : ""}saved ${esc(m.created_at.slice(0, 10))}${m.source === "chat" ? " from chat" : ""}</div></div>
+        <button class="btn-danger" data-forget="${m.id}" title="Forget">✕</button>
+      </div>`).join("")
+    : `<div class="empty">Nothing saved yet.</div>`;
+  $("memories").querySelectorAll("[data-forget]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      await api(`/api/memories/${b.dataset.forget}`, { method: "DELETE" });
+      loadMemories();
+    })
+  );
+}
+
+$("btn-memory-add").addEventListener("click", async () => {
+  const content = $("memory-new").value.trim();
+  if (!content) return;
+  try {
+    await api("/api/memories", { method: "POST", body: { content } });
+    $("memory-new").value = "";
+    loadMemories();
+  } catch (err) { toast(err.message, true); }
+});
+
 loadProfile().catch((e) => toast(e.message, true));
 loadMeds().catch((e) => toast(e.message, true));
+loadMemories().catch(() => {});

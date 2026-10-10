@@ -11,6 +11,7 @@ import { getProfile, profileForPrompt, medicationsForPrompt } from "./profile.js
 import { headachesContext } from "./headaches.js";
 import { checkinsContext } from "./checkins.js";
 import { labsContext } from "./labs.js";
+import { memoriesForPrompt } from "./memory.js";
 
 // --- Sections -------------------------------------------------------------
 
@@ -245,6 +246,10 @@ const SECTIONS = {
   headaches_90d: ({ end }) => headachesContext(end),
   checkins_14d: ({ end }) => checkinsContext(end),
   labs: () => labsContext(),
+  memories: () => {
+    const m = memoriesForPrompt();
+    return m.length ? m : null;
+  },
 };
 
 export const SECTION_NAMES = Object.keys(SECTIONS);

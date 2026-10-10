@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Thor — Guides</title>
+  <meta name="theme-color" content="#0b0f17" />
+  <link rel="stylesheet" href="css/app.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
+</head>
+<body>
+  <main class="container">
+    <div class="page-head">
+      <h1>Guides</h1>
+      <span class="sub">Explainers written from your own data — weekly reviews, lab reads and deep dives</span>
+    </div>
+
+    <div class="card">
+      <h2>What do you want to understand?</h2>
+      <div class="row">
+        <div><input id="topic" maxlength="300" placeholder="e.g. Why is my LDL creeping up, and what would actually move it?" /></div>
+        <button id="btn-ask" class="fit">Write my guide</button>
+      </div>
+      <div class="chips mt" id="suggestions"></div>
+      <div class="muted small mt" id="ask-status"></div>
+    </div>
+
+    <div class="row-between mt">
+      <div class="seg tabs" id="filters" style="flex:1;max-width:620px">
+        <button type="button" data-kind="" class="on">All</button>
+        <button type="button" data-kind="weekly_review">Weekly</button>
+        <button type="button" data-kind="lab_explainer">Labs</button>
+        <button type="button" data-kind="deep_dive">Deep dives</button>
+        <button type="button" data-kind="pinned">Pinned</button>
+      </div>
+      <button id="btn-weekly" class="btn-ghost btn-sm fit">Write last week's review</button>
+    </div>
+
+    <div class="grid cols-2 mt guides-layout">
+      <div class="card">
+        <div id="list" class="list"><div class="empty">Loading…</div></div>
+        <details class="mt" id="archive-wrap">
+          <summary>Archive: older weekly training summaries</summary>
+          <div id="archive" class="list mt"></div>
+        </details>
+      </div>
+      <div class="card" id="detail-card">
+        <div id="detail"><div class="empty">Pick a guide to read it, or ask a question above.</div></div>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="js/guides.js"></script>
+</body>
+</html>

@@ -5,7 +5,7 @@ import { systemPrompt } from "./persona.js";
 import { buildHealthContext } from "./healthContext.js";
 
 export const DAILY_SECTIONS = [
-  "profile", "medications", "today", "last7", "nutrition_30d", "training_4w", "running_8w", "body",
+  "profile", "medications", "memories", "today", "last7", "nutrition_30d", "training_4w", "running_8w", "body",
   "checkins_14d", "headaches_90d", "labs",
 ];
 

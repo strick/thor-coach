@@ -533,6 +533,30 @@ export function ensureSchemaAndSeed() {
     FOREIGN KEY(lab_report_id) REFERENCES lab_reports(id) ON DELETE SET NULL
   );
   CREATE INDEX IF NOT EXISTS idx_guides_kind ON guides(user_id, kind, created_at);
+
+  -- Ask Thor history, kept across reloads. Order by rowid: datetime('now') has
+  -- one-second resolution and a question + reply land in the same second.
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    thread_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    tool_calls TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_chat_thread ON chat_messages(user_id, thread_id);
+
+  -- Long-term memory: durable facts and preferences you asked Thor to keep.
+  CREATE TABLE IF NOT EXISTS user_memories (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    content TEXT NOT NULL,
+    category TEXT,
+    source TEXT NOT NULL DEFAULT 'chat',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
   `);
 
   // Additive migration for databases created before Microsoft sign-in existed

@@ -157,6 +157,7 @@ export function renderNav(active) {
     ["health", "Health", "health.html"],
     ["labs", "Labs", "labs.html"],
     ["trends", "Trends", "trends.html"],
+    ["guides", "Guides", "guides.html"],
     ["chat", "Ask Thor", "chat.html"],
   ];
   const link = ([key, label, href]) => `<a class="link${key === active ? " active" : ""}" href="${href}">${label}</a>`;

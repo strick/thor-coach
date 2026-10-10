@@ -1,7 +1,8 @@
 // "Ask Thor": conversational health pal with tool calling. Replaces the old
 // thor-agent, health-agent, meta-runner and health-mcp containers with one loop.
-import { db } from "../db.js";
+import { db, uuid, tx, getSetting, setSetting } from "../db.js";
 import { chatCompletion } from "../llm.js";
+import { HttpError } from "../http.js";
 import { DEFAULT_USER_ID, todayISO, getDOW } from "../config.js";
 import * as workouts from "./workouts.js";
 import * as nutrition from "./nutrition.js";
@@ -13,6 +14,9 @@ import { getProfile, listMedications } from "./profile.js";
 import * as headaches from "./headaches.js";
 import * as checkins from "./checkins.js";
 import * as labs from "./labs.js";
+import * as memory from "./memory.js";
+import * as guides from "./guides.js";
+import { labsContext } from "./labs.js";
 import { LAB_MARKERS } from "../data/labMarkers.js";
 
 const TOOLS = [
@@ -257,36 +261,130 @@ const TOOLS = [
       db.prepare("SELECT * FROM health_events WHERE date BETWEEN ? AND ? AND category != 'migraine' ORDER BY date DESC")
         .all(start || "0000-01-01", end || "9999-12-31"),
   },
+  {
+    name: "remember",
+    description:
+      "Save a durable fact, preference, or doctor instruction to long-term memory (e.g. 'Doctor wants LDL under 100 by March', 'Prefers morning runs', 'Lactose intolerant'). " +
+      "Use only when the user asks you to remember something or states something lasting and important — never for trivia or one-off details. Tell them what you saved.",
+    parameters: {
+      type: "object",
+      properties: { content: { type: "string" }, category: { type: "string", enum: memory.MEMORY_CATEGORIES } },
+      required: ["content"],
+    },
+    run: ({ content, category }) => memory.addMemory({ content, category }),
+  },
+  {
+    name: "list_memories",
+    description: "List everything in long-term memory (with ids).",
+    parameters: { type: "object", properties: {} },
+    run: () => memory.listMemories(),
+  },
+  {
+    name: "forget_memory",
+    description: "Delete a memory by id when the user asks you to forget it or it's out of date.",
+    parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+    run: ({ id }) => memory.deleteMemory(id),
+  },
+  {
+    name: "get_guides",
+    description: "List saved guides (weekly reviews, lab explainers, deep dives) with titles and short excerpts, or read one in full by id.",
+    parameters: { type: "object", properties: { id: { type: "string" }, kind: { type: "string", enum: guides.GUIDE_KINDS } } },
+    run: ({ id, kind }) => (id ? guides.getGuide(id) : guides.listGuides({ kind, limit: 20 })),
+  },
+  {
+    name: "get_weekly_review",
+    description: "Get the most recent weekly health review.",
+    parameters: { type: "object", properties: {} },
+    run: () => guides.latestWeeklyReview() || { none: "No weekly review yet." },
+  },
 ];
 
 const SYSTEM = () => {
-  const context = buildHealthContext({ sections: ["profile", "medications", "today"] });
-  return systemPrompt(`Chat with the user. Through tools you can read and log their workouts, food, runs, weight, water, headaches and daily check-ins (sleep, stress, energy, caffeine, alcohol), and look at headache patterns.
+  const context = buildHealthContext({ sections: ["profile", "medications", "memories", "today"] });
+  const labs = labsContext();
+  const outOfRange = labs?.results.filter((r) => r.flag);
+  const recentHeadaches = headacheSummary();
+  return systemPrompt(`Chat with the user. Through tools you can read and log their workouts, food, runs, weight, water, headaches and daily check-ins (sleep, stress, energy, caffeine, alcohol), read their lab results and saved guides, and look at headache patterns.
 Today is ${todayISO()} (day-of-week ${getDOW()} where Monday=1..Sunday=7).
 - Use tools to read or log data instead of guessing. After logging something, confirm exactly what you logged.
-- Keep replies short and conversational unless they ask for depth. Use their numbers.
-- Their profile, medications and today's data so far (JSON): ${JSON.stringify(context)}`);
+- Keep replies short and conversational unless they ask for depth: a few sentences or a short list, answering the question first. Don't use report-style section headings (like "What went well") in chat. Use their numbers.
+- Long-term memory: things the user asked you to keep are under "memories" below — use them. Call remember only when the user asks you to remember something or tells you something durable (a doctor's instruction, a lasting preference or condition), and tell them what you saved. Never store trivia.
+- Their profile, medications, memories and today's data so far (JSON): ${JSON.stringify(context)}
+${outOfRange?.length ? `- Lab results currently out of range (most recent draw ${labs.most_recent_draw}): ${JSON.stringify(outOfRange)}` : ""}
+${recentHeadaches ? `- Headaches, last 30 days: ${JSON.stringify(recentHeadaches)}` : ""}`);
 };
 
+function headacheSummary() {
+  const h = headaches.headachesContext(todayISO());
+  if (!h || !h.headaches_last_30d) return null;
+  return {
+    headaches: h.headaches_last_30d,
+    headache_days: h.headache_days_last_30d,
+    most_recent: h.most_recent,
+    medication_overuse: h.medication_overuse.status,
+  };
+}
+
+// --- Persistent conversation ---------------------------------------------------
+
+const HISTORY_TURNS = 20;
+
+export function currentThread() {
+  let id = getSetting("chat.thread");
+  if (!id) {
+    id = uuid();
+    setSetting("chat.thread", id);
+  }
+  return id;
+}
+
+export function newThread() {
+  const id = uuid();
+  setSetting("chat.thread", id);
+  return { thread_id: id };
+}
+
+export function chatHistory({ limit = 50 } = {}, userId = DEFAULT_USER_ID) {
+  const thread = currentThread();
+  const rows = db
+    .prepare("SELECT id, role, content, tool_calls, created_at FROM chat_messages WHERE user_id = ? AND thread_id = ? ORDER BY rowid DESC LIMIT ?")
+    .all(userId, thread, Math.min(200, Number(limit) || 50))
+    .reverse()
+    .map((m) => ({ ...m, tool_calls: m.tool_calls ? JSON.parse(m.tool_calls) : [] }));
+  return { thread_id: thread, messages: rows };
+}
+
 /**
- * messages: [{role:'user'|'assistant', content}] conversation history from the client.
- * Runs an OpenAI-compatible tool-calling loop (max 6 rounds) and returns the reply.
+ * One chat turn. The server keeps the conversation: `message` is the new user
+ * text (the legacy `{messages}` shape is accepted — its last user message is used).
+ * The question and reply are saved together only when the turn succeeds.
  */
-export async function chat(messages) {
+export async function chat({ message, messages } = {}, userId = DEFAULT_USER_ID) {
+  const text = String(message ?? [...(messages || [])].reverse().find((m) => m.role === "user")?.content ?? "").trim();
+  if (!text) throw new HttpError(400, "message is required");
+  if (text.length > 4000) throw new HttpError(400, "Message is too long");
+  const thread = currentThread();
+  const history = db
+    .prepare("SELECT role, content FROM chat_messages WHERE user_id = ? AND thread_id = ? ORDER BY rowid DESC LIMIT ?")
+    .all(userId, thread, HISTORY_TURNS)
+    .reverse();
+
   const toolDefs = TOOLS.map((t) => ({
     type: "function",
     function: { name: t.name, description: t.description, parameters: t.parameters },
   }));
-  const convo = [{ role: "system", content: SYSTEM() }, ...messages.slice(-20)];
+  const convo = [{ role: "system", content: SYSTEM() }, ...history, { role: "user", content: text }];
   const toolCallsMade = [];
+  let reply = null;
 
-  for (let round = 0; round < 6; round += 1) {
-    const { message } = await chatCompletion("chat", { messages: convo, tools: toolDefs });
-    convo.push(message);
-
-    const calls = message.tool_calls || [];
-    if (!calls.length) return { reply: message.content ?? "", tool_calls: toolCallsMade };
-
+  for (let round = 0; round < 6 && reply == null; round += 1) {
+    const { message: m } = await chatCompletion("chat", { messages: convo, tools: toolDefs });
+    convo.push(m);
+    const calls = m.tool_calls || [];
+    if (!calls.length) {
+      reply = m.content ?? "";
+      break;
+    }
     for (const call of calls) {
       const tool = TOOLS.find((t) => t.name === call.function?.name);
       let result;
@@ -301,5 +399,18 @@ export async function chat(messages) {
       convo.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result).slice(0, 12000) });
     }
   }
-  return { reply: "I hit my tool-call limit for this turn — try a more specific question.", tool_calls: toolCallsMade };
+  reply ??= "I hit my tool-call limit for this turn — try a more specific question.";
+
+  const pills = toolCallsMade.map((t) => ({ name: t.name, error: t.error ? true : undefined }));
+  tx(() => {
+    const ins = db.prepare("INSERT INTO chat_messages (id, user_id, thread_id, role, content, tool_calls) VALUES (?, ?, ?, ?, ?, ?)");
+    ins.run(uuid(), userId, thread, "user", text, null);
+    ins.run(uuid(), userId, thread, "assistant", reply, pills.length ? JSON.stringify(pills) : null);
+  });
+  return {
+    reply,
+    tool_calls: toolCallsMade,
+    thread_id: thread,
+    memory_saved: toolCallsMade.some((t) => t.name === "remember" && !t.error) || undefined,
+  };
 }

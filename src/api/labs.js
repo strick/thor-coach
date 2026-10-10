@@ -39,6 +39,4 @@ export function register(app) {
     res.end(data);
   });
   app.delete("/api/labs/files/:id", ({ params }) => labs.deleteFile(params.id));
-
-  app.get("/api/guides/:id", ({ params }) => guides.getGuide(params.id));
 }
