@@ -33,6 +33,9 @@ function getUserGoals(userId) {
 
 export function upsertGoals(userId, goals) {
   const id = uuid();
+  // The Nutrition page doesn't send diet_style; keep the current one rather
+  // than silently resetting it to DASH.
+  const dietStyle = goals.diet_style || getUserGoals(userId)?.diet_style || "DASH";
   db.prepare(
     `INSERT INTO nutrition_goals (id, user_id, daily_protein_target_g, max_daily_sodium_mg, max_daily_saturated_fat_g,
        min_daily_fiber_g, max_daily_cholesterol_mg, max_daily_added_sugar_g, diet_style)
@@ -41,7 +44,7 @@ export function upsertGoals(userId, goals) {
     id, userId,
     goals.daily_protein_target_g ?? null, goals.max_daily_sodium_mg ?? null, goals.max_daily_saturated_fat_g ?? null,
     goals.min_daily_fiber_g ?? null, goals.max_daily_cholesterol_mg ?? null, goals.max_daily_added_sugar_g ?? null,
-    goals.diet_style || "DASH"
+    dietStyle
   );
   return getUserGoals(userId);
 }

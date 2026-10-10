@@ -69,30 +69,54 @@ export function toast(message, isError = false) {
 export const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-/** Tiny markdown renderer: headings, bold, italics, lists, paragraphs. */
+/**
+ * Tiny markdown renderer: headings, bold, italics, bullet and numbered lists,
+ * "> " callouts, paragraphs. Text is escaped first — no raw HTML or links.
+ */
 export function renderMarkdown(md) {
   const lines = String(md || "").split(/\r?\n/);
   const out = [];
-  let inList = false;
+  let list = null; // "ul" | "ol" while inside a list
+  let quote = false;
   const inline = (s) =>
     esc(s)
       .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
       .replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>")
       .replace(/`([^`]+)`/g, "<code>$1</code>");
+  const closeList = () => {
+    if (list) out.push(`</${list}>`);
+    list = null;
+  };
+  const closeQuote = () => {
+    if (quote) out.push("</blockquote>");
+    quote = false;
+  };
   for (const line of lines) {
     const t = line.trim();
-    if (/^[-*] /.test(t)) {
-      if (!inList) { out.push("<ul>"); inList = true; }
-      out.push(`<li>${inline(t.slice(2))}</li>`);
+    if (t.startsWith(">")) {
+      closeList();
+      if (!quote) { out.push("<blockquote>"); quote = true; }
+      const body = t.replace(/^>\s?/, "");
+      if (body) out.push(`<p>${inline(body)}</p>`);
       continue;
     }
-    if (inList) { out.push("</ul>"); inList = false; }
+    closeQuote();
+    const bullet = /^[-*] /.test(t);
+    const numbered = /^\d+[.)] /.test(t);
+    if (bullet || numbered) {
+      const kind = bullet ? "ul" : "ol";
+      if (list !== kind) { closeList(); out.push(`<${kind}>`); list = kind; }
+      out.push(`<li>${inline(bullet ? t.slice(2) : t.replace(/^\d+[.)] /, ""))}</li>`);
+      continue;
+    }
+    closeList();
     if (t.startsWith("### ")) out.push(`<h3>${inline(t.slice(4))}</h3>`);
     else if (t.startsWith("## ")) out.push(`<h2>${inline(t.slice(3))}</h2>`);
     else if (t.startsWith("# ")) out.push(`<h2>${inline(t.slice(2))}</h2>`);
     else if (t) out.push(`<p>${inline(t)}</p>`);
   }
-  if (inList) out.push("</ul>");
+  closeList();
+  closeQuote();
   return out.join("\n");
 }
 
@@ -117,21 +141,25 @@ export const DOW_NAMES = { 1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursd
 /** Render the shared nav; `active` is the page key. */
 export function renderNav(active) {
   const pages = [
-    ["index", "Dashboard", "index.html"],
+    ["index", "Today", "index.html"],
     ["workouts", "Workouts", "workouts.html"],
-    ["nutrition", "Nutrition", "nutrition.html"],
     ["running", "Running", "running.html"],
-    ["trends", "Trends", "trends.html"],
+    ["nutrition", "Nutrition", "nutrition.html"],
     ["health", "Health", "health.html"],
-    ["chat", "Coach", "chat.html"],
-    ["settings", "Settings", "settings.html"],
+    ["trends", "Trends", "trends.html"],
+    ["chat", "Ask Thor", "chat.html"],
   ];
+  const link = ([key, label, href]) => `<a class="link${key === active ? " active" : ""}" href="${href}">${label}</a>`;
   const nav = document.createElement("nav");
   nav.className = "nav";
   nav.innerHTML =
-    `<a class="brand" href="index.html"><span class="bolt">⚡</span> THOR</a>` +
-    pages.map(([key, label, href]) => `<a class="link${key === active ? " active" : ""}" href="${href}">${label}</a>`).join("");
+    `<a class="brand" href="index.html"><span class="bolt">⚡</span><span class="brand-text">THOR</span></a>` +
+    pages.map(link).join("") +
+    `<span class="spacer"></span>` +
+    link(["settings", "Settings", "settings.html"]);
   document.body.prepend(nav);
+  // On narrow screens the nav scrolls sideways; keep the current page in view.
+  nav.querySelector(".link.active")?.scrollIntoView?.({ inline: "center", block: "nearest" });
   // With Microsoft sign-in active, offer a sign-out link (fire-and-forget; the
   // endpoint is public so this never triggers a PIN prompt or redirect).
   fetch("/api/auth/me")

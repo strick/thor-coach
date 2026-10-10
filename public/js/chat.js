@@ -1,4 +1,4 @@
-import { api, toast, esc, renderNav } from "./ui.js";
+import { api, toast, esc, renderNav, renderMarkdown } from "./ui.js";
 
 renderNav("chat");
 const $ = (id) => document.getElementById(id);
@@ -25,7 +25,8 @@ async function send() {
     const res = await api("/api/chat", { method: "POST", body: { messages: history } });
     history.push({ role: "assistant", content: res.reply });
     const tools = (res.tool_calls || []).map((t) => `<span class="pill gray">🔧 ${esc(t.name)}</span>`).join("");
-    thinking.innerHTML = esc(res.reply) + (tools ? `<div class="tools">${tools}</div>` : "");
+    thinking.classList.add("md");
+    thinking.innerHTML = renderMarkdown(res.reply) + (tools ? `<div class="tools">${tools}</div>` : "");
   } catch (err) {
     thinking.innerHTML = `<span class="pill red">${esc(err.message)}</span>`;
     toast(err.message, true);

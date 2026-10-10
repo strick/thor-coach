@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Thor — Health profile</title>
+  <meta name="theme-color" content="#0b0f17" />
+  <link rel="stylesheet" href="css/app.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
+</head>
+<body>
+  <main class="container">
+    <div class="page-head">
+      <h1>Health profile</h1>
+      <span class="sub">Thor uses this to personalize your summaries, answers and lab reads.</span>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h2>About you</h2>
+        <div class="row">
+          <div><label for="birth_date">Date of birth</label><input type="date" id="birth_date" /></div>
+          <div><label for="sex">Sex <span class="muted">(for lab ranges)</span></label>
+            <select id="sex"><option value="">—</option></select></div>
+        </div>
+        <div class="row">
+          <div><label for="height_ft">Height (ft)</label><input type="number" id="height_ft" min="3" max="7" /></div>
+          <div><label for="height_in">(in)</label><input type="number" id="height_in" min="0" max="11.5" step="0.5" /></div>
+          <div><label for="diet_style">Diet style</label><select id="diet_style"><option value="">—</option></select></div>
+        </div>
+        <p class="muted small mt">Diet style also sets which nutrients your summaries focus on.</p>
+      </div>
+
+      <div class="card">
+        <h2>Goals</h2>
+        <label for="goals">What you're working toward <span class="muted">(one per line)</span></label>
+        <textarea id="goals" rows="4" placeholder="Lower my LDL&#10;Run a half marathon&#10;Fewer headaches"></textarea>
+        <label for="doctor_notes">What your doctor wants you to work on</label>
+        <textarea id="doctor_notes" rows="3" placeholder="e.g. Get LDL under 100 before next physical"></textarea>
+      </div>
+    </div>
+
+    <div class="card mt">
+      <h2>Health background</h2>
+      <div class="grid cols-3">
+        <div><label for="conditions">Conditions <span class="muted">(one per line)</span></label>
+          <textarea id="conditions" rows="4" placeholder="High cholesterol&#10;Migraines"></textarea></div>
+        <div><label for="allergies">Allergies</label>
+          <textarea id="allergies" rows="4" placeholder="Penicillin"></textarea></div>
+        <div><label for="family_history">Family history</label>
+          <textarea id="family_history" rows="4" placeholder="Father: heart attack at 58"></textarea></div>
+      </div>
+      <div class="row mt">
+        <button id="btn-save" class="fit">Save profile</button>
+        <span class="muted small" id="save-status"></span>
+      </div>
+    </div>
+
+    <div class="card mt">
+      <div class="row-between">
+        <div>
+          <h2>Medications &amp; supplements</h2>
+          <p class="muted small">Used when reading labs and giving advice (interactions, confounders). Thor never tells you to change a prescription.</p>
+        </div>
+        <label class="fit small" style="margin:0;text-transform:none;letter-spacing:0"><input type="checkbox" id="show-stopped" style="width:auto" /> Show stopped</label>
+      </div>
+      <div class="table-scroll mt">
+        <table class="med-table">
+          <thead><tr><th>Name</th><th>Dose</th><th>How often</th><th>Type</th><th>As needed</th><th>For</th><th>Active</th><th></th></tr></thead>
+          <tbody id="med-rows"></tbody>
+          <tfoot>
+            <tr id="med-new">
+              <td><input class="m-name" placeholder="e.g. Atorvastatin" /></td>
+              <td><input class="m-dose" placeholder="20 mg" /></td>
+              <td><input class="m-frequency" placeholder="daily" /></td>
+              <td><select class="m-kind"><option value="med">med</option><option value="supplement">supplement</option></select></td>
+              <td class="center"><input type="checkbox" class="m-as_needed" style="width:auto" /></td>
+              <td><input class="m-purpose" placeholder="cholesterol" /></td>
+              <td></td>
+              <td><button class="btn-sm" id="btn-add-med">Add</button></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </main>
+  <script type="module" src="js/profile.js"></script>
+</body>
+</html>

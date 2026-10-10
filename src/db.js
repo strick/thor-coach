@@ -6,9 +6,18 @@ import { fileURLToPath } from "node:url";
 import { THOR_PLAN_ID, DEFAULT_USER_ID } from "./config.js";
 import { FOOD_CATALOG } from "./data/foods.js";
 
+// Test runs must never open the real database or touch the real backup mirror.
+// (Static imports are hoisted above env setup, so a test that imports src/
+// directly instead of through test/helpers/env.js trips this.)
+if (process.env.THOR_TEST === "1" && (!process.env.THOR_DB_PATH || !process.env.THOR_BACKUP_MIRROR)) {
+  throw new Error("THOR_TEST=1 requires THOR_DB_PATH and THOR_BACKUP_MIRROR (use test/helpers/env.js)");
+}
+
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const dbPath = process.env.THOR_DB_PATH || path.join(root, "data", "workout.db");
-mkdirSync(path.dirname(dbPath), { recursive: true });
+/** Directory holding the database; uploads and backups live beside it. */
+export const dataDir = path.dirname(dbPath);
+mkdirSync(dataDir, { recursive: true });
 
 export const db = new DatabaseSync(dbPath);
 // WAL needs shared memory, which network filesystems (Azure App Service /home,
@@ -357,6 +366,42 @@ export function ensureSchemaAndSeed() {
     started_at TEXT NOT NULL,
     finished_at TEXT
   );
+
+  -- Health profile: what the AI needs to know about you. Multi-value fields
+  -- (conditions, allergies, family_history, goals) are newline-separated text.
+  CREATE TABLE IF NOT EXISTS health_profile (
+    user_id TEXT PRIMARY KEY DEFAULT '${DEFAULT_USER_ID}',
+    birth_date TEXT,
+    sex TEXT,
+    height_in REAL,
+    conditions TEXT,
+    allergies TEXT,
+    family_history TEXT,
+    goals TEXT,
+    diet_style TEXT,
+    doctor_notes TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS medications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    name TEXT NOT NULL,
+    dose TEXT,
+    frequency TEXT,
+    kind TEXT NOT NULL DEFAULT 'med',
+    purpose TEXT,
+    as_needed INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    started_on TEXT,
+    stopped_on TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_medications_user ON medications(user_id, active);
   `);
 
   // Additive migration for databases created before Microsoft sign-in existed
@@ -396,6 +441,10 @@ export function ensureSchemaAndSeed() {
     }
   });
 
+  runDataMigrations();
+
+  // NOTE: everything below runs only on a brand-new database. New migrations
+  // and seeds belong in runDataMigrations() above.
   const planExists = db.prepare("SELECT 1 FROM plans WHERE id = ?").get(THOR_PLAN_ID);
   if (planExists) return;
 
@@ -437,6 +486,34 @@ export function ensureSchemaAndSeed() {
   for (const [name, day, aliases] of seed) {
     ins.run(randomUUID(), THOR_PLAN_ID, name, day, JSON.stringify(aliases));
   }
+}
+
+/** Run a one-shot data migration exactly once (flagged in app_settings). */
+function once(name, fn) {
+  const key = `migration.${name}`;
+  if (getSetting(key) === "done") return;
+  tx(() => {
+    fn();
+    setSetting(key, "done");
+  });
+}
+
+/**
+ * Idempotent data migrations and seeds for existing databases. Runs on every
+ * boot, before the brand-new-database seed in ensureSchemaAndSeed().
+ */
+function runDataMigrations() {
+  // Health profile: turn the facts the old prompts hard-coded into editable data.
+  once("health_profile_seed", () => {
+    const user = db.prepare("SELECT id FROM users WHERE id = ?").get(DEFAULT_USER_ID);
+    if (!user) return;
+    const dietStyle =
+      db.prepare("SELECT diet_style FROM nutrition_goals WHERE user_id = ? ORDER BY created_at DESC LIMIT 1")
+        .get(DEFAULT_USER_ID)?.diet_style || "DASH";
+    db.prepare(
+      `INSERT OR IGNORE INTO health_profile (user_id, conditions, goals, diet_style) VALUES (?, ?, ?, ?)`
+    ).run(DEFAULT_USER_ID, "High cholesterol (watching)", "Fat loss while keeping muscle\nConsistency", dietStyle);
+  });
 }
 
 /**

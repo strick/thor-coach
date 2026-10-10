@@ -1,13 +1,14 @@
 import { db, uuid, backupStatus, runDailyBackup, getSetting, setSetting } from "./db.js";
 import { HttpError } from "./http.js";
-import { DEFAULT_USER_ID, todayISO, getDOW, LLM_PROVIDER, OPENAI_API_KEY } from "./config.js";
-import { getLLMConfig, updateLLMConfig, resetLLMConfig, listOllamaModels } from "./llm.js";
+import { DEFAULT_USER_ID, todayISO, getDOW, LLM_PROVIDER, OPENAI_API_KEY, OPENAI_MODEL, OPENAI_ADVICE_MODEL } from "./config.js";
+import { getLLMConfig, updateLLMConfig, resetLLMConfig, listOllamaModels, listOpenAIModels } from "./llm.js";
 import * as workouts from "./services/workouts.js";
 import * as nutrition from "./services/nutrition.js";
 import * as running from "./services/running.js";
 import * as strava from "./services/strava.js";
 import * as summary from "./services/dailySummary.js";
 import { chat } from "./services/chat.js";
+import * as profileApi from "./api/profile.js";
 
 export function registerRoutes(app) {
   // --- System ---
@@ -15,6 +16,8 @@ export function registerRoutes(app) {
   app.get("/api/config", () => ({
     provider: LLM_PROVIDER,
     openai_configured: Boolean(OPENAI_API_KEY),
+    model: OPENAI_MODEL,
+    advice_model: OPENAI_ADVICE_MODEL,
     strava: strava.stravaStatus(),
     today: todayISO(),
     day_of_week: getDOW(),
@@ -25,6 +28,10 @@ export function registerRoutes(app) {
     return updateLLMConfig(body.usage, { provider: body.provider, model: body.model });
   });
   app.get("/api/ollama/models", async () => ({ models: await listOllamaModels() }));
+  app.get("/api/openai/models", async () => ({ models: await listOpenAIModels() }));
+
+  // --- Health profile, medications & supplements ---
+  profileApi.register(app);
   app.get("/api/backups", () => backupStatus());
   app.post("/api/backups/run", () => runDailyBackup({ force: true }));
 
@@ -193,6 +200,7 @@ export function registerRoutes(app) {
     "health_events", "nutrition_goals", "nutrition_days", "nutrition_day_targets", "nutrition_day_totals",
     "nutrition_meals", "nutrition_meal_items", "nutrition_meal_totals", "nutrition_templates",
     "running_sessions", "body_metrics", "water_intake", "daily_summaries", "daily_reflections", "food_catalog",
+    "health_profile", "medications",
   ];
   app.get("/api/export", () => ({
     exported_at: new Date().toISOString(),

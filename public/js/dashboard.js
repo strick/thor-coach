@@ -44,7 +44,7 @@ async function loadStats() {
 
   const streakEl = $("streak");
   if (streak.streak > 0) {
-    streakEl.innerHTML = `<span class="pill gold">🔥 ${streak.streak}-day streak${streak.today_active ? "" : " — log something to keep it"}</span>`;
+    streakEl.innerHTML = `<span class="pill gold">${streak.streak}-day logging streak${streak.today_active ? "" : " · today's still open"}</span>`;
   } else {
     streakEl.innerHTML = `<span class="pill gray">No streak — today's a good day to start one</span>`;
   }
@@ -89,7 +89,7 @@ function quickForm(ex, latest) {
     </div>`;
   wrap.querySelector(".qf-nudge")?.addEventListener("click", () => {
     wrap.querySelector(".qf-weight").value = nudge.suggest;
-    toast(`Loaded ${nudge.suggest} lbs — go get it`);
+    toast(`Loaded ${nudge.suggest} lbs`);
   });
 
   const parseRepsInput = (raw) =>
@@ -101,7 +101,7 @@ function quickForm(ex, latest) {
     } else {
       await api("/api/log-manual", { method: "POST", body: { exercise_id: ex.id, date: today, ...body } });
     }
-    toast(`${ex.name} ${latest.today ? "updated" : "logged"} 💪`);
+    toast(`${ex.name} ${latest.today ? "updated" : "logged"}`);
     startTimer(Number(localStorage.getItem("thor_rest_secs")) || 90);
     loadPlan();
     loadStats();
@@ -158,9 +158,10 @@ async function loadSummary() {
     $("daily-summary").innerHTML = renderMarkdown(s.markdown);
     return true;
   }
-  // fall back to yesterday's insights until today's exists
+  // fall back to yesterday's insights until today's exists (but not summaries
+  // written in the old coach voice, which used a "## Your Day" heading)
   const y = await api(`/api/daily-summary/${addDays(today, -1)}`);
-  if (y.markdown) {
+  if (y.markdown && !y.markdown.startsWith("## Your Day")) {
     $("daily-summary").innerHTML = `<p class="muted small">Yesterday's summary — generate today's when you're done for the day.</p>` + renderMarkdown(y.markdown);
   }
   return false;
@@ -168,7 +169,7 @@ async function loadSummary() {
 
 async function generateSummary(auto = false) {
   $("btn-summary").disabled = true;
-  $("summary-status").innerHTML = '<span class="spin">⚡</span> Coach is reviewing your week…';
+  $("summary-status").innerHTML = '<span class="spin">⚡</span> Putting your day together…';
   try {
     const s = await api("/api/daily-summary", { method: "POST", body: { date: today } });
     $("daily-summary").innerHTML = renderMarkdown(s.markdown);
@@ -231,7 +232,7 @@ $("btn-log").addEventListener("click", async () => {
       return `<div class="item"><div class="main"><div class="title">${esc(r.exercise || r.input || "")}</div></div><span class="pill red">${esc(r.status.replaceAll("_", " "))}</span></div>`;
     }).join("");
     $("quick-log").value = "";
-    toast("Workout logged 💪");
+    toast("Workout logged");
     loadStats(); loadPlan();
   } catch (err) {
     toast(err.message, true);
@@ -281,7 +282,7 @@ function renderTimer() {
   disp.style.cssText = "font-size:16px;min-width:64px;justify-content:center";
   if (left <= 0) {
     stopTimer();
-    disp.textContent = "GO!";
+    disp.textContent = "Rest done";
     disp.className = "pill green fit";
     disp.style.cssText = "font-size:16px;min-width:64px;justify-content:center";
     beep();
@@ -320,7 +321,7 @@ async function loadWeight() {
   const rows = await api(`/api/body?start=${addDays(today, -45)}&end=${today}`);
   const withWeight = rows.filter((r) => r.weight_lbs != null);
   if (!withWeight.length) {
-    $("weight-trend").textContent = "No weigh-ins yet — step on the scale.";
+    $("weight-trend").textContent = "No weigh-ins yet.";
     return;
   }
   const latest = withWeight[withWeight.length - 1];
@@ -383,7 +384,7 @@ $("water-plus").addEventListener("click", () => setWater(waterState.glasses + 1)
 $("water-minus").addEventListener("click", () => setWater(waterState.glasses - 1));
 
 const hour = new Date().getHours();
-$("greeting").textContent = hour < 12 ? "Morning. Go earn it." : hour < 17 ? "Afternoon check-in" : "Evening review";
+$("greeting").textContent = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
 loadStats().catch((e) => toast(e.message, true));
 loadPlan().catch(() => {});

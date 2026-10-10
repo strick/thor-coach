@@ -9,7 +9,7 @@ async function loadConnections() {
   const cfg = await api("/api/config");
   $("version").textContent = `Thor v2 — ${cfg.today}`;
   $("connections").innerHTML = `
-    <div class="item"><div class="main"><div class="title">OpenAI</div><div class="meta">chat, parsing, summaries</div></div>
+    <div class="item"><div class="main"><div class="title">OpenAI</div><div class="meta">advice: ${esc(cfg.advice_model)} · parsing: ${esc(cfg.model)}</div></div>
       ${cfg.openai_configured ? '<span class="pill green">configured</span>' : '<span class="pill red">missing OPENAI_API_KEY</span>'}</div>
     <div class="item"><div class="main"><div class="title">Strava</div><div class="meta">run sync${cfg.strava.configured ? ` · token: ${cfg.strava.token_source}` : ""}</div></div>
       ${cfg.strava.configured ? '<span class="pill green">authorized</span>' : cfg.strava.can_connect ? '<a class="pill gold" href="running.html">connect</a>' : `<span class="pill red">missing ${esc(cfg.strava.missing.join(", "))}</span>`}</div>
@@ -36,30 +36,55 @@ async function loadConnections() {
   document.getElementById("ollama-pill").textContent = ollamaModels.length ? "online" : "offline";
 }
 
-async function loadLLM() {
-  const cfg = await api("/api/config/llm");
-  $("llm-rows").innerHTML = Object.entries(cfg).map(([usage, c]) => `
-    <tr data-usage="${usage}">
-      <td>${esc(usage.replaceAll("_", " "))}</td>
-      <td><select class="prov"><option value="openai"${c.provider === "openai" ? " selected" : ""}>openai</option><option value="ollama"${c.provider === "ollama" ? " selected" : ""}>ollama</option></select></td>
-      <td><input class="model" value="${esc(c.model)}" list="ollama-list" /></td>
-      <td><button class="btn-sm save">Save</button></td>
-    </tr>`).join("");
-  if (!document.getElementById("ollama-list")) {
-    const dl = document.createElement("datalist");
-    dl.id = "ollama-list";
+const JOB_LABELS = {
+  chat: "Ask Thor (chat)",
+  daily_summary: "Daily summary",
+  weekly_review: "Weekly review",
+  guides: "Guides & deep dives",
+  lab_extraction: "Lab extraction",
+  workout_parsing: "Workout parsing",
+  nutrition_parsing: "Food parsing",
+};
+
+function ensureDatalist(id, models) {
+  let dl = document.getElementById(id);
+  if (!dl) {
+    dl = document.createElement("datalist");
+    dl.id = id;
     document.body.appendChild(dl);
   }
-  document.getElementById("ollama-list").innerHTML = ollamaModels.map((m) => `<option value="${esc(m)}">`).join("");
+  dl.innerHTML = models.map((m) => `<option value="${esc(m)}">`).join("");
+}
 
-  $("llm-rows").querySelectorAll("tr").forEach((row) => {
-    row.querySelector(".save").addEventListener("click", async () => {
+async function loadLLM() {
+  const [cfg, openai] = await Promise.all([api("/api/config/llm"), api("/api/openai/models").catch(() => ({ models: [] }))]);
+  ensureDatalist("ollama-list", ollamaModels);
+  ensureDatalist("openai-list", openai.models);
+  const row = ([usage, c]) => `
+    <tr data-usage="${usage}">
+      <td>${esc(JOB_LABELS[usage] || usage.replaceAll("_", " "))}${c.is_default ? "" : ' <span class="pill gray">custom</span>'}</td>
+      <td><select class="prov"><option value="openai"${c.provider === "openai" ? " selected" : ""}>openai</option><option value="ollama"${c.provider === "ollama" ? " selected" : ""}>ollama</option></select></td>
+      <td><input class="model" value="${esc(c.model)}" list="${c.provider}-list" placeholder="${esc(c.default_model)}" />
+        <div class="muted small">default: ${esc(c.default_model)}</div></td>
+      <td><button class="btn-sm save">Save</button></td>
+    </tr>`;
+  const group = (title, entries) =>
+    `<tr><td colspan="4" class="muted small"><strong>${title}</strong></td></tr>` + entries.map(row).join("");
+  const entries = Object.entries(cfg);
+  $("llm-rows").innerHTML =
+    group("Advice", entries.filter(([, c]) => c.advice)) + group("Parsing", entries.filter(([, c]) => !c.advice));
+
+  $("llm-rows").querySelectorAll("tr[data-usage]").forEach((tr) => {
+    const prov = tr.querySelector(".prov");
+    prov.addEventListener("change", () => tr.querySelector(".model").setAttribute("list", `${prov.value}-list`));
+    tr.querySelector(".save").addEventListener("click", async () => {
       try {
         await api("/api/config/llm", {
           method: "POST",
-          body: { usage: row.dataset.usage, provider: row.querySelector(".prov").value, model: row.querySelector(".model").value },
+          body: { usage: tr.dataset.usage, provider: prov.value, model: tr.querySelector(".model").value },
         });
-        toast(`${row.dataset.usage} updated`);
+        toast(`${JOB_LABELS[tr.dataset.usage] || tr.dataset.usage} saved`);
+        loadLLM();
       } catch (err) { toast(err.message, true); }
     });
   });
@@ -128,7 +153,7 @@ loadGoals().catch(() => {});
 
 $("btn-reset").addEventListener("click", async () => {
   await api("/api/config/llm", { method: "POST", body: { reset: true } });
-  toast("LLM config reset"); loadLLM();
+  toast("AI models reset to defaults"); loadLLM();
 });
 
 loadConnections().then(loadLLM).catch((e) => toast(e.message, true));

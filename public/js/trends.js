@@ -41,7 +41,7 @@ async function loadExerciseSeries() {
     const first = weighted[0].weight_lbs, last = weighted[weighted.length - 1].weight_lbs;
     const delta = last - first;
     $("ex-meta").innerHTML = `Weight: ${first} → ${last} lbs ` +
-      (delta > 0 ? `<span class="pill green">+${delta} lbs 📈</span>` : delta < 0 ? `<span class="pill red">${delta} lbs</span>` : `<span class="pill gray">flat — time to push?</span>`);
+      (delta > 0 ? `<span class="pill green">+${delta} lbs 📈</span>` : delta < 0 ? `<span class="pill red">${delta} lbs</span>` : `<span class="pill gray">steady</span>`);
   } else if (series.length >= 2) {
     $("c-exercise").innerHTML = chartLine(
       series.map((s) => ({ label: shortDate(s.date), value: s.volume })),

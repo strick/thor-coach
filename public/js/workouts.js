@@ -134,7 +134,7 @@ $("btn-ai").addEventListener("click", async () => {
         : `<div class="item"><div class="main"><div class="title">${esc(r.exercise || r.input || "")}</div></div><span class="pill red">${esc(r.status.replaceAll("_", " "))}</span></div>`
     ).join("");
     $("ai-text").value = "";
-    toast("Logged 💪");
+    toast("Logged");
     loadHistory(); loadProgress();
   } catch (err) { toast(err.message, true); }
   finally { $("btn-ai").disabled = false; }

@@ -12,7 +12,17 @@
   <main class="container">
     <div class="page-head"><h1>Settings</h1><span class="sub" id="version"></span></div>
 
-    <div class="grid cols-2">
+    <div class="card">
+      <div class="row-between">
+        <div>
+          <h2>Health profile</h2>
+          <p class="muted small">Your conditions, medications, supplements and goals. Thor uses these to personalize every summary and answer.</p>
+        </div>
+        <a class="btn-gold btn-sm fit" href="profile.html">Edit profile &amp; meds</a>
+      </div>
+    </div>
+
+    <div class="grid cols-2 mt">
       <div class="card">
         <h2>Connections</h2>
         <div id="connections" class="list"></div>
@@ -32,7 +42,7 @@
     <div class="grid cols-2 mt">
       <div class="card">
         <h2>Weekly goals</h2>
-        <p class="muted small">Shown as progress on the dashboard and fed to your daily coach.</p>
+        <p class="muted small">Shown as progress on the dashboard and used in your daily summary.</p>
         <div class="row">
           <div><label>Workouts / week</label><input type="number" id="goal-workouts" min="0" /></div>
           <div><label>Miles / week</label><input type="number" id="goal-miles" step="0.5" min="0" /></div>
@@ -56,12 +66,14 @@
     </div>
 
     <div class="card mt">
-      <h2>LLM routing</h2>
-      <p class="muted small">Choose which provider/model handles each job. Runtime-only — resets on restart.</p>
-      <table>
-        <thead><tr><th>Usage</th><th>Provider</th><th>Model</th><th></th></tr></thead>
-        <tbody id="llm-rows"></tbody>
-      </table>
+      <h2>AI models</h2>
+      <p class="muted small">Which provider and model handles each job. Advice jobs reason over your health data and default to a stronger model; parsing jobs turn your typed logs into rows and stay on the fast one. Changes are saved and kept across restarts.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Job</th><th>Provider</th><th>Model</th><th></th></tr></thead>
+          <tbody id="llm-rows"></tbody>
+        </table>
+      </div>
       <button id="btn-reset" class="btn-ghost btn-sm mt">Reset to defaults</button>
     </div>
   </main>

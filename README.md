@@ -1,6 +1,8 @@
 # ⚡ Thor v2
 
-AI-native workout, nutrition, running and health tracker. Complete rewrite of the old
+Your AI health pal: tracks training (lifting + running), food, and health, and gives
+warm, straight, evidence-based guidance personalized to your profile, meds and data.
+Complete rewrite of the old
 6-container `thor-stack` as **one Node 24 process with zero npm dependencies** —
 built-in `node:sqlite`, `fetch`, and `http` replace better-sqlite3, Express, the
 OpenAI SDK, Docker, and the agent/MCP containers.
@@ -56,28 +58,62 @@ The image is a single `node:24-slim` container (still zero npm deps) that bind-m
 
 ## Features
 
-- **Dashboard** — activity streak, week stats, AI quick-log, **tap-to-log today's plan** (prefilled with your last session, one-tap "Same as last", updates in place mid-workout), macro bars, Goggins-mode daily insights (auto-generated in the evening, with a "What You're Doing Wrong" section built from your last 7 days), Strava one-tap + auto-sync, reflections
+- **Health-pal voice** — every AI feature shares one persona and safety layer (`src/services/persona.js`): warm and straight, names wins, describes patterns honestly with numbers, explains the *why*, suggests one or two things to try. It interprets data and labs with stated confidence and flags red-flag symptoms, but never diagnoses or tells you to change a prescription.
+- **Health profile** — conditions, allergies, family history, goals, diet style, doctor notes, and a medications & supplements list. Every summary, chat answer and lab read is personalized with it (`src/services/healthContext.js` builds the data snapshot each prompt sees).
+- **Dashboard** — activity streak, week stats, AI quick-log, **tap-to-log today's plan** (prefilled with your last session, one-tap "Same as last", updates in place mid-workout), macro bars, an evening daily summary (today at a glance, wins, patterns from your last 7/30 days, food & heart health, training & recovery, one or two things to try tomorrow), Strava one-tap + auto-sync, reflections
 - **Trends** — weekly lifting volume, per-exercise weight progression, weekly mileage, pace trend, protein vs target and calories for the last 14 logged days (zero-dep SVG charts)
 - **Workouts** — natural-language logging via LLM (`"3x12 floor press @45"`), manual logging, history with inline edit/delete, progression trends, weekly AI summaries
 - **Nutrition** — natural-language food logging with USDA-style estimates, meals/items, DASH-oriented targets (sodium, sat fat, cholesterol, fiber), templates, per-user goals
 - **Food library** — 131 seeded common foods with exact USDA-style per-serving values (searchable, categorized); tap to build a picks tray with serving steppers and live totals, then log it as a meal or save it straight as a template. Add/delete your own custom foods. Library logging bypasses the LLM entirely — consistent numbers every time.
 - **Running** — manual logs + **Strava sync** (refresh token persisted & rotated in DB, single-day or 30/90-day backfill), stats, weekly mileage
 - **Body** — daily weigh-ins from the dashboard, 60-day trend chart, fed into daily insights
-- **Water** — tap-to-fill glass tracker on the dashboard (8 oz each, configurable daily goal), logged by date, fed to the coach and CSV export
+- **Water** — tap-to-fill glass tracker on the dashboard (8 oz each, configurable daily goal), logged by date, used in summaries and CSV export
 - **Goals** — weekly workout/mileage/volume targets with live progress on the dashboard stats
 - **Mid-workout** — rest timer with beep (auto-starts after each logged set), progressive-overload nudges ("50 lbs for 6 sessions — load 55 today"), editable workout plan (add/rename/move/delete exercises per day)
 - **Health** — migraine/sleep/activity events with intensity tracking
 - **Barcode scanning** — camera (Chrome BarcodeDetector) or manual entry → OpenFoodFacts lookup → picks tray or library
 - **Export** — one-click CSV (workouts, nutrition, running, body) and full JSON dump from Settings
-- **Coach** — chat with tool-calling over all of the above (OpenAI or Ollama)
-- **Settings** — connection status, per-usage LLM routing (openai/ollama per job), users
+- **Ask Thor** — chat with tool-calling over all of the above, aware of your profile and meds (OpenAI or Ollama)
+- **Settings** — connection status, AI model per job (persisted), users, link to your health profile
 
 ## Configuration
 
 All via `.env` (see `.env.example`). LLM provider defaults to OpenAI when
-`OPENAI_API_KEY` is set; any usage (parsing, summaries, chat) can be routed to a
-local Ollama model from the Settings page. Ollama is reached through its
+`OPENAI_API_KEY` is set. Jobs are split in two:
+
+- **Advice** (daily summary, weekly review, chat, guides, lab extraction) defaults to
+  `OPENAI_ADVICE_MODEL` (default `gpt-5-mini`; set it to any chat-completions model
+  your account has — if the default isn't available Thor falls back to `OPENAI_MODEL`
+  and logs a warning).
+- **Parsing** (workout and food text) stays on `OPENAI_MODEL` (default `gpt-4o-mini`).
+
+Any job can be re-routed (provider + model) from Settings → AI models; overrides are
+saved in the database and survive restarts. Models that reject `temperature` or
+`reasoning_effort` have them dropped automatically. Ollama is reached through its
 OpenAI-compatible `/v1` endpoint.
+
+## Privacy
+
+When OpenAI is the provider, each advice request sends the relevant slice of your
+data to the OpenAI API: health profile, medications, summaries of food, training,
+running and health logs, and (for lab extraction) uploaded lab files. See OpenAI's
+API data-usage policy for how API data is handled. Routing jobs to Ollama keeps them
+on your machine (lab PDFs need an OpenAI model; pasted lab text works locally).
+
+The SQLite database, uploads and backups — including the G: mirror and the Azure
+Files share — are not encrypted at rest by Thor.
+
+## Testing
+
+```bash
+npm test
+```
+
+Runs `node --test` against a throwaway database in a temp dir with the LLM stubbed
+(`test/helpers/env.js`, `test/helpers/llmStub.js`) — no API keys, no network, never
+your real data. Test files must load `src/` modules through `setupTestEnv()` (dynamic
+imports after the env is set); with `THOR_TEST=1`, `src/db.js` refuses to open
+without a scratch `THOR_DB_PATH` and `THOR_BACKUP_MIRROR`.
 
 ## Data & backups
 

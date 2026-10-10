@@ -1,5 +1,5 @@
-// Conversational coach with tool calling. Replaces the old thor-agent,
-// health-agent, meta-runner and health-mcp containers with one loop.
+// "Ask Thor": conversational health pal with tool calling. Replaces the old
+// thor-agent, health-agent, meta-runner and health-mcp containers with one loop.
 import { db } from "../db.js";
 import { chatCompletion } from "../llm.js";
 import { DEFAULT_USER_ID, todayISO, getDOW } from "../config.js";
@@ -7,8 +7,20 @@ import * as workouts from "./workouts.js";
 import * as nutrition from "./nutrition.js";
 import * as running from "./running.js";
 import { syncStrava } from "./strava.js";
+import { systemPrompt } from "./persona.js";
+import { buildHealthContext } from "./healthContext.js";
+import { getProfile, listMedications } from "./profile.js";
 
 const TOOLS = [
+  {
+    name: "get_health_profile",
+    description: "Get the user's health profile (age, conditions, allergies, family history, goals, diet style, doctor notes) and their medications & supplements.",
+    parameters: { type: "object", properties: { include_inactive_meds: { type: "boolean" } } },
+    run: ({ include_inactive_meds }) => ({
+      profile: getProfile(),
+      medications: listMedications({ active: include_inactive_meds ? undefined : true }),
+    }),
+  },
   {
     name: "get_today_plan",
     description: "Get the planned exercises for a date (defaults to today).",
@@ -143,11 +155,14 @@ const TOOLS = [
   },
 ];
 
-const SYSTEM = () => `You are Thor, a direct, motivating personal fitness coach with access to the user's workout, nutrition, running and health data via tools.
+const SYSTEM = () => {
+  const context = buildHealthContext({ sections: ["profile", "medications", "today"] });
+  return systemPrompt(`Chat with the user. You can read and log their workouts, food, runs, weight, water and health notes through tools.
 Today is ${todayISO()} (day-of-week ${getDOW()} where Monday=1..Sunday=7).
-- Use tools to read or log data instead of guessing. Confirm what you logged.
-- Be concise. Use numbers. Goggins-style motivation, but constructive and respectful.
-- You are not a doctor; add a short disclaimer if giving health-adjacent guidance.`;
+- Use tools to read or log data instead of guessing. After logging something, confirm exactly what you logged.
+- Keep replies short and conversational unless they ask for depth. Use their numbers.
+- Their profile, medications and today's data so far (JSON): ${JSON.stringify(context)}`);
+};
 
 /**
  * messages: [{role:'user'|'assistant', content}] conversation history from the client.
@@ -162,7 +177,7 @@ export async function chat(messages) {
   const toolCallsMade = [];
 
   for (let round = 0; round < 6; round += 1) {
-    const { message } = await chatCompletion("chat", { messages: convo, tools: toolDefs, temperature: 0.4 });
+    const { message } = await chatCompletion("chat", { messages: convo, tools: toolDefs });
     convo.push(message);
 
     const calls = message.tool_calls || [];
