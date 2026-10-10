@@ -10,6 +10,7 @@ import * as summary from "./services/dailySummary.js";
 import { chat } from "./services/chat.js";
 import * as profileApi from "./api/profile.js";
 import * as headachesApi from "./api/headaches.js";
+import * as labsApi from "./api/labs.js";
 
 export function registerRoutes(app) {
   // --- System ---
@@ -36,6 +37,9 @@ export function registerRoutes(app) {
 
   // --- Headaches, daily check-ins, headache patterns ---
   headachesApi.register(app);
+
+  // --- Blood work + lab explainers ---
+  labsApi.register(app);
   app.get("/api/backups", () => backupStatus());
   app.post("/api/backups/run", () => runDailyBackup({ force: true }));
 
@@ -205,6 +209,7 @@ export function registerRoutes(app) {
     "nutrition_meals", "nutrition_meal_items", "nutrition_meal_totals", "nutrition_templates",
     "running_sessions", "body_metrics", "water_intake", "daily_summaries", "daily_reflections", "food_catalog",
     "health_profile", "medications", "headaches", "daily_checkins",
+    "lab_reports", "lab_report_files", "lab_results", "guides",
   ];
   app.get("/api/export", () => ({
     exported_at: new Date().toISOString(),
@@ -232,6 +237,10 @@ export function registerRoutes(app) {
                 meds, triggers, red_flags, notes FROM headaches ORDER BY date, started_at`,
     checkins: `SELECT date, sleep_hours, sleep_quality, stress, energy, caffeine_servings, alcohol_drinks, notes
                FROM daily_checkins ORDER BY date`,
+    labs: `SELECT x.collected_on AS date, r.lab_name, x.name_on_report, x.marker_key, x.value_num, x.value_text, x.unit,
+             x.ref_low, x.ref_high, x.ref_text, x.flag, x.canonical_value, x.canonical_unit
+           FROM lab_results x JOIN lab_reports r ON r.id = x.report_id WHERE r.status = 'confirmed'
+           ORDER BY x.collected_on, x.sort_order`,
   };
   app.get("/api/export/csv/:name", ({ params, res }) => {
     const sql = CSV_QUERIES[params.name];

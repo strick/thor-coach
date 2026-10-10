@@ -22,7 +22,8 @@ function askPin() {
 
 export async function api(path, options = {}, retried = false) {
   const opts = { ...options, headers: { ...pinHeaders(), ...(options.headers || {}) } };
-  if (opts.body && typeof opts.body !== "string") {
+  // Plain objects go as JSON; files/blobs (uploads) are sent as-is.
+  if (opts.body && typeof opts.body !== "string" && !(opts.body instanceof Blob) && !(opts.body instanceof ArrayBuffer)) {
     opts.body = JSON.stringify(opts.body);
     opts.headers["Content-Type"] = "application/json";
   }
@@ -154,6 +155,7 @@ export function renderNav(active) {
     ["running", "Running", "running.html"],
     ["nutrition", "Nutrition", "nutrition.html"],
     ["health", "Health", "health.html"],
+    ["labs", "Labs", "labs.html"],
     ["trends", "Trends", "trends.html"],
     ["chat", "Ask Thor", "chat.html"],
   ];
@@ -210,27 +212,61 @@ export function chartBars(data, { height = 140, unit = "", color = "var(--accent
   return `<svg width="100%" height="${height}" style="overflow:visible">${bars}${labels}</svg>`;
 }
 
-/** Zero-dep SVG line chart. points: [{label, value}]. */
-export function chartLine(points, { height = 140, unit = "", color = "var(--accent)" } = {}) {
-  if (points.length < 2) return `<div class="empty">Not enough data yet.</div>`;
+/**
+ * Zero-dep SVG line chart. points: [{label, value}].
+ * band: {low, high} draws the reference range (either side may be null).
+ * minPoints: how many points are needed before drawing (default 2).
+ */
+export function chartLine(points, { height = 140, unit = "", color = "var(--accent)", band = null, minPoints = 2 } = {}) {
+  if (points.length < minPoints) return `<div class="empty">Not enough data yet.</div>`;
   const vals = points.map((p) => p.value);
-  const min = Math.min(...vals), max = Math.max(...vals);
+  const bandVals = [band?.low, band?.high].filter((v) => v != null);
+  const min = Math.min(...vals, ...bandVals), max = Math.max(...vals, ...bandVals);
   const span = max - min || 1;
   const W = 100;
-  const xy = points.map((p, i) => [
-    (i / (points.length - 1)) * W,
-    8 + (1 - (p.value - min) / span) * (height - 34),
-  ]);
+  const yOf = (v) => 8 + (1 - (v - min) / span) * (height - 34);
+  const xy = points.map((p, i) => [points.length > 1 ? (i / (points.length - 1)) * W : W / 2, yOf(p.value)]);
   const path = xy.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
   const dots = xy.map(([x, y], i) =>
     `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="1.6" fill="${color}"><title>${esc(points[i].label)}: ${points[i].value}${unit}</title></circle>`
   ).join("");
+  let bandSvg = "";
+  if (band && (band.low != null || band.high != null)) {
+    const top = band.high != null ? yOf(band.high) : 8;
+    const bottom = band.low != null ? yOf(band.low) : height - 26;
+    bandSvg = `<rect x="0" y="${top.toFixed(2)}" width="${W}" height="${Math.max(0, bottom - top).toFixed(2)}" fill="var(--success)" opacity="0.08"/>` +
+      bandVals.map((v) => `<line x1="0" x2="${W}" y1="${yOf(v).toFixed(2)}" y2="${yOf(v).toFixed(2)}" stroke="var(--success)" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" opacity="0.6"/>`).join("");
+  }
   const first = points[0], lastP = points[points.length - 1];
   return `<svg viewBox="0 0 ${W} ${height}" width="100%" height="${height}" preserveAspectRatio="none" style="overflow:visible">
-    <path d="${path}" fill="none" stroke="${color}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>${dots}
+    ${bandSvg}<path d="${path}" fill="none" stroke="${color}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>${dots}
     <text x="0" y="${height - 4}" font-size="7" fill="var(--muted)">${esc(first.label)}</text>
     <text x="${W}" y="${height - 4}" font-size="7" fill="var(--muted)" text-anchor="end">${esc(lastP.label)}</text>
   </svg>`;
+}
+
+/**
+ * A lab value on its reference range: a track with the normal band shaded and
+ * a dot for the value. Handles one-sided ranges ("<100", ">39").
+ */
+export function rangeBar({ value, low = null, high = null, flag = null }) {
+  if (value == null || (low == null && high == null)) return "";
+  let lo, hi;
+  if (low != null && high != null) {
+    const pad = (high - low) * 0.6 || Math.abs(high) * 0.2 || 1;
+    lo = low - pad; hi = high + pad;
+  } else if (high != null) {
+    lo = 0; hi = high * 1.6;
+  } else {
+    lo = Math.max(0, low * 0.4); hi = low * 2;
+  }
+  lo = Math.min(lo, value); hi = Math.max(hi, value);
+  const pct = (v) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo || 1)) * 100));
+  const bandL = pct(low ?? lo), bandR = pct(high ?? hi);
+  const cls = flag?.startsWith("critical") ? "crit" : flag && flag !== "normal" ? "out" : "ok";
+  return `<div class="rb" title="range ${low ?? "–"} to ${high ?? "–"}">
+    <span class="rb-band" style="left:${bandL}%;width:${Math.max(0, bandR - bandL)}%"></span>
+    <span class="rb-dot ${cls}" style="left:${pct(value)}%"></span></div>`;
 }
 
 /** Macro progress bar HTML. `max` semantics: 'target' (reach it) or 'limit' (stay under). */

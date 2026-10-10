@@ -304,6 +304,29 @@ input[type="range"] { padding: 0; accent-color: var(--accent); background: trans
 .rate-row { display: grid; grid-template-columns: 74px 1fr 110px; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 5px; }
 .rate-row .bar { height: 7px; }
 
+/* --- Labs --- */
+.rb { position: relative; height: 8px; background: var(--panel-2); border-radius: 99px; margin: 6px 0 2px; min-width: 90px; }
+.rb-band { position: absolute; top: 0; bottom: 0; background: rgba(61, 220, 132, 0.28); border-radius: 99px; }
+.rb-dot {
+  position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%;
+  transform: translate(-50%, -50%); border: 2px solid var(--panel); background: var(--success);
+}
+.rb-dot.out { background: var(--gold); }
+.rb-dot.crit { background: var(--danger); }
+.lab-marker { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(90px, 1.2fr); gap: 12px; align-items: center; cursor: pointer; }
+.lab-marker .val { font-weight: 700; font-variant-numeric: tabular-nums; }
+.lab-marker .delta { font-size: 12px; margin-left: 6px; }
+.delta.good { color: var(--success); }
+.delta.bad { color: var(--gold); }
+.review-table input, .review-table select { padding: 6px 8px; font-size: 13px; }
+.review-table td { padding: 5px 4px; vertical-align: middle; }
+.review-table .num { width: 82px; }
+.review-table tr.flag-out td { background: rgba(255, 176, 46, 0.06); }
+.review-table tr.flag-crit td { background: rgba(255, 93, 93, 0.1); }
+.seg.tabs button { padding: 8px 0; }
+.file-chip { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 640px) { .lab-marker { grid-template-columns: 1fr 1fr; } .lab-marker .rb { grid-column: 1 / -1; } }
+
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .row-between h2 { margin-bottom: 4px; }
 .row-between p { margin: 0; }

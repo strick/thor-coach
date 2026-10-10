@@ -6,7 +6,7 @@ import { buildHealthContext } from "./healthContext.js";
 
 export const DAILY_SECTIONS = [
   "profile", "medications", "today", "last7", "nutrition_30d", "training_4w", "running_8w", "body",
-  "checkins_14d", "headaches_90d",
+  "checkins_14d", "headaches_90d", "labs",
 ];
 
 const TASK = `Write the user's end-of-day summary from the JSON data you're given. Return JSON: {"markdown": string}.
@@ -19,7 +19,7 @@ Use these headings, in this order. Skip a middle section entirely if there is no
 ## Patterns worth noticing
 Use the 7- and 30-day data. Name 1–3 real patterns (e.g. "protein under target on 4 of the 5 days you logged", "sodium over your limit on 9 of 22 logged days") and say in one sentence why each matters. Mention confidence only where it's genuinely uncertain (few logged days, mixed research). This is not a list of failures — frame it as useful information.
 ## Food & heart health
-How eating lines up with their targets and diet style. For DASH / heart health focus on sodium, saturated fat, fiber and potassium; mention cholesterol if they have a cholesterol-related condition.
+How eating lines up with their targets and diet style. For DASH / heart health focus on sodium, saturated fat, fiber and potassium; mention cholesterol if they have a cholesterol-related condition. If recent lab results are in the data, connect food to the relevant markers (e.g. LDL → saturated fat and fiber, triglycerides → added sugar and alcohol, A1c → added sugar).
 ## Training & recovery
 Lifting and running together: training rhythm, weekly mileage versus prior weeks, long run, easy/hard balance, heart rate, ramp warnings, and whether protein supports recovery.
 ## Headaches & sleep

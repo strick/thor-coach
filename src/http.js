@@ -11,6 +11,7 @@ const MIME = {
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".pdf": "application/pdf",
   ".ico": "image/x-icon",
   ".woff2": "font/woff2",
 };
@@ -28,7 +29,11 @@ const pinMatches = (given, expected) => timingSafeEqual(sha(given), sha(expected
 export function createApp({ staticDir, pin = "", auth = null }) {
   const routes = [];
 
-  function add(method, pattern, handler) {
+  /**
+   * opts.raw: hand the handler the request body as a Buffer (file uploads)
+   * instead of parsed JSON; opts.maxBytes caps it (default: the JSON cap).
+   */
+  function add(method, pattern, handler, opts = {}) {
     const keys = [];
     const regex = new RegExp(
       "^" +
@@ -38,19 +43,32 @@ export function createApp({ staticDir, pin = "", auth = null }) {
         }) +
         "/?$"
     );
-    routes.push({ method, regex, keys, handler });
+    routes.push({ method, regex, keys, handler, opts });
   }
 
   const app = {
-    get: (p, h) => add("GET", p, h),
-    post: (p, h) => add("POST", p, h),
-    put: (p, h) => add("PUT", p, h),
-    patch: (p, h) => add("PATCH", p, h),
-    delete: (p, h) => add("DELETE", p, h),
+    get: (p, h, o) => add("GET", p, h, o),
+    post: (p, h, o) => add("POST", p, h, o),
+    put: (p, h, o) => add("PUT", p, h, o),
+    patch: (p, h, o) => add("PATCH", p, h, o),
+    delete: (p, h, o) => add("DELETE", p, h, o),
     listen: (port, host, cb) => server.listen(port, host, cb),
   };
 
   const MAX_BODY = 1024 * 1024; // 1 MB
+
+  async function readRaw(req, limit) {
+    const tooBig = () => new HttpError(413, `File too large (max ${Math.round(limit / 1048576)} MB)`);
+    if (Number(req.headers["content-length"] || 0) > limit) throw tooBig();
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of req) {
+      size += chunk.length;
+      if (size > limit) throw tooBig();
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  }
 
   async function readBody(req) {
     const chunks = [];
@@ -131,11 +149,15 @@ export function createApp({ staticDir, pin = "", auth = null }) {
         if (!m) continue;
         const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
         const query = Object.fromEntries(url.searchParams);
-        const body = ["POST", "PUT", "PATCH"].includes(req.method) ? await readBody(req) : {};
+        const hasBody = ["POST", "PUT", "PATCH"].includes(req.method);
+        const body = !hasBody ? {} : r.opts.raw ? await readRaw(req, r.opts.maxBytes ?? MAX_BODY) : await readBody(req);
         const result = await r.handler({ req, res, params, query, body });
-        if (!res.writableEnded) {
+        // Handlers that wrote their own response (files, CSV, redirects) are done.
+        if (!res.headersSent) {
           res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
           res.end(JSON.stringify(result ?? { ok: true }));
+        } else if (!res.writableEnded) {
+          res.end();
         }
         return;
       }
@@ -145,9 +167,14 @@ export function createApp({ staticDir, pin = "", auth = null }) {
     } catch (err) {
       const status = err instanceof HttpError ? err.status : 500;
       if (status === 500) console.error(`[${req.method} ${url.pathname}]`, err);
-      if (!res.writableEnded) {
-        res.writeHead(status, { "Content-Type": "application/json" });
+      if (!res.headersSent) {
+        // An oversized upload may still be streaming in; don't keep reading it.
+        const headers = { "Content-Type": "application/json" };
+        if (status === 413) headers.Connection = "close";
+        res.writeHead(status, headers);
         res.end(JSON.stringify({ error: err.message || "Internal error" }));
+      } else {
+        res.destroy();
       }
     }
   });

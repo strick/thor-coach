@@ -446,6 +446,93 @@ export function ensureSchemaAndSeed() {
     PRIMARY KEY (user_id, date),
     FOREIGN KEY(user_id) REFERENCES users(id)
   );
+
+  -- Blood work. A report is a draft until you've reviewed the extracted rows
+  -- and confirmed it; only confirmed results feed trends and advice.
+  CREATE TABLE IF NOT EXISTS lab_reports (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    collected_on TEXT,
+    reported_on TEXT,
+    lab_name TEXT,
+    ordering_provider TEXT,
+    source TEXT NOT NULL,
+    raw_text TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    extraction_json TEXT,
+    llm_provider TEXT,
+    llm_model TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    confirmed_at TEXT,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_lab_reports_user ON lab_reports(user_id, collected_on);
+
+  CREATE TABLE IF NOT EXISTS lab_report_files (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    report_id TEXT NOT NULL,
+    stored_name TEXT NOT NULL,
+    original_filename TEXT,
+    mime_type TEXT NOT NULL,
+    bytes INTEGER NOT NULL,
+    sha256 TEXT NOT NULL,
+    page_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(report_id) REFERENCES lab_reports(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_lab_files_report ON lab_report_files(report_id);
+  CREATE INDEX IF NOT EXISTS idx_lab_files_sha ON lab_report_files(sha256);
+
+  CREATE TABLE IF NOT EXISTS lab_results (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    report_id TEXT NOT NULL,
+    marker_key TEXT,
+    name_on_report TEXT NOT NULL,
+    value_num REAL,
+    value_text TEXT,
+    unit TEXT,
+    ref_low REAL,
+    ref_high REAL,
+    ref_text TEXT,
+    flag TEXT,
+    canonical_value REAL,
+    canonical_unit TEXT,
+    canonical_ref_low REAL,
+    canonical_ref_high REAL,
+    collected_on TEXT,
+    sort_order INTEGER,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(report_id) REFERENCES lab_reports(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_lab_results_report ON lab_results(report_id);
+  CREATE INDEX IF NOT EXISTS idx_lab_results_marker ON lab_results(user_id, marker_key, collected_on);
+
+  -- Guides: AI-written explainers kept in a library — lab explainers, weekly
+  -- reviews and on-demand deep dives. context_json snapshots what the model saw.
+  CREATE TABLE IF NOT EXISTS guides (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    topic TEXT,
+    period_start TEXT,
+    period_end TEXT,
+    lab_report_id TEXT,
+    markdown TEXT NOT NULL,
+    context_json TEXT,
+    llm_provider TEXT,
+    llm_model TEXT,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(lab_report_id) REFERENCES lab_reports(id) ON DELETE SET NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_guides_kind ON guides(user_id, kind, created_at);
   `);
 
   // Additive migration for databases created before Microsoft sign-in existed
@@ -601,6 +688,36 @@ function mirrorBackup(file) {
   return true;
 }
 
+/** Uploaded files (lab PDFs/photos) live here, next to the database. */
+export const uploadsDir = path.join(dataDir, "uploads");
+
+/**
+ * Uploads aren't inside the VACUUM INTO snapshot, so copy any new ones to the
+ * mirror too. Incremental (names are unique UUIDs) and never pruned.
+ */
+function mirrorUploads() {
+  const mountRoot = path.dirname(path.dirname(mirrorDir));
+  if (!existsSync(mountRoot) || !existsSync(uploadsDir)) return 0;
+  let copied = 0;
+  const walk = (rel) => {
+    for (const name of readdirSync(path.join(uploadsDir, rel))) {
+      const relPath = path.join(rel, name);
+      const src = path.join(uploadsDir, relPath);
+      if (statSync(src).isDirectory()) {
+        walk(relPath);
+        continue;
+      }
+      const dest = path.join(mirrorDir, "uploads", relPath);
+      if (existsSync(dest)) continue;
+      mkdirSync(path.dirname(dest), { recursive: true });
+      copyFileSync(src, dest);
+      copied += 1;
+    }
+  };
+  walk("");
+  return copied;
+}
+
 export function runDailyBackup({ force = false } = {}) {
   mkdirSync(localBackupDir, { recursive: true });
   const now = new Date();
@@ -613,6 +730,10 @@ export function runDailyBackup({ force = false } = {}) {
   let mirrored = false;
   try {
     mirrored = mirrorBackup(file);
+    if (mirrored) {
+      const n = mirrorUploads();
+      if (n) console.log(`[backup] mirrored ${n} new upload file(s)`);
+    }
   } catch (err) {
     console.error("[backup] mirror failed:", err.message);
   }

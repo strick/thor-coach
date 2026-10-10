@@ -12,6 +12,8 @@ import { buildHealthContext } from "./healthContext.js";
 import { getProfile, listMedications } from "./profile.js";
 import * as headaches from "./headaches.js";
 import * as checkins from "./checkins.js";
+import * as labs from "./labs.js";
+import { LAB_MARKERS } from "../data/labMarkers.js";
 
 const TOOLS = [
   {
@@ -158,6 +160,20 @@ const TOOLS = [
     description: "Get daily check-ins (sleep, stress, energy, caffeine, alcohol) between two dates.",
     parameters: { type: "object", properties: { start: { type: "string" }, end: { type: "string" } } },
     run: ({ start, end }) => checkins.listCheckins(start, end),
+  },
+  {
+    name: "get_lab_results",
+    description:
+      "Get the user's confirmed blood-work results: latest value per marker (with the previous one) grouped by panel, or the full history of one marker. " +
+      `Marker keys: ${LAB_MARKERS.map((m) => m.key).join(", ")}.`,
+    parameters: { type: "object", properties: { marker: { type: "string", description: "A marker key for its full history" } } },
+    run: ({ marker }) => (marker ? labs.trend(marker) : labs.latestResults()),
+  },
+  {
+    name: "get_lab_reports",
+    description: "List the user's lab reports (date, lab, status, counts), or one report's full results by id.",
+    parameters: { type: "object", properties: { id: { type: "string" } } },
+    run: ({ id }) => (id ? labs.getReport(id) : labs.listReports()),
   },
   {
     name: "log_health_event",
