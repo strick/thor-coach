@@ -165,9 +165,21 @@ user and rewrites the pull credentials; build and update explicitly instead:
 
 ```bash
 tag=$(git rev-parse --short HEAD)
-az acr build -r caad62479b7facr -t "thor:$tag" .
+# Build from an export of the commit: exactly what's committed (no .env, data or .git),
+# and it avoids az choking on long paths inside .git when the repo sits on a WSL share.
+rm -rf /tmp/thor-build && mkdir /tmp/thor-build && git archive HEAD | tar -x -C /tmp/thor-build
+az acr build -r caad62479b7facr -t "thor:$tag" /tmp/thor-build
 az containerapp update -g rg-thor -n thor --image "caad62479b7facr.azurecr.io/thor:$tag"
 ```
+
+(From Windows, point `az acr build` at a Windows copy of the export, e.g. under `%TEMP%`.)
+
+Before deploying schema changes, rehearse on a copy of the production database
+(`az storage file download --account-name stthorbstrick --share-name thordata --path workout.db`)
+booted locally with `THOR_DB_PATH` pointing at the copy, and keep a pre-deploy copy in
+`backups/` on the share under a name that doesn't match `workout-YYYY-MM-DD.db` (so the
+14-day pruning leaves it alone). Roll back by updating the app to the previous image tag —
+migrations only add tables and columns, so older code still runs on a newer database.
 
 First request after idle is a cold start (a few seconds). The in-process daily
 backup runs on boot, so snapshots happen whenever the app wakes on a new day.
