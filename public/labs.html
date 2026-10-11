@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Thor — Labs</title>
+  <meta name="theme-color" content="#0b0f17" />
+  <link rel="stylesheet" href="css/app.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
+</head>
+<body>
+  <main class="container">
+    <div class="page-head">
+      <h1>Labs</h1>
+      <span class="sub">Your blood work, tracked over time and read in plain English</span>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card" id="add-card">
+        <h2>Add results</h2>
+        <div class="seg tabs" id="add-tabs">
+          <button type="button" data-tab="upload" class="on">Upload</button>
+          <button type="button" data-tab="paste">Paste text</button>
+          <button type="button" data-tab="manual">Type in</button>
+        </div>
+        <div data-pane="upload" class="mt">
+          <p class="muted small">A PDF from your lab or patient portal, or clear photos of each page (up to 6). Thor reads it, then you check every row before anything is saved.</p>
+          <input type="file" id="files" multiple accept="application/pdf,image/jpeg,image/png,image/webp" />
+          <div class="row mt"><button id="btn-upload" class="fit">Read report</button><span class="muted small" id="upload-status"></span></div>
+        </div>
+        <div data-pane="paste" class="mt" hidden>
+          <p class="muted small">Copy the results table from MyChart, Quest, LabCorp or your lab's portal and paste it here.</p>
+          <textarea id="paste-text" rows="7" placeholder="LDL Cholesterol Calc   128   mg/dL   0 - 99   H&#10;HDL Cholesterol   52   mg/dL   >39&#10;…"></textarea>
+          <div class="row mt"><button id="btn-paste" class="fit">Read text</button><span class="muted small" id="paste-status"></span></div>
+        </div>
+        <div data-pane="manual" class="mt" hidden>
+          <p class="muted small">Enter results yourself, one row per marker.</p>
+          <button id="btn-manual" class="fit">Start a blank report</button>
+        </div>
+        <p class="muted small mt">Lab files are stored with your Thor data. When OpenAI is your provider, the file is sent to OpenAI to be read.</p>
+      </div>
+
+      <div class="card">
+        <h2>Reports</h2>
+        <div id="reports" class="list"><div class="empty">Loading…</div></div>
+      </div>
+    </div>
+
+    <div class="card mt" id="review" hidden>
+      <div class="row-between">
+        <h2 id="review-title">Review results</h2>
+        <span class="muted small" id="review-status"></span>
+      </div>
+      <p class="muted small" id="review-help">Check each row against your report — names, values, units and ranges. Fix anything that's off; unmatched rows are kept but won't trend.</p>
+      <div class="row">
+        <div class="fit" style="min-width:170px"><label for="r-collected">Collected on</label><input type="date" id="r-collected" /></div>
+        <div><label for="r-lab">Lab</label><input id="r-lab" placeholder="e.g. Quest Diagnostics" /></div>
+        <div><label for="r-provider">Ordered by</label><input id="r-provider" /></div>
+      </div>
+      <div id="r-files" class="row mt"></div>
+      <div id="r-warnings" class="mt"></div>
+      <div class="table-scroll mt">
+        <table class="review-table">
+          <thead><tr><th>Marker</th><th>Name on report</th><th>Value</th><th>Unit</th><th>Low</th><th>High</th><th>Flag</th><th></th></tr></thead>
+          <tbody id="r-rows"></tbody>
+        </table>
+      </div>
+      <button type="button" class="btn-ghost btn-sm mt" id="r-add-row">+ Add row</button>
+      <div class="row mt">
+        <button id="r-confirm" class="btn-gold fit">Confirm &amp; explain</button>
+        <button id="r-save" class="btn-ghost fit">Save draft</button>
+        <button id="r-close" class="btn-ghost fit">Close</button>
+        <span class="spacer"></span>
+        <button id="r-delete" class="btn-danger fit">Delete report</button>
+      </div>
+    </div>
+
+    <div class="card mt" id="explainer-card" hidden>
+      <div class="row-between">
+        <h2 id="explainer-title">What your results mean</h2>
+        <div class="row fit" style="gap:6px">
+          <button class="btn-ghost btn-sm fit" id="btn-edit-report">Edit results</button>
+          <button class="btn-ghost btn-sm fit" id="btn-regen">Regenerate</button>
+        </div>
+      </div>
+      <div id="explainer" class="md"></div>
+    </div>
+
+    <div class="card mt">
+      <div class="row-between">
+        <h2>Latest results</h2>
+        <span class="muted small">Tap a marker to see its trend</span>
+      </div>
+      <div id="latest"><div class="empty">Loading…</div></div>
+    </div>
+  </main>
+  <script type="module" src="js/labs.js"></script>
+</body>
+</html>

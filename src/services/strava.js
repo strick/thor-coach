@@ -1,10 +1,12 @@
 // Strava integration: OAuth token refresh (refresh token persisted in DB and
 // rotated automatically), activity fetch, and sync into running_sessions.
 import { db, uuid, getSetting, setSetting } from "../db.js";
-import { STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_REFRESH_TOKEN } from "../config.js";
+import { BASE_URL, STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_REFRESH_TOKEN } from "../config.js";
 import { HttpError } from "../http.js";
 
 const REFRESH_TOKEN_KEY = "strava.refresh_token";
+const OAUTH_STATE_KEY = "strava.oauth_state";
+const SCOPE_KEY = "strava.scope";
 
 let cachedAccessToken = null;
 let tokenExpiresAt = 0;
@@ -12,6 +14,7 @@ let tokenExpiresAt = 0;
 const storedRefreshToken = () => getSetting(REFRESH_TOKEN_KEY) || STRAVA_REFRESH_TOKEN;
 
 export function stravaStatus() {
+  const clientConfigured = Boolean(STRAVA_CLIENT_ID && STRAVA_CLIENT_SECRET);
   const missing = [
     STRAVA_CLIENT_ID ? null : "STRAVA_CLIENT_ID",
     STRAVA_CLIENT_SECRET ? null : "STRAVA_CLIENT_SECRET",
@@ -19,9 +22,77 @@ export function stravaStatus() {
   ].filter(Boolean);
   return {
     configured: missing.length === 0,
+    can_connect: clientConfigured,
     missing,
     token_source: getSetting(REFRESH_TOKEN_KEY) ? "database" : STRAVA_REFRESH_TOKEN ? "env" : "none",
+    scope: getSetting(SCOPE_KEY) || null,
   };
+}
+
+const isSecure = (req) =>
+  (req.headers["x-forwarded-proto"] || "").split(",")[0].trim() === "https" || Boolean(req.socket?.encrypted);
+const baseUrl = (req) => BASE_URL || `${isSecure(req) ? "https" : "http"}://${req.headers.host || "localhost"}`;
+const redirectUri = (req) => `${baseUrl(req)}/auth/strava/callback`;
+
+/** Begin a one-time OAuth flow so stale/revoked tokens can be repaired in the UI. */
+export function stravaConnectUrl(req) {
+  if (!STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
+    throw new HttpError(400, "Set STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET before connecting Strava");
+  }
+  const state = uuid();
+  setSetting(OAUTH_STATE_KEY, JSON.stringify({ state, expires_at: Date.now() + 10 * 60 * 1000 }));
+  const url = new URL("https://www.strava.com/oauth/authorize");
+  url.searchParams.set("client_id", STRAVA_CLIENT_ID);
+  url.searchParams.set("redirect_uri", redirectUri(req));
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("approval_prompt", "force");
+  url.searchParams.set("scope", "read,activity:read_all");
+  url.searchParams.set("state", state);
+  return { url: url.href };
+}
+
+function stravaErrorDetail(data, fallback) {
+  const details = Array.isArray(data?.errors)
+    ? data.errors.map((e) => [e.resource, e.field, e.code].filter(Boolean).join(" ")).filter(Boolean).join(", ")
+    : "";
+  return String(data?.message || data?.error_description || data?.error || details || fallback).slice(0, 240);
+}
+
+/** Finish OAuth, persist Strava's newest refresh token, and prime the access-token cache. */
+export async function finishStravaConnect(req, query) {
+  let flow;
+  try { flow = JSON.parse(getSetting(OAUTH_STATE_KEY) || "null"); } catch { flow = null; }
+  setSetting(OAUTH_STATE_KEY, "");
+  if (query.error) throw new HttpError(400, query.error_description || query.error);
+  if (!flow || flow.expires_at < Date.now() || !query.state || query.state !== flow.state) {
+    throw new HttpError(400, "Strava connection attempt expired or state did not match — try again");
+  }
+  if (!query.code) throw new HttpError(400, "Strava did not return an authorization code");
+
+  const response = await fetchWithRetry("https://www.strava.com/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: STRAVA_CLIENT_ID,
+      client_secret: STRAVA_CLIENT_SECRET,
+      grant_type: "authorization_code",
+      code: query.code,
+      redirect_uri: redirectUri(req),
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.refresh_token || !data.access_token) {
+    throw new HttpError(400, `Strava connection failed: ${stravaErrorDetail(data, `${response.status} ${response.statusText}`)}`);
+  }
+  const granted = String(query.scope || data.scope || "");
+  if (granted && !granted.split(/[ ,]+/).some((s) => s === "activity:read" || s === "activity:read_all")) {
+    throw new HttpError(400, "Strava activity access was not granted — reconnect and allow activity access");
+  }
+  setSetting(REFRESH_TOKEN_KEY, data.refresh_token);
+  if (granted) setSetting(SCOPE_KEY, granted);
+  cachedAccessToken = data.access_token;
+  tokenExpiresAt = Number(data.expires_at) || 0;
+  return { connected: true };
 }
 
 async function fetchWithRetry(url, init, attempts = 2) {
@@ -58,27 +129,61 @@ async function getAccessToken() {
       refresh_token: refreshToken,
     }),
   });
-  if (!response.ok) throw new HttpError(502, `Failed to refresh Strava token: ${response.status} ${response.statusText}`);
-
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    cachedAccessToken = null;
+    tokenExpiresAt = 0;
+    const detail = stravaErrorDetail(data, `${response.status} ${response.statusText}`);
+    if ([400, 401, 403].includes(response.status)) {
+      throw new HttpError(502, `Strava authorization is stale or revoked (${detail}). Reconnect Strava and try again.`);
+    }
+    throw new HttpError(502, `Failed to refresh Strava authorization: ${detail}`);
+  }
+  if (!data.access_token) throw new HttpError(502, "Strava token refresh returned no access token");
   cachedAccessToken = data.access_token;
-  tokenExpiresAt = data.expires_at;
+  tokenExpiresAt = Number(data.expires_at) || 0;
   if (data.refresh_token) setSetting(REFRESH_TOKEN_KEY, data.refresh_token);
+  if (data.scope) setSetting(SCOPE_KEY, String(data.scope));
   return cachedAccessToken;
 }
 
+async function fetchAuthorized(url) {
+  let accessToken = await getAccessToken();
+  let response = await fetchWithRetry(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  // A cached access token can be invalidated before its advertised expiry.
+  // Force one refresh; repeated auth failures need an explicit reconnect.
+  if (response.status === 401) {
+    cachedAccessToken = null;
+    tokenExpiresAt = 0;
+    accessToken = await getAccessToken();
+    response = await fetchWithRetry(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  }
+  return response;
+}
+
+async function assertActivitiesResponse(response) {
+  if (response.ok) return response.json();
+  const data = await response.json().catch(() => ({}));
+  const detail = stravaErrorDetail(data, `${response.status} ${response.statusText}`);
+  if (response.status === 403) {
+    throw new HttpError(502, `Strava denied activity access (${detail}). Reconnect Strava and grant activity access.`);
+  }
+  if (response.status === 401) {
+    throw new HttpError(502, `Strava authorization expired (${detail}). Reconnect Strava and try again.`);
+  }
+  if (response.status === 429) throw new HttpError(503, "Strava rate limit reached — wait a few minutes and try again");
+  throw new HttpError(502, `Strava activities request failed: ${detail}`);
+}
+
 async function fetchActivitiesByDate(date) {
-  const accessToken = await getAccessToken();
   const [year, month, day] = date.split("-").map(Number);
   // 36-hour window centered on noon UTC covers the local day in any timezone;
   // results are filtered exactly by start_date_local afterwards.
   const reference = Math.floor(Date.UTC(year, month - 1, day, 12) / 1000);
-  const response = await fetchWithRetry(
-    `https://www.strava.com/api/v3/athlete/activities?after=${reference - 64800}&before=${reference + 64800}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+  const response = await fetchAuthorized(
+    `https://www.strava.com/api/v3/athlete/activities?after=${reference - 64800}&before=${reference + 64800}`
   );
-  if (!response.ok) throw new HttpError(502, `Failed to fetch Strava activities: ${response.status} ${response.statusText}`);
-  const activities = await response.json();
+  const activities = await assertActivitiesResponse(response);
   return activities.filter((a) => a.type === "Run" && a.start_date_local?.startsWith(date));
 }
 
@@ -161,18 +266,15 @@ export async function syncStravaRange(start, end) {
   db.prepare("INSERT INTO strava_sync_runs (id, sync_date, status, started_at) VALUES (?, ?, 'started', datetime('now'))").run(runId, label);
 
   try {
-    const accessToken = await getAccessToken();
     const after = Math.floor(Date.UTC(...start.split("-").map(Number).map((v, i) => (i === 1 ? v - 1 : v))) / 1000) - 86400;
     const before = Math.floor(Date.UTC(...end.split("-").map(Number).map((v, i) => (i === 1 ? v - 1 : v))) / 1000) + 2 * 86400;
 
     const all = [];
     for (let page = 1; page <= 5; page += 1) {
-      const resp = await fetchWithRetry(
-        `https://www.strava.com/api/v3/athlete/activities?after=${after}&before=${before}&per_page=100&page=${page}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+      const resp = await fetchAuthorized(
+        `https://www.strava.com/api/v3/athlete/activities?after=${after}&before=${before}&per_page=100&page=${page}`
       );
-      if (!resp.ok) throw new HttpError(502, `Strava activities fetch failed: ${resp.status} ${resp.statusText}`);
-      const batch = await resp.json();
+      const batch = await assertActivitiesResponse(resp);
       all.push(...batch);
       if (batch.length < 100) break;
     }

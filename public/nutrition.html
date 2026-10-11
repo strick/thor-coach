@@ -40,12 +40,14 @@
     </div>
 
     <div class="card mb">
-      <h2><span class="accent">🥗</span> Food library — build a meal from real numbers</h2>
+      <div class="section-heading">
+        <div><h2><span class="accent">🥗</span> Build a meal</h2><p class="muted small">Choose exact foods and quantities. Nutrition updates before you log anything.</p></div>
+        <button id="btn-barcode" class="btn-ghost fit">📷 Scan barcode</button>
+      </div>
       <div id="frequent-row" class="mb"></div>
       <div class="row">
-        <div><label>Search</label><input id="lib-search" placeholder="chicken, rice, banana, pizza…" /></div>
+        <div><label for="lib-search">Find a food</label><input id="lib-search" type="search" placeholder="Try chicken, rice, banana…" autocomplete="off" /></div>
         <div class="fit" style="width:180px"><label>Category</label><select id="lib-category"><option value="">all</option></select></div>
-        <button id="btn-barcode" class="btn-ghost fit">📷 Barcode</button>
       </div>
       <div id="barcode-panel" class="mt" style="display:none">
         <div class="row">
@@ -56,24 +58,26 @@
         <video id="bc-video" style="display:none;width:100%;max-height:260px;border-radius:12px;margin-top:10px" muted playsinline></video>
         <div id="bc-result" class="list mt"></div>
       </div>
-      <div id="lib-results" class="list mt"></div>
-
-      <div id="draft-wrap" style="display:none">
-        <h2 class="mt">Your picks</h2>
-        <div id="draft" class="list"></div>
-        <div id="draft-totals" class="muted small mt"></div>
-        <div class="row mt">
-          <div class="fit" style="width:140px">
-            <label>Meal</label>
-            <select id="lib-meal-type"><option value="">auto</option><option>breakfast</option><option>lunch</option><option>dinner</option><option>snack</option></select>
+      <div class="nutrition-builder mt">
+        <section class="library-results" aria-label="Food search results">
+          <div id="lib-results" class="list"></div>
+        </section>
+        <aside id="draft-wrap" class="meal-builder">
+          <div class="builder-heading"><h3>Your meal</h3><span id="draft-count" class="pill gray">Nothing selected</span></div>
+          <div id="draft" class="list"></div>
+          <div id="draft-totals" class="draft-totals"></div>
+          <div class="row mt">
+            <div>
+              <label>Meal</label>
+              <select id="lib-meal-type"><option value="">auto</option><option>breakfast</option><option>lunch</option><option>dinner</option><option>snack</option></select>
+            </div>
           </div>
-          <button id="btn-lib-log" class="fit">Log to this day</button>
-          <button id="btn-lib-template" class="btn-gold fit">Save as template</button>
-          <button id="btn-lib-clear" class="btn-ghost fit btn-sm">Clear</button>
-        </div>
+          <button id="btn-lib-log" class="builder-primary mt">Log meal to this day</button>
+          <div class="builder-secondary mt"><button id="btn-lib-template" class="btn-ghost btn-sm">Save template</button><button id="btn-lib-clear" class="btn-ghost btn-sm">Clear</button></div>
+        </aside>
       </div>
 
-      <details class="mt"><summary>Add a custom food to the library</summary>
+      <details class="mt custom-food"><summary>Can’t find it? Add a custom food</summary>
         <div class="row mt">
           <div><label>Name</label><input id="cf-name" placeholder="Mom's lasagna" /></div>
           <div class="fit" style="width:140px"><label>Serving</label><input id="cf-serving" placeholder="1 slice" /></div>

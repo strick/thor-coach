@@ -33,6 +33,9 @@ function getUserGoals(userId) {
 
 export function upsertGoals(userId, goals) {
   const id = uuid();
+  // The Nutrition page doesn't send diet_style; keep the current one rather
+  // than silently resetting it to DASH.
+  const dietStyle = goals.diet_style || getUserGoals(userId)?.diet_style || "DASH";
   db.prepare(
     `INSERT INTO nutrition_goals (id, user_id, daily_protein_target_g, max_daily_sodium_mg, max_daily_saturated_fat_g,
        min_daily_fiber_g, max_daily_cholesterol_mg, max_daily_added_sugar_g, diet_style)
@@ -41,7 +44,7 @@ export function upsertGoals(userId, goals) {
     id, userId,
     goals.daily_protein_target_g ?? null, goals.max_daily_sodium_mg ?? null, goals.max_daily_saturated_fat_g ?? null,
     goals.min_daily_fiber_g ?? null, goals.max_daily_cholesterol_mg ?? null, goals.max_daily_added_sugar_g ?? null,
-    goals.diet_style || "DASH"
+    dietStyle
   );
   return getUserGoals(userId);
 }
@@ -155,6 +158,26 @@ export function updateItem(itemId, patch) {
     recomputeMeal(item.meal_id);
     recomputeDay(meal.nutrition_day_id);
     return db.prepare("SELECT * FROM nutrition_meal_items WHERE id = ?").get(itemId);
+  });
+}
+
+/** Change an item's serving count while keeping every nutrient in proportion. */
+export function setItemServings(itemId, servings) {
+  const item = db.prepare("SELECT * FROM nutrition_meal_items WHERE id = ?").get(itemId);
+  if (!item) throw new HttpError(404, "Item not found");
+  const next = Number(servings);
+  if (!Number.isFinite(next) || next < 0.01 || next > 1000) {
+    throw new HttpError(400, "servings must be between 0.01 and 1000");
+  }
+  const current = Number(item.serving_quantity) > 0 ? Number(item.serving_quantity) : 1;
+  const factor = next / current;
+  const baseServing = item.serving_unit || item.serving_display || "1 serving";
+  const servingDisplay = Math.abs(next - 1) < 0.0001 ? baseServing : `${next} × ${baseServing}`;
+  return updateItem(itemId, {
+    serving_quantity: next,
+    serving_unit: baseServing,
+    serving_display: servingDisplay,
+    ...Object.fromEntries(NUTRIENTS.map((n) => [n, (Number(item[n]) || 0) * factor])),
   });
 }
 

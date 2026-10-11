@@ -1,4 +1,5 @@
-import { api, toast, esc, renderMarkdown, todayISO, addDays, fmtDate, renderNav, bar } from "./ui.js";
+import { api, toast, esc, renderMarkdown, todayISO, addDays, fmtDate, fmtTime, localDateTime, renderNav, bar } from "./ui.js";
+import { mountCheckin } from "./checkin.js";
 
 renderNav("index");
 
@@ -44,7 +45,7 @@ async function loadStats() {
 
   const streakEl = $("streak");
   if (streak.streak > 0) {
-    streakEl.innerHTML = `<span class="pill gold">🔥 ${streak.streak}-day streak${streak.today_active ? "" : " — log something to keep it"}</span>`;
+    streakEl.innerHTML = `<span class="pill gold">${streak.streak}-day logging streak${streak.today_active ? "" : " · today's still open"}</span>`;
   } else {
     streakEl.innerHTML = `<span class="pill gray">No streak — today's a good day to start one</span>`;
   }
@@ -89,7 +90,7 @@ function quickForm(ex, latest) {
     </div>`;
   wrap.querySelector(".qf-nudge")?.addEventListener("click", () => {
     wrap.querySelector(".qf-weight").value = nudge.suggest;
-    toast(`Loaded ${nudge.suggest} lbs — go get it`);
+    toast(`Loaded ${nudge.suggest} lbs`);
   });
 
   const parseRepsInput = (raw) =>
@@ -101,7 +102,7 @@ function quickForm(ex, latest) {
     } else {
       await api("/api/log-manual", { method: "POST", body: { exercise_id: ex.id, date: today, ...body } });
     }
-    toast(`${ex.name} ${latest.today ? "updated" : "logged"} 💪`);
+    toast(`${ex.name} ${latest.today ? "updated" : "logged"}`);
     startTimer(Number(localStorage.getItem("thor_rest_secs")) || 90);
     loadPlan();
     loadStats();
@@ -158,9 +159,10 @@ async function loadSummary() {
     $("daily-summary").innerHTML = renderMarkdown(s.markdown);
     return true;
   }
-  // fall back to yesterday's insights until today's exists
+  // fall back to yesterday's insights until today's exists (but not summaries
+  // written in the old coach voice, which used a "## Your Day" heading)
   const y = await api(`/api/daily-summary/${addDays(today, -1)}`);
-  if (y.markdown) {
+  if (y.markdown && !y.markdown.startsWith("## Your Day")) {
     $("daily-summary").innerHTML = `<p class="muted small">Yesterday's summary — generate today's when you're done for the day.</p>` + renderMarkdown(y.markdown);
   }
   return false;
@@ -168,7 +170,7 @@ async function loadSummary() {
 
 async function generateSummary(auto = false) {
   $("btn-summary").disabled = true;
-  $("summary-status").innerHTML = '<span class="spin">⚡</span> Coach is reviewing your week…';
+  $("summary-status").innerHTML = '<span class="spin">⚡</span> Putting your day together…';
   try {
     const s = await api("/api/daily-summary", { method: "POST", body: { date: today } });
     $("daily-summary").innerHTML = renderMarkdown(s.markdown);
@@ -231,7 +233,7 @@ $("btn-log").addEventListener("click", async () => {
       return `<div class="item"><div class="main"><div class="title">${esc(r.exercise || r.input || "")}</div></div><span class="pill red">${esc(r.status.replaceAll("_", " "))}</span></div>`;
     }).join("");
     $("quick-log").value = "";
-    toast("Workout logged 💪");
+    toast("Workout logged");
     loadStats(); loadPlan();
   } catch (err) {
     toast(err.message, true);
@@ -281,7 +283,7 @@ function renderTimer() {
   disp.style.cssText = "font-size:16px;min-width:64px;justify-content:center";
   if (left <= 0) {
     stopTimer();
-    disp.textContent = "GO!";
+    disp.textContent = "Rest done";
     disp.className = "pill green fit";
     disp.style.cssText = "font-size:16px;min-width:64px;justify-content:center";
     beep();
@@ -320,7 +322,7 @@ async function loadWeight() {
   const rows = await api(`/api/body?start=${addDays(today, -45)}&end=${today}`);
   const withWeight = rows.filter((r) => r.weight_lbs != null);
   if (!withWeight.length) {
-    $("weight-trend").textContent = "No weigh-ins yet — step on the scale.";
+    $("weight-trend").textContent = "No weigh-ins yet.";
     return;
   }
   const latest = withWeight[withWeight.length - 1];
@@ -343,8 +345,88 @@ $("btn-weight").addEventListener("click", async () => {
   } catch (err) { toast(err.message, true); }
 });
 
+// --- Water tracker ---
+
+let waterState = { glasses: 0, goal: 8 };
+
+function renderWater() {
+  const { glasses, goal } = waterState;
+  const cells = Math.max(goal, glasses);
+  let html = "";
+  for (let i = 1; i <= cells; i += 1) {
+    const cls = i <= glasses ? (i > goal ? "over" : "full") : "";
+    html += `<div class="glass ${cls}" data-set="${i}" title="${i} glass${i > 1 ? "es" : ""}"></div>`;
+  }
+  $("water-glasses").innerHTML = html;
+  $("water-label").innerHTML = `${glasses} / ${goal} glasses · ${glasses * 8} oz` +
+    (glasses >= goal ? ' <span class="pill green">goal hit 💧</span>' : "");
+  $("water-glasses").querySelectorAll("[data-set]").forEach((g) =>
+    g.addEventListener("click", () => {
+      // tapping the current level clears it back one; otherwise set to tapped level
+      const n = Number(g.dataset.set);
+      setWater(n === waterState.glasses ? n - 1 : n);
+    })
+  );
+}
+
+async function loadWater() {
+  waterState = await api(`/api/water?date=${today}`);
+  renderWater();
+}
+
+async function setWater(glasses) {
+  try {
+    waterState = await api("/api/water", { method: "POST", body: { date: today, glasses: Math.max(0, glasses) } });
+    renderWater();
+  } catch (err) { toast(err.message, true); }
+}
+
+$("water-plus").addEventListener("click", () => setWater(waterState.glasses + 1));
+$("water-minus").addEventListener("click", () => setWater(waterState.glasses - 1));
+
+// --- Headache still going? ---
+
+async function loadOngoingHeadache() {
+  const { ongoing } = await api("/api/headaches/ongoing");
+  const box = $("ongoing-headache");
+  if (!ongoing) {
+    box.innerHTML = "";
+    return;
+  }
+  box.innerHTML = `<div class="banner blue"><strong>Headache still going?</strong>
+    Started ${fmtTime(ongoing.started_at)}${ongoing.date !== today ? ` on ${fmtDate(ongoing.date)}` : ""} · worst pain ${ongoing.peak_severity ?? "?"}/10
+    <div class="row"><button class="btn-sm fit" id="end-headache">It's over — end it now</button>
+    <a class="btn btn-ghost btn-sm fit" href="health.html#headache">Update</a></div></div>`;
+  $("end-headache").addEventListener("click", async () => {
+    try {
+      await api(`/api/headaches/${ongoing.id}`, { method: "PATCH", body: { ended_at: localDateTime() } });
+      toast("Headache marked as ended");
+      loadOngoingHeadache();
+    } catch (err) { toast(err.message, true); }
+  });
+}
+
+// --- Weekly review: written Sunday evening, or Monday if it's still missing ---
+
+async function loadWeeklyReview() {
+  const [latest] = await api("/api/guides?kind=weekly_review&limit=1");
+  const dow = new Date().getDay(); // 0 = Sunday
+  const reviewWeek = dow === 0 ? weekStart() : addDays(weekStart(), -7);
+  const due = (dow === 0 && new Date().getHours() >= 18) || dow === 1;
+  let review = latest;
+  if (due && (!latest || latest.period_start < reviewWeek)) {
+    try {
+      review = await api("/api/guides/weekly-review", { method: "POST", body: {} });
+    } catch { /* silent — the button on Guides/Workouts still works */ }
+  }
+  if (review && review.period_start >= addDays(reviewWeek, -7)) {
+    $("weekly-review-link").innerHTML =
+      `<a class="btn btn-ghost btn-sm" href="guides.html#${review.id}">📘 ${esc(review.title)} — read your weekly review →</a>`;
+  }
+}
+
 const hour = new Date().getHours();
-$("greeting").textContent = hour < 12 ? "Morning. Go earn it." : hour < 17 ? "Afternoon check-in" : "Evening review";
+$("greeting").textContent = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
 loadStats().catch((e) => toast(e.message, true));
 loadPlan().catch(() => {});
@@ -355,4 +437,10 @@ loadSummary().then((hasToday) => {
 loadReflection().catch(() => {});
 loadLatestRun().catch(() => {});
 loadWeight().catch(() => {});
+loadWater().catch(() => {});
+loadOngoingHeadache().catch(() => {});
+loadWeeklyReview().catch(() => {});
+mountCheckin($("checkin"), { date: today, compact: true }).catch(() => {
+  $("checkin").innerHTML = `<div class="empty">Couldn't load the check-in.</div>`;
+});
 autoSyncStrava();

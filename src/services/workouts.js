@@ -327,42 +327,7 @@ const addDays = (iso, n) => {
   return todayISO(d);
 };
 
-export async function generateWeeklySummary(weekStart) {
-  // Default to the Monday of the current week
-  let start = weekStart;
-  if (!start) {
-    const now = new Date();
-    const back = (getDOW(now) - 1) % 7;
-    now.setDate(now.getDate() - back);
-    start = todayISO(now);
-  }
-  const end = addDays(start, 6);
-  const sessions = getWorkouts(start, end);
-  const totalVolume = Math.round(sessions.reduce((a, x) => a + x.total_volume, 0));
-  const runs = db.prepare("SELECT * FROM running_sessions WHERE session_date BETWEEN ? AND ?").all(start, end);
-
-  const metrics = {
-    sessions: sessions.length,
-    exercises_logged: sessions.reduce((a, x) => a + x.logs.length, 0),
-    total_volume_lbs: totalVolume,
-    runs: runs.length,
-    run_miles: Number(runs.reduce((a, r) => a + (r.distance_miles || 0), 0).toFixed(1)),
-  };
-
-  const { data } = await chatJSON(
-    "weekly_summary",
-    `You are a direct, motivating strength coach (David Goggins vibe, but constructive). Return JSON: {"summary": string} — 3-5 sentences reviewing the week using the provided numbers. Be honest about gaps, specific about wins.`,
-    JSON.stringify({ week_start: start, week_end: end, metrics, sessions: sessions.map((s) => ({ date: s.session_date, exercises: s.logs.map((l) => ({ name: l.exercise, sets: l.sets, reps: l.reps, weight: l.weight_lbs })) })) })
-  );
-
-  const id = uuid();
-  db.prepare(
-    `INSERT INTO weekly_summaries (id, plan_id, week_start_date, week_end_date, total_sessions, total_volume, summary_text, metrics_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, THOR_PLAN_ID, start, end, metrics.sessions, totalVolume, data.summary || "", JSON.stringify(metrics));
-  return db.prepare("SELECT * FROM weekly_summaries WHERE id = ?").get(id);
-}
-
+/** Legacy lifting-only weekly summaries (replaced by the weekly health review in guides.js). */
 export function listWeeklySummaries(limit = 12) {
   return db.prepare("SELECT * FROM weekly_summaries ORDER BY week_start_date DESC LIMIT ?").all(limit);
 }

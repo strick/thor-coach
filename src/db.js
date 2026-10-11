@@ -6,12 +6,33 @@ import { fileURLToPath } from "node:url";
 import { THOR_PLAN_ID, DEFAULT_USER_ID } from "./config.js";
 import { FOOD_CATALOG } from "./data/foods.js";
 
+// Test runs must never open the real database or touch the real backup mirror.
+// (Static imports are hoisted above env setup, so a test that imports src/
+// directly instead of through test/helpers/env.js trips this.)
+if (process.env.THOR_TEST === "1" && (!process.env.THOR_DB_PATH || !process.env.THOR_BACKUP_MIRROR)) {
+  throw new Error("THOR_TEST=1 requires THOR_DB_PATH and THOR_BACKUP_MIRROR (use test/helpers/env.js)");
+}
+
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const dbPath = process.env.THOR_DB_PATH || path.join(root, "data", "workout.db");
-mkdirSync(path.dirname(dbPath), { recursive: true });
+/** Directory holding the database; uploads and backups live beside it. */
+export const dataDir = path.dirname(dbPath);
+mkdirSync(dataDir, { recursive: true });
 
 export const db = new DatabaseSync(dbPath);
-db.exec("PRAGMA journal_mode = WAL");
+// WAL needs shared memory, which network filesystems (Azure App Service /home,
+// SMB mounts) don't provide — fall back rather than fail to boot there.
+// THOR_SQLITE_JOURNAL forces a mode explicitly (WAL | DELETE | TRUNCATE | PERSIST).
+const journal = ["WAL", "DELETE", "TRUNCATE", "PERSIST"].includes((process.env.THOR_SQLITE_JOURNAL || "").toUpperCase())
+  ? process.env.THOR_SQLITE_JOURNAL.toUpperCase()
+  : "WAL";
+try {
+  db.exec(`PRAGMA journal_mode = ${journal}`);
+} catch (err) {
+  console.error(`[db] journal_mode ${journal} unavailable (${err.message}); using DELETE`);
+  db.exec("PRAGMA journal_mode = DELETE");
+}
+db.exec("PRAGMA busy_timeout = 5000");
 db.exec("PRAGMA foreign_keys = ON");
 
 export const uuid = () => randomUUID();
@@ -34,6 +55,8 @@ export function ensureSchemaAndSeed() {
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT,
+    ms_oid TEXT,
+    last_login_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -304,6 +327,12 @@ export function ensureSchemaAndSeed() {
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS water_intake (
+    date TEXT PRIMARY KEY,
+    glasses INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS food_catalog (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -337,31 +366,240 @@ export function ensureSchemaAndSeed() {
     started_at TEXT NOT NULL,
     finished_at TEXT
   );
+
+  -- Health profile: what the AI needs to know about you. Multi-value fields
+  -- (conditions, allergies, family_history, goals) are newline-separated text.
+  CREATE TABLE IF NOT EXISTS health_profile (
+    user_id TEXT PRIMARY KEY DEFAULT '${DEFAULT_USER_ID}',
+    birth_date TEXT,
+    sex TEXT,
+    height_in REAL,
+    conditions TEXT,
+    allergies TEXT,
+    family_history TEXT,
+    goals TEXT,
+    diet_style TEXT,
+    doctor_notes TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS medications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    name TEXT NOT NULL,
+    dose TEXT,
+    frequency TEXT,
+    kind TEXT NOT NULL DEFAULT 'med',
+    purpose TEXT,
+    as_needed INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    started_on TEXT,
+    stopped_on TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_medications_user ON medications(user_id, active);
+
+  -- Headaches: structured entries. Enum-like columns (type, locations,
+  -- symptoms, red_flags, triggers) are validated in the service, not by CHECK.
+  -- started_at / ended_at are local 'YYYY-MM-DDTHH:MM'; ended_at NULL with a
+  -- start = still going. date is the local onset date (drives correlations).
+  CREATE TABLE IF NOT EXISTS headaches (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    date TEXT NOT NULL,
+    started_at TEXT,
+    ended_at TEXT,
+    duration_minutes INTEGER,
+    peak_severity INTEGER CHECK(peak_severity BETWEEN 0 AND 10),
+    type TEXT NOT NULL DEFAULT 'unknown',
+    locations TEXT NOT NULL DEFAULT '[]',
+    aura INTEGER NOT NULL DEFAULT 0,
+    symptoms TEXT NOT NULL DEFAULT '[]',
+    red_flags TEXT NOT NULL DEFAULT '[]',
+    meds TEXT NOT NULL DEFAULT '[]',
+    triggers TEXT NOT NULL DEFAULT '[]',
+    notes TEXT,
+    legacy_event_id TEXT UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_headaches_date ON headaches(user_id, date);
+
+  -- Daily check-in: sleep_hours is the night that ended on the morning of date.
+  CREATE TABLE IF NOT EXISTS daily_checkins (
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    date TEXT NOT NULL,
+    sleep_hours REAL CHECK(sleep_hours BETWEEN 0 AND 24),
+    sleep_quality INTEGER CHECK(sleep_quality BETWEEN 1 AND 5),
+    stress INTEGER CHECK(stress BETWEEN 1 AND 5),
+    energy INTEGER CHECK(energy BETWEEN 1 AND 5),
+    caffeine_servings REAL CHECK(caffeine_servings >= 0),
+    alcohol_drinks REAL CHECK(alcohol_drinks >= 0),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, date),
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+
+  -- Blood work. A report is a draft until you've reviewed the extracted rows
+  -- and confirmed it; only confirmed results feed trends and advice.
+  CREATE TABLE IF NOT EXISTS lab_reports (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    collected_on TEXT,
+    reported_on TEXT,
+    lab_name TEXT,
+    ordering_provider TEXT,
+    source TEXT NOT NULL,
+    raw_text TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    extraction_json TEXT,
+    llm_provider TEXT,
+    llm_model TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    confirmed_at TEXT,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_lab_reports_user ON lab_reports(user_id, collected_on);
+
+  CREATE TABLE IF NOT EXISTS lab_report_files (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    report_id TEXT NOT NULL,
+    stored_name TEXT NOT NULL,
+    original_filename TEXT,
+    mime_type TEXT NOT NULL,
+    bytes INTEGER NOT NULL,
+    sha256 TEXT NOT NULL,
+    page_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(report_id) REFERENCES lab_reports(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_lab_files_report ON lab_report_files(report_id);
+  CREATE INDEX IF NOT EXISTS idx_lab_files_sha ON lab_report_files(sha256);
+
+  CREATE TABLE IF NOT EXISTS lab_results (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    report_id TEXT NOT NULL,
+    marker_key TEXT,
+    name_on_report TEXT NOT NULL,
+    value_num REAL,
+    value_text TEXT,
+    unit TEXT,
+    ref_low REAL,
+    ref_high REAL,
+    ref_text TEXT,
+    flag TEXT,
+    canonical_value REAL,
+    canonical_unit TEXT,
+    canonical_ref_low REAL,
+    canonical_ref_high REAL,
+    collected_on TEXT,
+    sort_order INTEGER,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(report_id) REFERENCES lab_reports(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_lab_results_report ON lab_results(report_id);
+  CREATE INDEX IF NOT EXISTS idx_lab_results_marker ON lab_results(user_id, marker_key, collected_on);
+
+  -- Guides: AI-written explainers kept in a library — lab explainers, weekly
+  -- reviews and on-demand deep dives. context_json snapshots what the model saw.
+  CREATE TABLE IF NOT EXISTS guides (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    topic TEXT,
+    period_start TEXT,
+    period_end TEXT,
+    lab_report_id TEXT,
+    markdown TEXT NOT NULL,
+    context_json TEXT,
+    llm_provider TEXT,
+    llm_model TEXT,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(lab_report_id) REFERENCES lab_reports(id) ON DELETE SET NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_guides_kind ON guides(user_id, kind, created_at);
+
+  -- Ask Thor history, kept across reloads. Order by rowid: datetime('now') has
+  -- one-second resolution and a question + reply land in the same second.
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    thread_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    tool_calls TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_chat_thread ON chat_messages(user_id, thread_id);
+
+  -- Long-term memory: durable facts and preferences you asked Thor to keep.
+  CREATE TABLE IF NOT EXISTS user_memories (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT '${DEFAULT_USER_ID}',
+    content TEXT NOT NULL,
+    category TEXT,
+    source TEXT NOT NULL DEFAULT 'chat',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
   `);
+
+  // Additive migration for databases created before Microsoft sign-in existed
+  // (CREATE TABLE IF NOT EXISTS never alters an existing table).
+  const userCols = new Set(db.prepare("PRAGMA table_info(users)").all().map((c) => c.name));
+  if (!userCols.has("ms_oid")) db.exec("ALTER TABLE users ADD COLUMN ms_oid TEXT");
+  if (!userCols.has("last_login_at")) db.exec("ALTER TABLE users ADD COLUMN last_login_at TEXT");
 
   const userCount = db.prepare("SELECT COUNT(*) AS n FROM users").get().n;
   if (userCount === 0) {
     db.prepare("INSERT INTO users (id, name, email) VALUES (?, ?, ?)").run(DEFAULT_USER_ID, "Main User", null);
   }
 
-  // Seed the food catalog once (user-added foods have source='custom' and survive re-seeds)
-  const foodCount = db.prepare("SELECT COUNT(*) AS n FROM food_catalog WHERE source = 'seed'").get().n;
-  if (foodCount === 0) {
-    const insFood = db.prepare(
-      `INSERT INTO food_catalog (id, name, category, serving_display, calories_kcal, protein_g, carbs_g, fat_g,
-         fiber_g, sugar_g, added_sugar_g, sodium_mg, sat_fat_g, cholesterol_mg, potassium_mg, calcium_mg, aliases)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
+  // Reconcile built-in foods on every boot. Earlier builds seeded these rows
+  // only once, so corrected macro values never reached an existing database.
+  // Custom foods are deliberately excluded and remain entirely user-owned.
+  const foodValues = (f) => [
+    f.category, f.serving_display, f.calories_kcal, f.protein_g, f.carbs_g, f.fat_g,
+    f.fiber_g, f.sugar_g, f.added_sugar_g, f.sodium_mg, f.sat_fat_g, f.cholesterol_mg,
+    f.potassium_mg, f.calcium_mg, JSON.stringify(f.aliases || []),
+  ];
+  const updateFood = db.prepare(
+    `UPDATE food_catalog SET category = ?, serving_display = ?, calories_kcal = ?, protein_g = ?, carbs_g = ?, fat_g = ?,
+       fiber_g = ?, sugar_g = ?, added_sugar_g = ?, sodium_mg = ?, sat_fat_g = ?, cholesterol_mg = ?,
+       potassium_mg = ?, calcium_mg = ?, aliases = ?
+     WHERE source = 'seed' AND name = ?`
+  );
+  const insertFood = db.prepare(
+    `INSERT INTO food_catalog (id, name, category, serving_display, calories_kcal, protein_g, carbs_g, fat_g,
+       fiber_g, sugar_g, added_sugar_g, sodium_mg, sat_fat_g, cholesterol_mg, potassium_mg, calcium_mg, aliases, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'seed')`
+  );
+  tx(() => {
     for (const f of FOOD_CATALOG) {
-      insFood.run(
-        randomUUID(), f.name, f.category, f.serving_display, f.calories_kcal, f.protein_g, f.carbs_g, f.fat_g,
-        f.fiber_g, f.sugar_g, f.added_sugar_g, f.sodium_mg, f.sat_fat_g, f.cholesterol_mg, f.potassium_mg, f.calcium_mg,
-        JSON.stringify(f.aliases || [])
-      );
+      const result = updateFood.run(...foodValues(f), f.name);
+      if (!result.changes) insertFood.run(randomUUID(), f.name, ...foodValues(f));
     }
-    console.log(`[seed] food catalog: ${FOOD_CATALOG.length} items`);
-  }
+  });
 
+  runDataMigrations();
+
+  // NOTE: everything below runs only on a brand-new database. New migrations
+  // and seeds belong in runDataMigrations() above.
   const planExists = db.prepare("SELECT 1 FROM plans WHERE id = ?").get(THOR_PLAN_ID);
   if (planExists) return;
 
@@ -405,6 +643,48 @@ export function ensureSchemaAndSeed() {
   }
 }
 
+/** Run a one-shot data migration exactly once (flagged in app_settings). */
+function once(name, fn) {
+  const key = `migration.${name}`;
+  if (getSetting(key) === "done") return;
+  tx(() => {
+    fn();
+    setSetting(key, "done");
+  });
+}
+
+/**
+ * Idempotent data migrations and seeds for existing databases. Runs on every
+ * boot, before the brand-new-database seed in ensureSchemaAndSeed().
+ */
+function runDataMigrations() {
+  // Health profile: turn the facts the old prompts hard-coded into editable data.
+  once("health_profile_seed", () => {
+    const user = db.prepare("SELECT id FROM users WHERE id = ?").get(DEFAULT_USER_ID);
+    if (!user) return;
+    const dietStyle =
+      db.prepare("SELECT diet_style FROM nutrition_goals WHERE user_id = ? ORDER BY created_at DESC LIMIT 1")
+        .get(DEFAULT_USER_ID)?.diet_style || "DASH";
+    db.prepare(
+      `INSERT OR IGNORE INTO health_profile (user_id, conditions, goals, diet_style) VALUES (?, ?, ?, ?)`
+    ).run(DEFAULT_USER_ID, "High cholesterol (watching)", "Fat loss while keeping muscle\nConsistency", dietStyle);
+  });
+
+  // Migraines logged as generic health events become structured headaches.
+  // The originals stay in health_events (hidden from that list). The flag
+  // means a migrated headache you later delete never comes back.
+  once("headaches_from_events", () => {
+    if (!db.prepare("SELECT id FROM users WHERE id = ?").get(DEFAULT_USER_ID)) return;
+    const ins = db.prepare(
+      `INSERT OR IGNORE INTO headaches (id, user_id, date, duration_minutes, peak_severity, type, notes, legacy_event_id, created_at)
+       VALUES (?, ?, ?, ?, ?, 'migraine', ?, ?, ?)`
+    );
+    for (const e of db.prepare("SELECT * FROM health_events WHERE category = 'migraine'").all()) {
+      ins.run(randomUUID(), DEFAULT_USER_ID, e.date, e.duration_minutes, e.intensity, e.notes, e.id, e.created_at);
+    }
+  });
+}
+
 /**
  * Daily backup via VACUUM INTO (consistent snapshot, WAL-safe), kept 14 days,
  * plus a best-effort mirror to an off-VM location (defaults to the Windows
@@ -432,6 +712,36 @@ function mirrorBackup(file) {
   return true;
 }
 
+/** Uploaded files (lab PDFs/photos) live here, next to the database. */
+export const uploadsDir = path.join(dataDir, "uploads");
+
+/**
+ * Uploads aren't inside the VACUUM INTO snapshot, so copy any new ones to the
+ * mirror too. Incremental (names are unique UUIDs) and never pruned.
+ */
+function mirrorUploads() {
+  const mountRoot = path.dirname(path.dirname(mirrorDir));
+  if (!existsSync(mountRoot) || !existsSync(uploadsDir)) return 0;
+  let copied = 0;
+  const walk = (rel) => {
+    for (const name of readdirSync(path.join(uploadsDir, rel))) {
+      const relPath = path.join(rel, name);
+      const src = path.join(uploadsDir, relPath);
+      if (statSync(src).isDirectory()) {
+        walk(relPath);
+        continue;
+      }
+      const dest = path.join(mirrorDir, "uploads", relPath);
+      if (existsSync(dest)) continue;
+      mkdirSync(path.dirname(dest), { recursive: true });
+      copyFileSync(src, dest);
+      copied += 1;
+    }
+  };
+  walk("");
+  return copied;
+}
+
 export function runDailyBackup({ force = false } = {}) {
   mkdirSync(localBackupDir, { recursive: true });
   const now = new Date();
@@ -444,6 +754,10 @@ export function runDailyBackup({ force = false } = {}) {
   let mirrored = false;
   try {
     mirrored = mirrorBackup(file);
+    if (mirrored) {
+      const n = mirrorUploads();
+      if (n) console.log(`[backup] mirrored ${n} new upload file(s)`);
+    }
   } catch (err) {
     console.error("[backup] mirror failed:", err.message);
   }

@@ -1,5 +1,14 @@
 import { db, uuid } from "../db.js";
 import { HttpError } from "../http.js";
+import { getProfile } from "./profile.js";
+
+/** Max heart rate for effort classification: highest observed, else 220 - age. */
+export function hrMaxEstimate() {
+  const observed = db.prepare("SELECT MAX(max_heart_rate) AS m FROM running_sessions").get()?.m;
+  if (observed) return observed;
+  const age = getProfile().age;
+  return age ? 220 - age : null;
+}
 
 const FIELDS = [
   "session_date", "start_time", "end_time", "distance_miles", "duration_minutes", "pace_min_per_mile",

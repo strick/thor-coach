@@ -15,6 +15,8 @@
       <span class="sub"><span id="streak"></span> <span id="today-label"></span></span>
     </div>
 
+    <div id="ongoing-headache"></div>
+
     <div class="grid cols-4 mb" id="stat-cards">
       <div class="card"><div class="stat" id="stat-workouts">–</div><div class="stat-label">Workouts this week</div></div>
       <div class="card"><div class="stat" id="stat-volume">–</div><div class="stat-label">Volume this week (lbs)</div></div>
@@ -25,7 +27,7 @@
     <div class="grid cols-2">
       <div class="card">
         <h2><span class="accent">⚡</span> Quick log workout</h2>
-        <p class="muted small">Type it like you'd say it — "3x12 floor press @45, then 20 15 10 pushups, brutal"</p>
+        <p class="muted small">Type it like you'd say it — "3x12 floor press @45, then 20 15 10 pushups, felt strong"</p>
         <textarea id="quick-log" placeholder="What did you lift?"></textarea>
         <div class="row mt">
           <button id="btn-log" class="fit">Log it</button>
@@ -45,7 +47,14 @@
       </div>
 
       <div class="card">
-        <h2>Nutrition today</h2>
+        <h2>💧 Water today</h2>
+        <div id="water-glasses" class="water-glasses"></div>
+        <div class="row mt" style="align-items:center">
+          <button id="water-minus" class="btn-ghost btn-sm fit">−</button>
+          <button id="water-plus" class="fit btn-sm">＋ Glass</button>
+          <span class="muted small" id="water-label"></span>
+        </div>
+        <h2 class="mt">Nutrition today</h2>
         <div id="nutrition-today"><div class="empty">Loading…</div></div>
         <a class="btn btn-ghost btn-sm mt" href="nutrition.html">Open nutrition →</a>
       </div>
@@ -53,15 +62,21 @@
 
     <div class="grid cols-2 mt">
       <div class="card">
-        <h2><span class="accent">🔥</span> Daily summary</h2>
+        <h2><span class="accent">⚡</span> Daily summary</h2>
         <div class="row mb">
           <button id="btn-summary" class="btn-gold fit">Generate for today</button>
           <span class="muted small" id="summary-status"></span>
         </div>
+        <div id="weekly-review-link" class="mb"></div>
         <div id="daily-summary" class="md"><div class="empty">No summary yet for today.</div></div>
       </div>
       <div class="card">
-        <h2>Weigh-in</h2>
+        <div class="row-between">
+          <h2>Daily check-in</h2>
+          <a class="btn btn-ghost btn-sm" href="health.html#headache">Log a headache</a>
+        </div>
+        <div id="checkin"><div class="empty">Loading…</div></div>
+        <h2 class="mt">Weigh-in</h2>
         <div class="row" style="align-items:center">
           <div class="fit" style="width:110px"><input type="number" id="weigh-in" step="0.1" placeholder="lbs" /></div>
           <button id="btn-weight" class="btn-ghost btn-sm fit">Save</button>

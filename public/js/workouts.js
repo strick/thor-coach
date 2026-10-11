@@ -1,4 +1,4 @@
-import { api, toast, esc, todayISO, addDays, fmtDate, DOW_NAMES, renderNav } from "./ui.js";
+import { api, toast, esc, todayISO, addDays, fmtDate, DOW_NAMES, renderNav, renderMarkdown } from "./ui.js";
 
 renderNav("workouts");
 const $ = (id) => document.getElementById(id);
@@ -110,16 +110,14 @@ async function loadProgress() {
 }
 
 async function loadWeekly() {
-  const list = await api("/api/weekly-summaries");
-  $("weekly").innerHTML = list.length
-    ? list.slice(0, 6).map((w) => `
-      <div class="item" style="display:block">
-        <div class="title">${fmtDate(w.week_start_date)} – ${fmtDate(w.week_end_date)}
-          <span class="pill">${w.total_sessions} sessions</span>
-          <span class="pill gold">${Math.round(w.total_volume).toLocaleString()} lbs</span></div>
-        <div class="meta mt">${esc(w.summary_text || "")}</div>
-      </div>`).join("")
-    : `<div class="empty">No weekly summaries yet.</div>`;
+  const [latest] = await api("/api/guides?kind=weekly_review&limit=1");
+  if (!latest) {
+    $("weekly").innerHTML = `<div class="empty">No weekly reviews yet.</div>`;
+    return;
+  }
+  const g = await api(`/api/guides/${latest.id}`);
+  $("weekly").innerHTML = `<h3 style="margin-top:0">${esc(g.title)}</h3>` + renderMarkdown(g.markdown) +
+    `<a class="btn btn-ghost btn-sm mt" href="guides.html#${g.id}">Open in Guides →</a>`;
 }
 
 $("btn-ai").addEventListener("click", async () => {
@@ -134,7 +132,7 @@ $("btn-ai").addEventListener("click", async () => {
         : `<div class="item"><div class="main"><div class="title">${esc(r.exercise || r.input || "")}</div></div><span class="pill red">${esc(r.status.replaceAll("_", " "))}</span></div>`
     ).join("");
     $("ai-text").value = "";
-    toast("Logged 💪");
+    toast("Logged");
     loadHistory(); loadProgress();
   } catch (err) { toast(err.message, true); }
   finally { $("btn-ai").disabled = false; }
@@ -163,12 +161,15 @@ $("btn-manual").addEventListener("click", async () => {
 $("btn-history").addEventListener("click", () => loadHistory().catch((e) => toast(e.message, true)));
 $("btn-weekly").addEventListener("click", async () => {
   $("btn-weekly").disabled = true;
+  $("weekly").innerHTML = '<p class="muted"><span class="spin">⚡</span> Writing your weekly review…</p>';
   try {
-    await api("/api/weekly-summaries/generate", { method: "POST", body: {} });
-    toast("Weekly summary generated");
-    loadWeekly();
+    await api("/api/guides/weekly-review", { method: "POST", body: {} });
+    toast("Weekly review ready");
   } catch (err) { toast(err.message, true); }
-  finally { $("btn-weekly").disabled = false; }
+  finally {
+    $("btn-weekly").disabled = false;
+    loadWeekly().catch(() => {});
+  }
 });
 
 // --- Plan editor ---

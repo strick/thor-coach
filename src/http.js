@@ -11,6 +11,7 @@ const MIME = {
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".pdf": "application/pdf",
   ".ico": "image/x-icon",
   ".woff2": "font/woff2",
 };
@@ -25,10 +26,14 @@ export class HttpError extends Error {
 const sha = (s) => createHash("sha256").update(String(s)).digest();
 const pinMatches = (given, expected) => timingSafeEqual(sha(given), sha(expected));
 
-export function createApp({ staticDir, pin = "" }) {
+export function createApp({ staticDir, pin = "", auth = null }) {
   const routes = [];
 
-  function add(method, pattern, handler) {
+  /**
+   * opts.raw: hand the handler the request body as a Buffer (file uploads)
+   * instead of parsed JSON; opts.maxBytes caps it (default: the JSON cap).
+   */
+  function add(method, pattern, handler, opts = {}) {
     const keys = [];
     const regex = new RegExp(
       "^" +
@@ -38,19 +43,32 @@ export function createApp({ staticDir, pin = "" }) {
         }) +
         "/?$"
     );
-    routes.push({ method, regex, keys, handler });
+    routes.push({ method, regex, keys, handler, opts });
   }
 
   const app = {
-    get: (p, h) => add("GET", p, h),
-    post: (p, h) => add("POST", p, h),
-    put: (p, h) => add("PUT", p, h),
-    patch: (p, h) => add("PATCH", p, h),
-    delete: (p, h) => add("DELETE", p, h),
+    get: (p, h, o) => add("GET", p, h, o),
+    post: (p, h, o) => add("POST", p, h, o),
+    put: (p, h, o) => add("PUT", p, h, o),
+    patch: (p, h, o) => add("PATCH", p, h, o),
+    delete: (p, h, o) => add("DELETE", p, h, o),
     listen: (port, host, cb) => server.listen(port, host, cb),
   };
 
   const MAX_BODY = 1024 * 1024; // 1 MB
+
+  async function readRaw(req, limit) {
+    const tooBig = () => new HttpError(413, `File too large (max ${Math.round(limit / 1048576)} MB)`);
+    if (Number(req.headers["content-length"] || 0) > limit) throw tooBig();
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of req) {
+      size += chunk.length;
+      if (size > limit) throw tooBig();
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  }
 
   async function readBody(req) {
     const chunks = [];
@@ -90,18 +108,40 @@ export function createApp({ staticDir, pin = "" }) {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Referrer-Policy", "no-referrer");
+    // Browsers only honor HSTS over TLS, so this is inert for plain-http LAN use.
+    res.setHeader("Strict-Transport-Security", "max-age=31536000");
     res.setHeader(
       "Content-Security-Policy",
       "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'"
     );
     try {
-      // Shared-PIN gate for the API (static pages stay open; data does not).
-      if (pin && url.pathname.startsWith("/api/") && url.pathname !== "/api/health") {
-        if (!pinMatches(req.headers["x-thor-pin"] || "", pin)) {
+      // API gate: a Microsoft session cookie or the shared PIN, whichever is
+      // configured (both count when both are). /api/health stays open for
+      // uptime checks; /api/auth/me is what the UI asks *whether* to sign in.
+      const OPEN_API = url.pathname === "/api/health" || url.pathname === "/api/auth/me";
+      if ((pin || auth?.enabled) && url.pathname.startsWith("/api/") && !OPEN_API) {
+        const sessionOk = auth?.enabled ? Boolean(auth.getSession(req)) : false;
+        const pinOk = pin ? pinMatches(req.headers["x-thor-pin"] || "", pin) : false;
+        if (!sessionOk && !pinOk) {
           res.writeHead(401, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "PIN required" }));
+          res.end(
+            JSON.stringify(auth?.enabled ? { error: "Sign-in required", login: "/auth/login" } : { error: "PIN required" })
+          );
           return;
         }
+      }
+      // Page gate: with sign-in active, HTML navigations go to the login page
+      // until there's a session (assets stay open — they contain no data).
+      if (
+        auth?.enabled &&
+        req.method === "GET" &&
+        (url.pathname === "/" || url.pathname.endsWith(".html")) &&
+        url.pathname !== "/login.html" &&
+        !auth.getSession(req)
+      ) {
+        res.writeHead(302, { Location: `/login.html?next=${encodeURIComponent(url.pathname + url.search)}` });
+        res.end();
+        return;
       }
       for (const r of routes) {
         if (r.method !== req.method) continue;
@@ -109,11 +149,15 @@ export function createApp({ staticDir, pin = "" }) {
         if (!m) continue;
         const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
         const query = Object.fromEntries(url.searchParams);
-        const body = ["POST", "PUT", "PATCH"].includes(req.method) ? await readBody(req) : {};
+        const hasBody = ["POST", "PUT", "PATCH"].includes(req.method);
+        const body = !hasBody ? {} : r.opts.raw ? await readRaw(req, r.opts.maxBytes ?? MAX_BODY) : await readBody(req);
         const result = await r.handler({ req, res, params, query, body });
-        if (!res.writableEnded) {
+        // Handlers that wrote their own response (files, CSV, redirects) are done.
+        if (!res.headersSent) {
           res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
           res.end(JSON.stringify(result ?? { ok: true }));
+        } else if (!res.writableEnded) {
+          res.end();
         }
         return;
       }
@@ -123,9 +167,14 @@ export function createApp({ staticDir, pin = "" }) {
     } catch (err) {
       const status = err instanceof HttpError ? err.status : 500;
       if (status === 500) console.error(`[${req.method} ${url.pathname}]`, err);
-      if (!res.writableEnded) {
-        res.writeHead(status, { "Content-Type": "application/json" });
+      if (!res.headersSent) {
+        // An oversized upload may still be streaming in; don't keep reading it.
+        const headers = { "Content-Type": "application/json" };
+        if (status === 413) headers.Connection = "close";
+        res.writeHead(status, headers);
         res.end(JSON.stringify({ error: err.message || "Internal error" }));
+      } else {
+        res.destroy();
       }
     }
   });
