@@ -2,98 +2,112 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Thor — Labs</title>
   <meta name="theme-color" content="#0b0f17" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Thor" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="css/app.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
+  <link rel="icon" href="/icons/icon-192.png" />
 </head>
 <body>
   <main class="container">
-    <div class="page-head">
-      <h1>Labs</h1>
-      <span class="sub">Your blood work, tracked over time and read in plain English</span>
-    </div>
+    <div class="page-head"><h1>Health</h1><a class="btn btn-ghost btn-sm" href="profile.html">Profile &amp; meds ›</a></div>
+    <div id="segs"></div>
 
-    <div class="grid cols-2">
-      <div class="card" id="add-card">
-        <h2>Add results</h2>
-        <div class="seg tabs" id="add-tabs">
-          <button type="button" data-tab="upload" class="on">Upload</button>
-          <button type="button" data-tab="paste">Paste text</button>
-          <button type="button" data-tab="manual">Type in</button>
-        </div>
-        <div data-pane="upload" class="mt">
-          <p class="muted small">A PDF from your lab or patient portal, or clear photos of each page (up to 6). Thor reads it, then you check every row before anything is saved.</p>
-          <input type="file" id="files" multiple accept="application/pdf,image/jpeg,image/png,image/webp" />
-          <div class="row mt"><button id="btn-upload" class="fit">Read report</button><span class="muted small" id="upload-status"></span></div>
-        </div>
-        <div data-pane="paste" class="mt" hidden>
-          <p class="muted small">Copy the results table from MyChart, Quest, LabCorp or your lab's portal and paste it here.</p>
-          <textarea id="paste-text" rows="7" placeholder="LDL Cholesterol Calc   128   mg/dL   0 - 99   H&#10;HDL Cholesterol   52   mg/dL   >39&#10;…"></textarea>
-          <div class="row mt"><button id="btn-paste" class="fit">Read text</button><span class="muted small" id="paste-status"></span></div>
-        </div>
-        <div data-pane="manual" class="mt" hidden>
-          <p class="muted small">Enter results yourself, one row per marker.</p>
-          <button id="btn-manual" class="fit">Start a blank report</button>
-        </div>
-        <p class="muted small mt">Lab files are stored with your Thor data. When OpenAI is your provider, the file is sent to OpenAI to be read.</p>
-      </div>
+    <div id="lab-alerts"></div>
 
-      <div class="card">
-        <h2>Reports</h2>
-        <div id="reports" class="list"><div class="empty">Loading…</div></div>
-      </div>
-    </div>
+    <section class="card" id="overview-card" aria-labelledby="overview-h">
+      <h2 id="overview-h">Latest results</h2>
+      <div id="overview"><div class="empty">Loading…</div></div>
+    </section>
 
-    <div class="card mt" id="review" hidden>
-      <div class="row-between">
-        <h2 id="review-title">Review results</h2>
-        <span class="muted small" id="review-status"></span>
+    <section class="card" aria-labelledby="reports-h">
+      <h2 id="reports-h">Reports</h2>
+      <div id="reports" class="list"><div class="empty">Loading…</div></div>
+    </section>
+
+    <details class="card" id="add-card">
+      <summary>Add results</summary>
+      <div class="seg tabs mt" id="add-tabs" role="group" aria-label="How to add results">
+        <button type="button" data-tab="upload" aria-pressed="true">Photo or PDF</button>
+        <button type="button" data-tab="paste" aria-pressed="false">Paste text</button>
+        <button type="button" data-tab="manual" aria-pressed="false">Type in</button>
       </div>
-      <p class="muted small" id="review-help">Check each row against your report — names, values, units and ranges. Fix anything that's off; unmatched rows are kept but won't trend.</p>
-      <div class="row">
-        <div class="fit" style="min-width:170px"><label for="r-collected">Collected on</label><input type="date" id="r-collected" /></div>
-        <div><label for="r-lab">Lab</label><input id="r-lab" placeholder="e.g. Quest Diagnostics" /></div>
-        <div><label for="r-provider">Ordered by</label><input id="r-provider" /></div>
+      <div data-pane="upload" class="mt">
+        <p class="muted small">A PDF from your lab or patient portal, or clear photos of each page (up to 6). Thor reads it, then you check every row before anything is saved.</p>
+        <label for="files" class="sr-only">Lab report files</label>
+        <input type="file" id="files" multiple accept="application/pdf,image/jpeg,image/png,image/webp" />
+        <div class="row mt"><button id="btn-upload" class="fit">Read report</button><span class="muted small" id="upload-status"></span></div>
       </div>
-      <div id="r-files" class="row mt"></div>
+      <div data-pane="paste" class="mt" hidden>
+        <p class="muted small">Copy the results table from MyChart, Quest, LabCorp or your lab's portal and paste it here.</p>
+        <label for="paste-text" class="sr-only">Pasted results</label>
+        <textarea id="paste-text" rows="7" placeholder="LDL Cholesterol Calc   128   mg/dL   0 - 99   H&#10;HDL Cholesterol   52   mg/dL   >39&#10;…"></textarea>
+        <div class="row mt"><button id="btn-paste" class="fit">Read text</button><span class="muted small" id="paste-status"></span></div>
+      </div>
+      <div data-pane="manual" class="mt" hidden>
+        <p class="muted small">Enter results yourself, one row per marker.</p>
+        <button id="btn-manual" class="fit">Start a blank report</button>
+      </div>
+      <p class="muted small mt">Lab files are stored with your Thor data. When OpenAI is your provider, the file is sent to OpenAI to be read.</p>
+    </details>
+
+    <section class="card" id="explainer-card" hidden aria-labelledby="explainer-title">
+      <button type="button" class="back-link" data-back>‹ Labs</button>
+      <div class="reader-head">
+        <h2 id="explainer-title" style="margin:0">What your results mean</h2>
+        <div id="explainer-menu"></div>
+      </div>
+      <p class="read-meta" id="explainer-meta"></p>
+      <div id="explainer"></div>
+    </section>
+
+    <section class="card" id="review" hidden aria-labelledby="review-title">
+      <button type="button" class="back-link" data-back>‹ Labs</button>
+      <div class="reader-head">
+        <div><h2 id="review-title" style="margin:0">Review results</h2><span id="review-status"></span></div>
+        <div id="review-menu"></div>
+      </div>
+      <div id="r-critical"></div>
+      <p class="triage" id="r-triage"></p>
+      <p class="muted small" id="review-help">Check each row against your report — names, values, units and ranges. Unmatched rows are kept but won't trend.</p>
+      <div id="r-details" hidden>
+        <div class="row">
+          <div class="fit" style="min-width:170px"><label for="r-collected">Collected on</label><input type="date" id="r-collected" /></div>
+          <div><label for="r-lab">Lab</label><input id="r-lab" placeholder="e.g. Quest Diagnostics" /></div>
+          <div><label for="r-provider">Ordered by</label><input id="r-provider" /></div>
+        </div>
+      </div>
+      <div id="r-files" class="btn-row mt"></div>
       <div id="r-warnings" class="mt"></div>
       <div class="table-scroll mt">
-        <table class="review-table">
-          <thead><tr><th>Marker</th><th>Name on report</th><th>Value</th><th>Unit</th><th>Low</th><th>High</th><th>Flag</th><th></th></tr></thead>
+        <table class="review-table" id="r-table">
+          <thead><tr><th>Marker</th><th>Name on report</th><th>Value</th><th>Unit</th><th>Low</th><th>High</th><th>Status</th><th><span class="sr-only">Remove</span></th></tr></thead>
           <tbody id="r-rows"></tbody>
         </table>
       </div>
-      <button type="button" class="btn-ghost btn-sm mt" id="r-add-row">+ Add row</button>
-      <div class="row mt">
-        <button id="r-confirm" class="btn-gold fit">Confirm &amp; explain</button>
-        <button id="r-save" class="btn-ghost fit">Save draft</button>
-        <button id="r-close" class="btn-ghost fit">Close</button>
-        <span class="spacer"></span>
-        <button id="r-delete" class="btn-danger fit">Delete report</button>
+      <div id="r-step"></div>
+      <div id="r-normal"></div>
+      <button type="button" class="btn-ghost btn-sm mt" id="r-add-row">+ Add a row</button>
+      <div class="action-bar step-actions" id="r-step-actions" hidden>
+        <button type="button" class="btn-ghost fit" data-step-prev aria-label="Previous result">‹</button>
+        <button type="button" class="btn-ghost fit" data-step-not>Not a result</button>
+        <button type="button" data-step-ok>Looks right ✓</button>
       </div>
-    </div>
-
-    <div class="card mt" id="explainer-card" hidden>
-      <div class="row-between">
-        <h2 id="explainer-title">What your results mean</h2>
-        <div class="row fit" style="gap:6px">
-          <button class="btn-ghost btn-sm fit" id="btn-edit-report">Edit results</button>
-          <button class="btn-ghost btn-sm fit" id="btn-regen">Regenerate</button>
-        </div>
+      <div class="action-bar" id="r-final-actions">
+        <button id="r-save" class="btn-ghost">Save draft</button>
+        <button id="r-confirm">Confirm &amp; explain</button>
       </div>
-      <div id="explainer" class="md"></div>
-    </div>
-
-    <div class="card mt">
-      <div class="row-between">
-        <h2>Latest results</h2>
-        <span class="muted small">Tap a marker to see its trend</span>
-      </div>
-      <div id="latest"><div class="empty">Loading…</div></div>
-    </div>
+    </section>
   </main>
+  <dialog class="lightbox" id="lightbox" aria-label="Report page">
+    <div class="bar"><button type="button" class="btn-ghost" id="lightbox-close">Close</button></div>
+    <img id="lightbox-img" alt="" />
+  </dialog>
   <script type="module" src="js/labs.js"></script>
 </body>
 </html>
