@@ -1,112 +1,226 @@
-// Daily check-in widget (dashboard + Health page): every tap saves immediately.
-import { api, toast, esc, addDays } from "./ui.js";
+// Daily check-in (Today, Health, and the ＋ sheet). Every tap saves; the screen
+// updates before the request returns, and saves run one at a time.
+//
+// mode "morning": sleep, sleep quality, energy (+ an optional weigh-in)
+// mode "evening": stress, caffeine, drinks (+ "a line about today")
+// mode "full":    everything, plus notes (Health page)
+import { api, toast, esc, addDays, announceChange } from "./ui.js";
 
 const SCALES = {
-  sleep_quality: { label: "Sleep quality", ends: ["Awful", "Great"] },
+  sleep_quality: { label: "Sleep quality", ends: ["Rough", "Great"] },
+  energy: { label: "Energy right now", ends: ["Drained", "Full of energy"] },
   stress: { label: "Stress today", ends: ["Calm", "Maxed out"] },
-  energy: { label: "Energy today", ends: ["Drained", "Great"] },
 };
-const STEPPERS = {
-  caffeine_servings: { label: "Caffeine (cups)", step: 1 },
-  alcohol_drinks: { label: "Alcohol (drinks)", step: 1 },
+const OPTS = {
+  caffeine_servings: { label: "Caffeine today (cups)", values: [0, 1, 2, 3, 4], top: "4+" },
+  alcohol_drinks: { label: "Drinks today", values: [0, 1, 2, 3], top: "3+" },
+};
+const FIELDS = {
+  morning: ["sleep_hours", "sleep_quality", "energy"],
+  evening: ["stress", "caffeine_servings", "alcohol_drinks"],
+  full: ["sleep_hours", "sleep_quality", "energy", "stress", "caffeine_servings", "alcohol_drinks"],
 };
 
-const isCheckedIn = (s) => s.sleep_hours != null || s.stress != null || s.energy != null || s.sleep_quality != null;
+let uidSeq = 0;
+export const morningDone = (s) => FIELDS.morning.every((f) => s?.[f] != null);
+export const eveningDone = (s) => FIELDS.evening.every((f) => s?.[f] != null);
 
 /**
  * @param {HTMLElement} el container
- * @param {{ date: string, compact?: boolean, onChange?: (state) => void }} opts
- *   compact: collapse to a one-line summary once checked in (dashboard).
+ * @param {{ date: string, mode?: "morning"|"evening"|"full", statusEl?: HTMLElement,
+ *   collapse?: boolean, onChange?: (state) => void }} opts
+ *   collapse: show a one-line summary when this half is already complete.
  */
-export async function mountCheckin(el, { date, compact = false, onChange } = {}) {
-  let state = await api(`/api/checkins/${date}`);
-  const recent = await api(`/api/checkins?start=${addDays(date, -14)}&end=${addDays(date, -1)}`);
+export async function mountCheckin(el, { date, mode = "full", statusEl = null, collapse = false, onChange } = {}) {
+  const uid = `ci${++uidSeq}`;
+  const [initial, recent, reflection, weights] = await Promise.all([
+    api(`/api/checkins/${date}`),
+    api(`/api/checkins?start=${addDays(date, -14)}&end=${addDays(date, -1)}`),
+    mode === "evening" ? api(`/api/reflections/day?date=${date}`).catch(() => ({})) : null,
+    mode === "morning" ? api(`/api/body?start=${addDays(date, -45)}&end=${date}`).catch(() => []) : null,
+  ]);
+  let state = initial;
   const lastSleep = recent.find((r) => r.sleep_hours != null)?.sleep_hours ?? null;
-  let expanded = !compact || !isCheckedIn(state);
+  const weighIns = (weights || []).filter((r) => r.weight_lbs != null);
+  const todayWeight = weighIns.find((r) => r.date === date)?.weight_lbs ?? null;
+  const lastWeight = weighIns.filter((r) => r.date < date).pop() || null;
+  const fields = FIELDS[mode];
+  const complete = () => fields.every((f) => state[f] != null);
+  let expanded = !collapse || !complete();
 
-  async function save(field, value) {
-    try {
-      state = await api("/api/checkins", { method: "PUT", body: { date, [field]: value } });
-      render();
-      onChange?.(state);
-    } catch (err) {
-      toast(err.message, true);
-    }
+  const setStatus = (text) => { if (statusEl) statusEl.textContent = text; };
+
+  let queue = Promise.resolve();
+  function save(field, value) {
+    state = { ...state, [field]: value };
+    sync();
+    setStatus("Saving…");
+    queue = queue
+      .then(() => api("/api/checkins", { method: "PUT", body: { date, [field]: value } }))
+      .then(() => {
+        setStatus("Saved ✓");
+        onChange?.(state);
+        announceChange("checkin");
+      })
+      .catch(async (err) => {
+        toast(err, true);
+        setStatus("");
+        state = await api(`/api/checkins/${date}`).catch(() => state);
+        sync();
+      });
   }
 
   function summary() {
     const bits = [];
-    if (state.sleep_hours != null) bits.push(`${state.sleep_hours} h sleep`);
-    if (state.stress != null) bits.push(`stress ${state.stress}/5`);
-    if (state.energy != null) bits.push(`energy ${state.energy}/5`);
-    if (state.caffeine_servings != null) bits.push(`${state.caffeine_servings} caffeine`);
-    if (state.alcohol_drinks) bits.push(`${state.alcohol_drinks} drinks`);
+    if (fields.includes("sleep_hours") && state.sleep_hours != null) bits.push(`${state.sleep_hours} h sleep`);
+    if (fields.includes("sleep_quality") && state.sleep_quality != null) bits.push(`quality ${state.sleep_quality}/5`);
+    if (fields.includes("energy") && state.energy != null) bits.push(`energy ${state.energy}/5`);
+    if (fields.includes("stress") && state.stress != null) bits.push(`stress ${state.stress}/5`);
+    if (fields.includes("caffeine_servings") && state.caffeine_servings != null) bits.push(`${state.caffeine_servings} caffeine`);
+    if (fields.includes("alcohol_drinks") && state.alcohol_drinks != null) bits.push(`${state.alcohol_drinks} drinks`);
     return bits.join(" · ");
   }
 
+  const rating = (field) => {
+    const s = SCALES[field];
+    // "right now" only makes sense in the morning check-in, not when looking back.
+    const label = field === "energy" && mode !== "morning" ? "Energy" : s.label;
+    return `<span class="field-label" id="${uid}-${field}">${label}</span>
+      <div class="rate" role="group" aria-labelledby="${uid}-${field}">${[1, 2, 3, 4, 5].map((n) =>
+        `<button type="button" data-rate="${field}" data-v="${n}" aria-pressed="false"
+          aria-label="${n} of 5${n === 1 ? `, ${s.ends[0]}` : n === 5 ? `, ${s.ends[1]}` : ""}">${n}</button>`).join("")}</div>
+      <div class="scale-legend" aria-hidden="true"><span>${s.ends[0]}</span><span>${s.ends[1]}</span></div>`;
+  };
+
+  const options = (field) => {
+    const o = OPTS[field];
+    return `<span class="field-label" id="${uid}-${field}">${o.label}</span>
+      <div class="opts" role="group" aria-labelledby="${uid}-${field}">${o.values.map((n, i) =>
+        `<button type="button" data-opt="${field}" data-v="${n}" aria-pressed="false">${i === o.values.length - 1 ? o.top : n}</button>`).join("")}</div>`;
+  };
+
+  const sleepChips = () => {
+    const hours = [...new Set([lastSleep, 6, 7, 8].filter((h) => h != null))];
+    return hours.map((h, i) =>
+      `<button type="button" class="chip" data-sleep-set="${h}" aria-pressed="false">${i === 0 && h === lastSleep ? `Same as last night (${h} h)` : `${h} h`}</button>`).join("");
+  };
+
   function render() {
     if (!expanded) {
-      el.innerHTML = `<div class="row" style="align-items:center">
-        <span class="pill green fit">Checked in ✓</span>
+      el.innerHTML = `<div class="checkin-done">
+        <span class="pill green">Checked in ✓</span>
         <span class="muted small">${esc(summary())}</span>
-        <button class="btn-ghost btn-sm fit" data-edit>Edit</button></div>`;
+        <button type="button" class="btn-ghost btn-sm" data-edit>Edit</button></div>`;
       el.querySelector("[data-edit]").addEventListener("click", () => { expanded = true; render(); });
       return;
     }
-    const seg = (field) => {
-      const s = SCALES[field];
-      return `<label>${s.label}</label>
-        <div class="seg" data-scale="${field}">${[1, 2, 3, 4, 5]
-          .map((n) => `<button type="button" class="${state[field] === n ? "on" : ""}" data-v="${n}">${n}</button>`).join("")}</div>
-        <div class="scale-legend"><span>1 · ${s.ends[0]}</span><span>5 · ${s.ends[1]}</span></div>`;
-    };
-    const stepper = (field) => `<div><label>${STEPPERS[field].label}</label>
-      <div class="quantity-control">
-        <button type="button" class="qty-button" data-step="${field}" data-d="-1">−</button>
-        <input type="number" min="0" step="1" data-num="${field}" value="${state[field] ?? ""}" placeholder="—" />
-        <button type="button" class="qty-button" data-step="${field}" data-d="1">+</button>
-      </div></div>`;
-    el.innerHTML = `
-      <label>Last night's sleep</label>
-      <div class="row" style="align-items:center">
-        <div class="quantity-control fit">
-          <button type="button" class="qty-button" data-step="sleep_hours" data-d="-0.5">−</button>
-          <input type="number" min="0" max="24" step="0.5" data-num="sleep_hours" value="${state.sleep_hours ?? ""}" placeholder="${lastSleep ?? "—"}" />
-          <button type="button" class="qty-button" data-step="sleep_hours" data-d="0.5">+</button>
+    const parts = [];
+    if (fields.includes("sleep_hours")) {
+      parts.push(`<span class="field-label" id="${uid}-sleep">Sleep last night</span>
+        <div class="sleep-row">
+          <div class="stepper" role="group" aria-labelledby="${uid}-sleep">
+            <button type="button" data-sleep="-0.5" aria-label="Half an hour less">−</button>
+            <output aria-live="polite" data-sleep-out></output>
+            <button type="button" data-sleep="0.5" aria-label="Half an hour more">+</button>
+          </div>
         </div>
-        <span class="muted small fit">hours</span>
-        ${state.sleep_hours == null && lastSleep != null ? `<button type="button" class="btn-ghost btn-sm fit" data-same>Same as before (${lastSleep} h)</button>` : ""}
-      </div>
-      ${seg("sleep_quality")}
-      ${seg("stress")}
-      ${seg("energy")}
-      <div class="row mt">${stepper("caffeine_servings")}${stepper("alcohol_drinks")}</div>
-      ${compact ? "" : `<label>Notes</label><input data-notes value="${esc(state.notes ?? "")}" placeholder="Anything worth remembering about today" />`}
-      ${compact && isCheckedIn(state) ? `<button type="button" class="btn-ghost btn-sm mt" data-done>Done</button>` : ""}`;
+        <div class="chips mt">${sleepChips()}</div>`);
+    }
+    if (fields.includes("sleep_quality")) parts.push(rating("sleep_quality"));
+    if (fields.includes("energy")) parts.push(rating("energy"));
+    if (fields.includes("stress")) parts.push(rating("stress"));
+    if (fields.includes("caffeine_servings")) parts.push(options("caffeine_servings"));
+    if (fields.includes("alcohol_drinks")) parts.push(options("alcohol_drinks"));
+    if (mode === "morning") {
+      parts.push(`<details class="more mt"${todayWeight != null ? " open" : ""}><summary>Weigh-in (optional)</summary>
+        <div class="row" style="align-items:center">
+          <div><label for="${uid}-w" class="sr-only">Weight in pounds</label>
+            <input id="${uid}-w" type="number" inputmode="decimal" step="0.1" enterkeyhint="done" data-weight
+              value="${todayWeight ?? ""}" placeholder="${lastWeight ? `Last: ${lastWeight.weight_lbs}` : "lbs"}" /></div>
+          <button type="button" class="btn-ghost fit" data-weight-save>Save</button>
+        </div></details>`);
+    }
+    if (mode === "evening") {
+      parts.push(`<label for="${uid}-note">A line about today</label>
+        <textarea id="${uid}-note" rows="2" data-reflection placeholder="How did today feel?">${esc(reflection?.body || "")}</textarea>`);
+    }
+    if (mode === "full") {
+      parts.push(`<label for="${uid}-notes">Notes</label>
+        <input id="${uid}-notes" data-notes value="${esc(state.notes ?? "")}" placeholder="Anything worth remembering about today" />`);
+    }
+    if (collapse) parts.push(`<button type="button" class="btn-ghost btn-sm mt" data-done hidden>Done</button>`);
+    el.innerHTML = parts.join("");
+    wire();
+    sync();
+  }
 
-    el.querySelectorAll("[data-scale]").forEach((g) =>
-      g.querySelectorAll("button").forEach((b) =>
-        b.addEventListener("click", () => {
-          const v = Number(b.dataset.v);
-          save(g.dataset.scale, state[g.dataset.scale] === v ? null : v); // tap again to clear
-        })
-      )
-    );
-    el.querySelectorAll("[data-step]").forEach((b) =>
+  /** Reflect `state` in the controls in place (no re-render, so focus stays put). */
+  function sync() {
+    if (!expanded) return render();
+    const out = el.querySelector("[data-sleep-out]");
+    if (out) out.textContent = state.sleep_hours != null ? `${state.sleep_hours} h` : "—";
+    el.querySelectorAll("[data-sleep-set]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.sleepSet) === state.sleep_hours)));
+    el.querySelectorAll("[data-rate]").forEach((b) => b.setAttribute("aria-pressed", String(state[b.dataset.rate] === Number(b.dataset.v))));
+    el.querySelectorAll("[data-opt]").forEach((b) => {
+      const o = OPTS[b.dataset.opt];
+      const v = Number(b.dataset.v);
+      const cur = state[b.dataset.opt];
+      const top = v === o.values[o.values.length - 1];
+      b.setAttribute("aria-pressed", String(cur != null && (top ? cur >= v : cur === v)));
+      if (top) b.textContent = cur != null && cur > v ? String(cur) : o.top;
+    });
+    const done = el.querySelector("[data-done]");
+    if (done) done.hidden = !complete();
+  }
+
+  function wire() {
+    el.querySelectorAll("[data-rate]").forEach((b) =>
       b.addEventListener("click", () => {
-        const f = b.dataset.step;
-        const d = Number(b.dataset.d);
-        const base = state[f] ?? (f === "sleep_hours" ? lastSleep ?? 7 : 0);
-        const next = state[f] == null && d < 0 && f !== "sleep_hours" ? 0 : Math.max(0, base + (state[f] == null && f === "sleep_hours" ? 0 : d));
-        save(f, next);
+        const f = b.dataset.rate;
+        const v = Number(b.dataset.v);
+        save(f, state[f] === v ? null : v); // tap again to clear
       })
     );
-    el.querySelectorAll("[data-num]").forEach((i) =>
-      i.addEventListener("change", () => save(i.dataset.num, i.value === "" ? null : Number(i.value)))
+    el.querySelectorAll("[data-opt]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const f = b.dataset.opt;
+        const v = Number(b.dataset.v);
+        const o = OPTS[f];
+        const top = v === o.values[o.values.length - 1];
+        // "4+" steps up on repeat taps; any other value toggles.
+        if (top && state[f] != null && state[f] >= v) save(f, Math.min(state[f] + 1, 20));
+        else save(f, state[f] === v ? null : v);
+      })
     );
-    el.querySelector("[data-same]")?.addEventListener("click", () => save("sleep_hours", lastSleep));
+    el.querySelectorAll("[data-sleep]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const d = Number(b.dataset.sleep);
+        const next = state.sleep_hours == null ? lastSleep ?? 7 : Math.min(24, Math.max(0, state.sleep_hours + d));
+        save("sleep_hours", next);
+      })
+    );
+    el.querySelectorAll("[data-sleep-set]").forEach((b) =>
+      b.addEventListener("click", () => save("sleep_hours", Number(b.dataset.sleepSet)))
+    );
     el.querySelector("[data-notes]")?.addEventListener("change", (e) => save("notes", e.target.value));
     el.querySelector("[data-done]")?.addEventListener("click", () => { expanded = false; render(); });
+    el.querySelector("[data-reflection]")?.addEventListener("change", async (e) => {
+      try {
+        await api("/api/reflections/day", { method: "PUT", body: { date, body: e.target.value } });
+        setStatus("Saved ✓");
+        announceChange("note");
+      } catch (err) { toast(err, true); }
+    });
+    el.querySelector("[data-weight-save]")?.addEventListener("click", async () => {
+      const w = Number(el.querySelector("[data-weight]").value);
+      if (!w) return toast("Enter your weight first", true);
+      try {
+        await api("/api/body", { method: "PUT", body: { date, weight_lbs: w } });
+        toast(`Weighed in at ${w} lbs`);
+        setStatus("Saved ✓");
+        announceChange("weight");
+      } catch (err) { toast(err, true); }
+    });
   }
 
   render();
