@@ -1,4 +1,4 @@
-import { api, toast, esc, todayISO, renderNav, bar } from "./ui.js";
+import { api, toast, esc, todayISO, renderNav, bar, undoable, askText, shrinkImage, waiting, plural, deco } from "./ui.js";
 
 renderNav("nutrition");
 const $ = (id) => document.getElementById(id);
@@ -7,12 +7,28 @@ $("date").value = todayISO();
 const userId = () => $("user").value;
 const date = () => $("date").value;
 
+// The person is remembered per device, so a household member's phone logs to
+// them, and every food screen says who it's logging for.
+const USER_KEY = "thor_food_user";
+const savedUser = () => { try { return localStorage.getItem(USER_KEY); } catch { return null; } };
+
 async function loadUsers() {
   const users = await api("/api/users");
   $("user").innerHTML = users.map((u) => `<option value="${u.id}">${esc(u.name)}</option>`).join("");
+  const saved = savedUser();
+  if (saved && users.some((u) => u.id === saved)) $("user").value = saved;
+  showForPill(users.length);
 }
 
-const MEAL_ICONS = { breakfast: "🌅", lunch: "🥪", dinner: "🍽", snack: "🥜" };
+function showForPill(count = $("user").options.length) {
+  const name = $("user").selectedOptions[0]?.textContent || "";
+  $("for-pill").hidden = count < 2;
+  $("for-pill").textContent = `Logging for: ${name}`;
+  const builderPill = $("draft-for");
+  if (builderPill) { builderPill.hidden = count < 2; builderPill.textContent = `For ${name}`; }
+}
+
+const MEAL_ICONS = { breakfast: deco("🌅"), lunch: deco("🥪"), dinner: deco("🍽"), snack: deco("🥜") };
 const qtyText = (value) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
 const qtyValue = (value) => String(Math.round(Number(value) * 100) / 100);
 
@@ -32,21 +48,18 @@ async function loadDay() {
     : `<div class="empty">Nothing logged this day.</div>`;
 
   if (!day.meals.length) {
-    $("meals").innerHTML = `<div class="empty">No meals logged. Use the AI logger above.</div>`;
+    $("meals").innerHTML = `<div class="empty">No meals logged. Describe what you ate above, or build a meal.</div>`;
     return;
   }
   $("meals").innerHTML = day.meals.map((m) => `
-    <div class="item" style="display:block">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+    <div class="item" style="display:block" data-meal="${m.id}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
         <div class="title">${MEAL_ICONS[m.meal_type] || ""} ${esc(m.meal_type)} <span class="muted small">${esc(m.time_local || "")}</span>
-          <span class="pill">${Math.round(m.totals?.calories_kcal || 0)} kcal</span>
-          <span class="pill gold">${qtyText(m.totals?.protein_g || 0)}g protein</span></div>
-        <div style="white-space:nowrap">
-          <button class="btn-ghost btn-sm" data-save-template="${m.id}">Save as template</button>
-          <button class="btn-danger" data-del-meal="${m.id}">✕</button>
-        </div>
+          <span class="pill gray">${Math.round(m.totals?.calories_kcal || 0)} kcal</span>
+          <span class="pill gray">${qtyText(m.totals?.protein_g || 0)}g protein</span></div>
+        <button class="btn-ghost btn-sm fit" data-save-template="${m.id}">Save as template</button>
       </div>
-      <div class="table-scroll"><table class="mt meal-table"><thead><tr><th>Food</th><th>Quantity</th><th>kcal</th><th>Protein</th><th>Sodium</th><th></th></tr></thead>
+      <div class="table-scroll"><table class="mt meal-table"><thead><tr><th>Food</th><th>Quantity</th><th>kcal</th><th>Protein</th><th>Sodium</th><th><span class="sr-only">Actions</span></th></tr></thead>
       <tbody>${m.items.map((i) => `
         <tr data-item-row="${i.id}">
           <td>${esc(i.food_name)}</td>
@@ -55,12 +68,14 @@ async function loadDay() {
             <input type="number" data-item-qty="${i.id}" value="${qtyValue(i.serving_quantity || 1)}" min="0.01" step="0.25" aria-label="Servings of ${esc(i.food_name)}" />
             <button class="qty-button" data-item-plus="${i.id}" aria-label="Increase ${esc(i.food_name)}">+</button>
           </div><div class="muted serving-base">${esc(i.serving_unit || i.serving_display || "1 serving")} each</div></td>
-          <td>${Math.round(i.calories_kcal)}</td>
-          <td>${qtyText(i.protein_g)}g</td>
-          <td>${Math.round(i.sodium_mg)}mg</td>
-          <td style="white-space:nowrap"><button class="btn-ghost btn-sm" data-edit-item="${i.id}">✎</button><button class="btn-danger" data-del-item="${i.id}">✕</button></td>
+          <td class="num-cell">${Math.round(i.calories_kcal)} kcal</td>
+          <td class="num-cell">${qtyText(i.protein_g)}g protein</td>
+          <td class="num-cell">${Math.round(i.sodium_mg)}mg sodium</td>
+          <td class="row-actions" style="white-space:nowrap"><button class="btn-ghost btn-sm" data-edit-item="${i.id}" aria-label="Edit ${esc(i.food_name)}">Edit</button>
+            <button class="btn-danger" data-del-item="${i.id}" aria-label="Remove ${esc(i.food_name)}">Remove</button></td>
         </tr>`).join("")}
       </tbody></table></div>
+      <button class="btn-link" data-del-meal="${m.id}">Delete this ${esc(m.meal_type)}</button>
     </div>`).join("");
 
   const itemById = (id) => day.meals.flatMap((m) => m.items).find((i) => i.id === id);
@@ -70,7 +85,7 @@ async function loadDay() {
     try {
       await api(`/api/nutrition/item/${id}/servings`, { method: "PATCH", body: { servings } });
       await loadDay();
-    } catch (err) { toast(err.message, true); }
+    } catch (err) { toast(err, true); }
   };
   $("meals").querySelectorAll("[data-item-minus], [data-item-plus]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -87,29 +102,36 @@ async function loadDay() {
   });
 
   $("meals").querySelectorAll("[data-del-meal]").forEach((b) =>
-    b.addEventListener("click", async () => {
-      if (!confirm("Delete this meal and its items?")) return;
-      await api(`/api/nutrition/meal/${b.dataset.delMeal}`, { method: "DELETE" });
-      toast("Meal deleted"); loadDay();
-    })
+    b.addEventListener("click", () =>
+      undoable({
+        message: "Meal deleted",
+        hide: [b.closest("[data-meal]")],
+        run: () => api(`/api/nutrition/meal/${b.dataset.delMeal}`, { method: "DELETE", keepalive: true }),
+        onDone: loadDay,
+      })
+    )
   );
   $("meals").querySelectorAll("[data-del-item]").forEach((b) =>
-    b.addEventListener("click", async () => {
-      await api(`/api/nutrition/item/${b.dataset.delItem}`, { method: "DELETE" });
-      toast("Item deleted"); loadDay();
-    })
+    b.addEventListener("click", () =>
+      undoable({
+        message: "Removed",
+        hide: [b.closest("tr")],
+        run: () => api(`/api/nutrition/item/${b.dataset.delItem}`, { method: "DELETE", keepalive: true }),
+        onDone: loadDay,
+      })
+    )
   );
   $("meals").querySelectorAll("[data-edit-item]").forEach((b) =>
     b.addEventListener("click", () => {
       const item = day.meals.flatMap((m) => m.items).find((i) => i.id === b.dataset.editItem);
       const row = $("meals").querySelector(`tr[data-item-row="${item.id}"]`);
       row.innerHTML = `
-        <td><input class="ie-name" value="${esc(item.food_name)}" style="min-width:120px" /></td>
-        <td><input class="ie-serving" value="${esc(item.serving_display || "")}" style="min-width:80px" /></td>
-        <td><input type="number" class="ie-kcal" value="${item.calories_kcal}" style="width:76px" /></td>
-        <td><input type="number" class="ie-protein" value="${item.protein_g}" step="0.1" style="width:70px" /></td>
-        <td><input type="number" class="ie-sodium" value="${item.sodium_mg}" style="width:80px" /></td>
-        <td style="white-space:nowrap"><button class="btn-sm ie-save">✓</button><button class="btn-ghost btn-sm ie-cancel">✕</button></td>`;
+        <td><input class="ie-name" aria-label="Food" value="${esc(item.food_name)}" style="min-width:120px" /></td>
+        <td><input class="ie-serving" aria-label="Serving" value="${esc(item.serving_display || "")}" style="min-width:80px" /></td>
+        <td class="num-cell"><input type="number" class="ie-kcal" aria-label="Calories" value="${item.calories_kcal}" style="width:84px" /></td>
+        <td class="num-cell"><input type="number" class="ie-protein" aria-label="Protein grams" value="${item.protein_g}" step="0.1" style="width:84px" /></td>
+        <td class="num-cell"><input type="number" class="ie-sodium" aria-label="Sodium milligrams" value="${item.sodium_mg}" style="width:90px" /></td>
+        <td class="row-actions" style="white-space:nowrap"><button class="btn-sm ie-save">Save</button> <button class="btn-ghost btn-sm ie-cancel">Cancel</button></td>`;
       row.querySelector(".ie-cancel").addEventListener("click", () => loadDay());
       row.querySelector(".ie-save").addEventListener("click", async () => {
         try {
@@ -125,14 +147,14 @@ async function loadDay() {
           });
           toast("Item updated");
           loadDay();
-        } catch (err) { toast(err.message, true); }
+        } catch (err) { toast(err, true); }
       });
     })
   );
   $("meals").querySelectorAll("[data-save-template]").forEach((b) =>
     b.addEventListener("click", async () => {
       const meal = day.meals.find((m) => m.id === b.dataset.saveTemplate);
-      const name = prompt("Template name:", `${meal.meal_type} template`);
+      const name = await askText({ title: "Save as a template", label: "Template name", value: `${meal.meal_type} template` });
       if (!name) return;
       await api("/api/nutrition/template", { method: "POST", body: { user_id: userId(), name, meal_type: meal.meal_type, items: meal.items } });
       toast("Template saved"); loadTemplates();
@@ -172,7 +194,7 @@ function templateEditor(t) {
         <div style="white-space:nowrap;display:flex;align-items:center;gap:6px">
           <label style="margin:0">×</label>
           <input type="number" data-scale="${i}" value="${w.scale}" step="0.25" min="0.25" style="width:70px" />
-          <button class="btn-danger" data-rm="${i}">✕</button>
+          <button class="btn-danger" data-rm="${i}" aria-label="Remove ${esc(w.item.food_name)}">Remove</button>
         </div>
       </div>`).join("");
     const live = work.filter((w) => !w.removed);
@@ -211,7 +233,7 @@ function templateEditor(t) {
       toast("Template updated");
       editingTemplateId = null;
       loadTemplates();
-    } catch (err) { toast(err.message, true); }
+    } catch (err) { toast(err, true); }
   });
   return el;
 }
@@ -230,30 +252,41 @@ async function loadTemplates() {
     row.innerHTML = `
       <div class="main"><div class="title">${esc(t.name)}</div>
         <div class="meta">${esc(t.meal_type || "any")} · ${t.items.length} items · ${Math.round(t.items.reduce((a, i) => a + (i.calories_kcal || 0), 0))} kcal · ${qtyText(t.items.reduce((a, i) => a + (i.protein_g || 0), 0))}g protein</div></div>
-      <div style="white-space:nowrap">
+      <div class="btn-row fit" style="flex:0 0 auto">
         <button class="btn-sm" data-apply>Add to day</button>
-        <button class="btn-ghost btn-sm" data-edit>✎</button>
-        <button class="btn-danger" data-del>✕</button>
+        <button class="btn-ghost btn-sm" data-edit aria-label="Edit template ${esc(t.name)}">Edit</button>
       </div>`;
     row.querySelector("[data-apply]").addEventListener("click", async () => {
       try {
         await api(`/api/nutrition/template/${t.id}/apply`, { method: "POST", body: { user_id: userId(), date: date() } });
         toast(`"${t.name}" added to ${date()}`);
         loadDay();
-      } catch (err) { toast(err.message, true); }
+      } catch (err) { toast(err, true); }
     });
     row.querySelector("[data-edit]").addEventListener("click", () => {
       editingTemplateId = editingTemplateId === t.id ? null : t.id;
       loadTemplates();
     });
-    row.querySelector("[data-del]").addEventListener("click", async () => {
-      if (!confirm(`Delete template "${t.name}"?`)) return;
-      await api(`/api/nutrition/template/${t.id}`, { method: "DELETE" });
-      toast("Template deleted");
-      loadTemplates();
-    });
     box.appendChild(row);
-    if (editingTemplateId === t.id) box.appendChild(templateEditor(t));
+    if (editingTemplateId === t.id) {
+      // Delete lives inside the editor, away from "Add to day".
+      const editor = templateEditor(t);
+      const del = document.createElement("button");
+      del.className = "btn-link mt";
+      del.textContent = "Delete this template";
+      del.addEventListener("click", () => {
+        editingTemplateId = null;
+        editor.remove();
+        undoable({
+          message: `Template "${t.name}" deleted`,
+          hide: [row],
+          run: () => api(`/api/nutrition/template/${t.id}`, { method: "DELETE", keepalive: true }),
+          onDone: loadTemplates,
+        });
+      });
+      editor.appendChild(del);
+      box.appendChild(editor);
+    }
   }
 }
 
@@ -271,16 +304,17 @@ $("btn-food").addEventListener("click", async () => {
   const text = $("food-text").value.trim();
   if (!text) return toast("Describe what you ate first", true);
   $("btn-food").disabled = true;
+  $("food-status").innerHTML = waiting("Reading your note…");
   try {
     const res = await api("/api/nutrition/log", {
       method: "POST",
       body: { user_id: userId(), text, date: date(), meal_type: $("meal-type").value || undefined },
     });
-    toast(`Logged ${res.items_added} item(s) as ${res.meal_type}`);
+    toast(`Logged ${plural(res.items_added, "item")} as ${res.meal_type}`);
     $("food-text").value = "";
     loadDay();
-  } catch (err) { toast(err.message, true); }
-  finally { $("btn-food").disabled = false; }
+  } catch (err) { toast(err, true); }
+  finally { $("btn-food").disabled = false; $("food-status").textContent = ""; }
 });
 
 $("btn-goals").addEventListener("click", async () => {
@@ -299,7 +333,7 @@ $("btn-goals").addEventListener("click", async () => {
       },
     });
     toast("Goals saved");
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toast(err, true); }
 });
 
 // --- Food library ---
@@ -334,7 +368,8 @@ async function searchLibrary() {
           <button class="qty-button" data-result-minus aria-label="Decrease quantity">−</button>
           <input type="number" class="result-qty" value="1" min="0.01" step="0.25" aria-label="Quantity" />
           <button class="qty-button" data-result-plus aria-label="Increase quantity">+</button>
-        </div><button class="btn-sm" data-add="${f.id}">Add</button>${f.source === "custom" ? `<button class="btn-danger" data-del-food="${f.id}">✕</button>` : ""}</div>
+        </div><button class="btn-sm" data-add="${f.id}">Add</button></div>
+        ${f.source === "custom" ? `<button class="btn-link" data-del-food="${f.id}">Remove from my foods</button>` : ""}
       </div>`).join("")
     : `<div class="empty">No match — add it as a custom food below.</div>`;
   $("lib-results").querySelectorAll("[data-add]").forEach((b) =>
@@ -355,12 +390,14 @@ async function searchLibrary() {
     })
   );
   $("lib-results").querySelectorAll("[data-del-food]").forEach((b) =>
-    b.addEventListener("click", async () => {
-      if (!confirm("Remove this custom food from the library?")) return;
-      await api(`/api/foods/${b.dataset.delFood}`, { method: "DELETE" });
-      toast("Removed from library");
-      searchLibrary(); loadCategories();
-    })
+    b.addEventListener("click", () =>
+      undoable({
+        message: "Removed from your foods",
+        hide: [b.closest("[data-food-row]")],
+        run: () => api(`/api/foods/${b.dataset.delFood}`, { method: "DELETE", keepalive: true }),
+        onDone: () => { loadCategories(); },
+      })
+    )
   );
 }
 
@@ -380,10 +417,10 @@ function renderDraft() {
       <div class="main"><div class="title">${esc(d.food.name)}</div>
         <div class="meta">${qtyText(d.servings)} × ${esc(d.food.serving_display)} · ${Math.round(d.food.calories_kcal * d.servings)} kcal · ${qtyText(d.food.protein_g * d.servings)}g protein</div></div>
       <div class="food-add-controls">
-        <div class="quantity-control"><button class="qty-button" data-minus="${i}">−</button>
+        <div class="quantity-control"><button class="qty-button" data-minus="${i}" aria-label="Less ${esc(d.food.name)}">−</button>
         <input type="number" data-draft-qty="${i}" value="${qtyValue(d.servings)}" min="0.01" step="0.25" aria-label="Quantity of ${esc(d.food.name)}" />
-        <button class="qty-button" data-plus="${i}">+</button></div>
-        <button class="btn-danger" data-remove="${i}">✕</button>
+        <button class="qty-button" data-plus="${i}" aria-label="More ${esc(d.food.name)}">+</button></div>
+        <button class="btn-danger" data-remove="${i}" aria-label="Take ${esc(d.food.name)} out of the meal" style="margin-left:6px">Remove</button>
       </div>
     </div>`).join("");
   const sum = (k) => draft.reduce((a, d) => a + (Number(d.food[k]) || 0) * d.servings, 0);
@@ -447,7 +484,7 @@ $("btn-copy-yesterday").addEventListener("click", async () => {
     });
     toast(`Copied ${res.copied_meals} meal(s), ${res.copied_items} item(s) from ${fromISO}`);
     loadDay();
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toast(err, true); }
 });
 
 // --- Barcode lookup (camera when available, manual entry always) ---
@@ -460,46 +497,73 @@ function stopScan() {
   $("bc-video").style.display = "none";
 }
 
+function showBarcodeResult(res) {
+  if (!res.found) {
+    $("bc-result").innerHTML = `<div class="empty">${res.unreadable
+      ? "Thor couldn't read every digit in that photo. Try again closer and in good light, or type the digits."
+      : "Not in OpenFoodFacts — add it as a custom food below."}</div>`;
+    return;
+  }
+  const f = res.food;
+  $("bc-result").innerHTML = `
+    <div class="item">
+      <div class="main"><div class="title">${esc(f.name)}</div>
+        <div class="meta">${esc(f.serving_display)} · ${Math.round(f.calories_kcal)} kcal · ${qtyText(f.protein_g)}g protein · ${Math.round(f.sodium_mg)}mg sodium${res.basis === "per_100g" ? " · per 100g" : ""}</div></div>
+      <div class="btn-row fit" style="flex:0 0 auto">
+        <button class="btn-sm" id="bc-add">Add to meal</button>
+        <button class="btn-ghost btn-sm" id="bc-save">Save to my foods</button>
+      </div>
+    </div>`;
+  document.getElementById("bc-add").addEventListener("click", () => {
+    addToDraft({ id: null, ...f });
+    toast(`${f.name} added to your meal`);
+  });
+  document.getElementById("bc-save").addEventListener("click", async () => {
+    try {
+      await api("/api/foods", { method: "POST", body: { ...f, category: "custom" } });
+      toast("Saved to your foods");
+      loadCategories();
+    } catch (err) { toast(err, true); }
+  });
+}
+
 async function handleBarcode(code) {
   stopScan();
   $("bc-code").value = code;
-  $("bc-result").innerHTML = `<div class="empty"><span class="spin">⚡</span> Looking up ${esc(code)}…</div>`;
+  $("bc-result").innerHTML = `<div class="empty">${waiting(`Looking up ${code}…`)}</div>`;
   try {
-    const res = await api(`/api/foods/barcode/${encodeURIComponent(code)}`);
-    if (!res.found) {
-      $("bc-result").innerHTML = `<div class="empty">Not in OpenFoodFacts — add it as a custom food below.</div>`;
-      return;
-    }
-    const f = res.food;
-    $("bc-result").innerHTML = `
-      <div class="item">
-        <div class="main"><div class="title">${esc(f.name)}</div>
-          <div class="meta">${esc(f.serving_display)} · ${Math.round(f.calories_kcal)} kcal · ${qtyText(f.protein_g)}g protein · ${Math.round(f.sodium_mg)}mg sodium${res.basis === "per_100g" ? " · per 100g" : ""}</div></div>
-        <div style="white-space:nowrap">
-          <button class="btn-sm" id="bc-add">+ Picks</button>
-          <button class="btn-gold btn-sm" id="bc-save">Save to library</button>
-        </div>
-      </div>`;
-    document.getElementById("bc-add").addEventListener("click", () => {
-      addToDraft({ id: null, ...f });
-      toast(`${f.name} added to picks`);
-    });
-    document.getElementById("bc-save").addEventListener("click", async () => {
-      await api("/api/foods", { method: "POST", body: { ...f, category: "custom" } });
-      toast("Saved to library");
-      loadCategories();
-    });
+    showBarcodeResult(await api(`/api/foods/barcode/${encodeURIComponent(code)}`));
   } catch (err) {
     $("bc-result").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
   }
 }
 
+// iPhone Safari has no BarcodeDetector: photograph it and Thor reads the printed digits.
+$("bc-photo").addEventListener("change", async () => {
+  const file = $("bc-photo").files[0];
+  if (!file) return;
+  $("bc-result").innerHTML = `<div class="empty">${waiting("Reading the barcode…")}</div>`;
+  try {
+    const blob = await shrinkImage(file, 1600);
+    const res = await api("/api/foods/barcode-photo", { method: "POST", body: blob, headers: { "Content-Type": blob.type || "image/jpeg" } });
+    if (res.code) $("bc-code").value = res.code;
+    showBarcodeResult(res);
+  } catch (err) {
+    $("bc-result").innerHTML = `<div class="empty">${esc(err.message)} You can type the digits instead.</div>`;
+  } finally {
+    $("bc-photo").value = "";
+  }
+});
+
+const canScanLive = () => "BarcodeDetector" in window && Boolean(navigator.mediaDevices?.getUserMedia);
 $("btn-barcode").addEventListener("click", () => {
   const panel = $("barcode-panel");
-  const open = panel.style.display !== "none";
-  panel.style.display = open ? "none" : "";
-  if (open) stopScan();
-  else if ("BarcodeDetector" in window && navigator.mediaDevices?.getUserMedia) $("bc-scan").style.display = "";
+  const open = !panel.hidden;
+  panel.hidden = open;
+  $("btn-barcode").setAttribute("aria-expanded", String(!open));
+  if (open) return stopScan();
+  $("bc-scan").hidden = !canScanLive();
+  $("bc-photo-wrap").hidden = canScanLive();
 });
 
 $("bc-lookup").addEventListener("click", () => {
@@ -541,11 +605,11 @@ $("btn-lib-log").addEventListener("click", async () => {
     });
     toast(`Logged ${res.items_added} item(s) as ${res.meal_type}`);
     draft.length = 0; renderDraft(); loadDay();
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toast(err, true); }
 });
 
 $("btn-lib-template").addEventListener("click", async () => {
-  const name = prompt("Template name:", "");
+  const name = await askText({ title: "Save as a template", label: "Template name", placeholder: "e.g. Usual breakfast" });
   if (!name) return;
   try {
     await api("/api/nutrition/template-from-catalog", {
@@ -554,7 +618,7 @@ $("btn-lib-template").addEventListener("click", async () => {
     });
     toast(`Template "${name}" saved`);
     draft.length = 0; renderDraft(); loadTemplates();
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toast(err, true); }
 });
 
 $("btn-lib-clear").addEventListener("click", () => { draft.length = 0; renderDraft(); });
@@ -575,16 +639,26 @@ $("btn-custom-food").addEventListener("click", async () => {
     $("lib-search").value = food.name;
     searchLibrary();
     loadCategories();
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toast(err, true); }
 });
 
 loadCategories().catch(() => {});
 searchLibrary().catch(() => {});
 renderDraft();
 
-$("date").addEventListener("change", () => loadDay().catch((e) => toast(e.message, true)));
-$("user").addEventListener("change", () => { loadDay(); loadTemplates(); loadGoals(); loadFrequent(); });
+$("date").addEventListener("change", () => loadDay().catch((e) => toast(e, true)));
+$("user").addEventListener("change", () => {
+  try { localStorage.setItem(USER_KEY, userId()); } catch { /* storage blocked */ }
+  showForPill();
+  loadDay(); loadTemplates(); loadGoals(); loadFrequent();
+});
+
+// ＋ → Food lands here, ready to type.
+if (location.hash === "#log") {
+  $("log").scrollIntoView({ block: "start" });
+  if (matchMedia("(pointer: fine)").matches) $("food-text").focus();
+}
 
 loadUsers()
   .then(() => Promise.all([loadDay(), loadTemplates(), loadGoals(), loadFrequent()]))
-  .catch((e) => toast(e.message, true));
+  .catch((e) => toast(e, true));
