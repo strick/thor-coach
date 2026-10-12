@@ -2,41 +2,45 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Thor — Guides</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Thor — Library</title>
   <meta name="theme-color" content="#0b0f17" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Thor" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="css/app.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
+  <link rel="icon" href="/icons/icon-192.png" />
 </head>
 <body>
   <main class="container">
-    <div class="page-head">
-      <h1>Guides</h1>
-      <span class="sub">Explainers written from your own data — weekly reviews, lab reads and deep dives</span>
-    </div>
+    <div class="page-head"><h1>Thor</h1><span class="sub">Weekly reviews, lab explainers and deep dives, written from your data</span></div>
+    <div id="segs"></div>
 
-    <div class="card">
-      <h2>What do you want to understand?</h2>
+    <section class="card" aria-labelledby="ask-h">
+      <h2 id="ask-h">What do you want to understand?</h2>
       <div class="row">
-        <div><input id="topic" maxlength="300" placeholder="e.g. Why is my LDL creeping up, and what would actually move it?" /></div>
+        <div><label for="topic" class="sr-only">Your question</label>
+          <input id="topic" maxlength="300" enterkeyhint="go" placeholder="e.g. Why is my LDL creeping up, and what would move it?" /></div>
         <button id="btn-ask" class="fit">Write my guide</button>
       </div>
       <div class="chips mt" id="suggestions"></div>
-      <div class="muted small mt" id="ask-status"></div>
-    </div>
+      <div class="mt" id="ask-status"></div>
+    </section>
 
     <div class="row-between mt">
-      <div class="seg tabs" id="filters" style="flex:1;max-width:620px">
-        <button type="button" data-kind="" class="on">All</button>
-        <button type="button" data-kind="weekly_review">Weekly</button>
-        <button type="button" data-kind="lab_explainer">Labs</button>
-        <button type="button" data-kind="deep_dive">Deep dives</button>
-        <button type="button" data-kind="pinned">Pinned</button>
+      <div class="seg tabs" id="filters" role="group" aria-label="Show" style="flex:1;max-width:620px">
+        <button type="button" data-kind="" aria-pressed="true">All</button>
+        <button type="button" data-kind="weekly_review" aria-pressed="false">Weekly</button>
+        <button type="button" data-kind="lab_explainer" aria-pressed="false">Labs</button>
+        <button type="button" data-kind="deep_dive" aria-pressed="false">Deep dives</button>
+        <button type="button" data-kind="pinned" aria-pressed="false">Pinned</button>
       </div>
       <button id="btn-weekly" class="btn-ghost btn-sm fit">Write last week's review</button>
     </div>
 
-    <div class="grid cols-2 mt guides-layout">
+    <div class="grid cols-2 mt guides-layout reader-host">
       <div class="card">
         <div id="list" class="list"><div class="empty">Loading…</div></div>
         <details class="mt" id="archive-wrap">
@@ -44,9 +48,9 @@
           <div id="archive" class="list mt"></div>
         </details>
       </div>
-      <div class="card" id="detail-card">
+      <article class="card reader-pane" id="detail-card" aria-live="polite">
         <div id="detail"><div class="empty">Pick a guide to read it, or ask a question above.</div></div>
-      </div>
+      </article>
     </div>
   </main>
   <script type="module" src="js/guides.js"></script>
