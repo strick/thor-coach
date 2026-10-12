@@ -11,6 +11,7 @@ import * as profileApi from "./api/profile.js";
 import * as guidesApi from "./api/guides.js";
 import * as headachesApi from "./api/headaches.js";
 import * as labsApi from "./api/labs.js";
+import * as alerts from "./services/alerts.js";
 
 export function registerRoutes(app) {
   // --- System ---
@@ -37,6 +38,9 @@ export function registerRoutes(app) {
 
   // --- Headaches, daily check-ins, headache patterns ---
   headachesApi.register(app);
+  // Care messages and critical labs that stay on Today until dismissed.
+  app.get("/api/alerts", () => alerts.activeAlerts());
+  app.post("/api/alerts/dismiss", ({ body }) => alerts.dismissAlert(body.key));
 
   // --- Blood work + lab explainers ---
   labsApi.register(app);
@@ -87,6 +91,8 @@ export function registerRoutes(app) {
     nutrition.templateFromPicks(body.user_id || DEFAULT_USER_ID, body.name, body.meal_type, body.picks));
   app.get("/api/foods/frequent", ({ query }) => nutrition.frequentFoods(query.user_id || DEFAULT_USER_ID, query.limit));
   app.get("/api/foods/barcode/:code", ({ params }) => nutrition.barcodeLookup(params.code));
+  // The photo is the raw request body (no multipart).
+  app.post("/api/foods/barcode-photo", ({ body }) => nutrition.barcodeFromPhoto(body), { raw: true, maxBytes: 8 * 1024 * 1024 });
   app.post("/api/nutrition/copy-day", ({ body }) =>
     nutrition.copyDay(body.user_id || DEFAULT_USER_ID, body.from_date, body.to_date));
 

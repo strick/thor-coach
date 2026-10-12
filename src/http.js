@@ -14,6 +14,9 @@ const MIME = {
   ".pdf": "application/pdf",
   ".ico": "image/x-icon",
   ".woff2": "font/woff2",
+  ".webmanifest": "application/manifest+json",
+  ".webp": "image/webp",
+  ".jpg": "image/jpeg",
 };
 
 export class HttpError extends Error {
@@ -112,7 +115,7 @@ export function createApp({ staticDir, pin = "", auth = null }) {
     res.setHeader("Strict-Transport-Security", "max-age=31536000");
     res.setHeader(
       "Content-Security-Policy",
-      "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'"
+      "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self'"
     );
     try {
       // API gate: a Microsoft session cookie or the shared PIN, whichever is
