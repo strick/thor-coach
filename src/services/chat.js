@@ -401,7 +401,12 @@ export async function chat({ message, messages } = {}, userId = DEFAULT_USER_ID)
   }
   reply ??= "I hit my tool-call limit for this turn — try a more specific question.";
 
-  const pills = toolCallsMade.map((t) => ({ name: t.name, error: t.error ? true : undefined }));
+  // Logging tools keep their arguments so the chat can show a receipt ("✓ Logged: …").
+  const pills = toolCallsMade.map((t) => ({
+    name: t.name,
+    error: t.error ? true : undefined,
+    args: t.error || /^(get_|list_)/.test(t.name) ? undefined : t.args,
+  }));
   tx(() => {
     const ins = db.prepare("INSERT INTO chat_messages (id, user_id, thread_id, role, content, tool_calls) VALUES (?, ?, ?, ?, ?, ?)");
     ins.run(uuid(), userId, thread, "user", text, null);

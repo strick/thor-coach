@@ -27,13 +27,14 @@ export function register(app) {
   app.post("/api/labs/reports/:id/extract", ({ params }) => labs.extractReport(params.id));
   app.post("/api/labs/reports/:id/explain", ({ params }) => guides.generateLabExplainer(params.id));
 
-  app.get("/api/labs/files/:id", ({ params, res }) => {
+  // ?inline=1 opens the page in a viewer beside the review instead of downloading it.
+  app.get("/api/labs/files/:id", ({ params, res, query }) => {
     const { meta, data } = labs.getFile(params.id);
     const ascii = (meta.original_filename || "report").replace(/[^\x20-\x7e]|["\\]/g, "_");
     res.writeHead(200, {
       "Content-Type": meta.mime_type,
       "Content-Length": data.length,
-      "Content-Disposition": `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(meta.original_filename || "report")}`,
+      "Content-Disposition": `${query.inline ? "inline" : "attachment"}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(meta.original_filename || "report")}`,
       "Cache-Control": "private, no-store",
     });
     res.end(data);

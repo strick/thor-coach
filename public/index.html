@@ -2,94 +2,101 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Thor — Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Thor — Today</title>
   <meta name="theme-color" content="#0b0f17" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Thor" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="css/app.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
+  <link rel="icon" href="/icons/icon-192.png" />
 </head>
 <body>
-  <main class="container">
+  <main class="container narrow">
     <div class="page-head">
       <h1 id="greeting">Today</h1>
-      <span class="sub"><span id="streak"></span> <span id="today-label"></span></span>
+      <span class="sub" id="today-label"></span>
     </div>
 
-    <div id="ongoing-headache"></div>
+    <!-- Order is set by dashboard.js (by time of day and what needs you), by moving
+         nodes so reading and focus order match what you see. -->
+    <div id="today-flow">
+      <div id="alerts"></div>
+      <div id="ongoing-headache"></div>
+      <div id="weekly-review-link"></div>
 
-    <div class="grid cols-4 mb" id="stat-cards">
-      <div class="card"><div class="stat" id="stat-workouts">–</div><div class="stat-label">Workouts this week</div></div>
-      <div class="card"><div class="stat" id="stat-volume">–</div><div class="stat-label">Volume this week (lbs)</div></div>
-      <div class="card"><div class="stat" id="stat-miles">–</div><div class="stat-label">Miles this week</div></div>
-      <div class="card"><div class="stat" id="stat-protein">–</div><div class="stat-label">Protein today (g)</div></div>
-    </div>
+      <section class="card" id="checkin-card" aria-labelledby="checkin-h">
+        <div class="card-head"><h2 id="checkin-h">Morning check-in</h2><span class="saved-note" id="checkin-status" aria-live="polite"></span></div>
+        <div id="checkin"><div class="empty">Loading…</div></div>
+      </section>
 
-    <div class="grid cols-2">
-      <div class="card">
-        <h2><span class="accent">⚡</span> Quick log workout</h2>
-        <p class="muted small">Type it like you'd say it — "3x12 floor press @45, then 20 15 10 pushups, felt strong"</p>
-        <textarea id="quick-log" placeholder="What did you lift?"></textarea>
-        <div class="row mt">
-          <button id="btn-log" class="fit">Log it</button>
-          <span class="muted small" id="log-status"></span>
+      <section class="card" id="plan-card" aria-labelledby="plan-h">
+        <div class="card-head"><h2 id="plan-h">Today's plan</h2><span class="sub" id="plan-progress"></span></div>
+        <div id="today-plan" class="plan-list"><div class="empty">Loading…</div></div>
+        <div class="rest-pick">
+          <span id="rest-l">Rest timer</span>
+          <div class="seg" role="group" aria-labelledby="rest-l" id="rest-pick">
+            <button type="button" class="btn-sm" data-timer="60" aria-pressed="false">60 s</button>
+            <button type="button" class="btn-sm" data-timer="90" aria-pressed="false">90 s</button>
+            <button type="button" class="btn-sm" data-timer="120" aria-pressed="false">2 min</button>
+          </div>
         </div>
-        <div id="log-results" class="list mt"></div>
+        <details class="more mt">
+          <summary>Type a workout instead</summary>
+          <label for="quick-log">Describe it like you'd say it</label>
+          <textarea id="quick-log" placeholder="3x12 floor press @45, then 20 15 10 pushups, felt strong"></textarea>
+          <div class="row mt"><button id="btn-log" class="fit">Log it</button><span class="muted small" id="log-status"></span></div>
+          <div id="log-results" class="list mt"></div>
+        </details>
+      </section>
+
+      <section class="card" id="summary-card" aria-labelledby="summary-h">
+        <div class="card-head"><h2 id="summary-h">Daily summary</h2><span class="sub" id="summary-meta"></span></div>
+        <div id="daily-summary"><div class="empty">Loading…</div></div>
         <div class="row mt" style="align-items:center">
-          <h2 style="margin:0" class="fit">Rest timer</h2>
-          <span id="timer-display" class="pill gray fit" style="font-size:16px;min-width:64px;justify-content:center">—</span>
-          <button class="btn-ghost btn-sm fit" data-timer="60">60s</button>
-          <button class="btn-ghost btn-sm fit" data-timer="90">90s</button>
-          <button class="btn-ghost btn-sm fit" data-timer="120">2m</button>
-          <button class="btn-ghost btn-sm fit" id="timer-stop" style="display:none">✕</button>
-        </div>
-        <h2 class="mt">Today's plan</h2>
-        <div id="today-plan" class="list"></div>
-      </div>
-
-      <div class="card">
-        <h2>💧 Water today</h2>
-        <div id="water-glasses" class="water-glasses"></div>
-        <div class="row mt" style="align-items:center">
-          <button id="water-minus" class="btn-ghost btn-sm fit">−</button>
-          <button id="water-plus" class="fit btn-sm">＋ Glass</button>
-          <span class="muted small" id="water-label"></span>
-        </div>
-        <h2 class="mt">Nutrition today</h2>
-        <div id="nutrition-today"><div class="empty">Loading…</div></div>
-        <a class="btn btn-ghost btn-sm mt" href="nutrition.html">Open nutrition →</a>
-      </div>
-    </div>
-
-    <div class="grid cols-2 mt">
-      <div class="card">
-        <h2><span class="accent">⚡</span> Daily summary</h2>
-        <div class="row mb">
-          <button id="btn-summary" class="btn-gold fit">Generate for today</button>
+          <button id="btn-summary" class="btn-ghost fit">Write today's summary</button>
           <span class="muted small" id="summary-status"></span>
         </div>
-        <div id="weekly-review-link" class="mb"></div>
-        <div id="daily-summary" class="md"><div class="empty">No summary yet for today.</div></div>
-      </div>
-      <div class="card">
-        <div class="row-between">
-          <h2>Daily check-in</h2>
-          <a class="btn btn-ghost btn-sm" href="health.html#headache">Log a headache</a>
-        </div>
-        <div id="checkin"><div class="empty">Loading…</div></div>
-        <h2 class="mt">Weigh-in</h2>
+      </section>
+
+      <section class="card" id="wrapup-card" aria-labelledby="wrapup-h" hidden>
+        <div class="card-head"><h2 id="wrapup-h">Evening wrap-up</h2><span class="saved-note" id="wrapup-status" aria-live="polite"></span></div>
+        <div id="wrapup"></div>
+      </section>
+
+      <section id="week-row" class="week-row" aria-label="This week"></section>
+
+      <details class="card" id="more-today">
+        <summary>Food, water, weigh-in and latest run</summary>
+        <h3 class="mt">Food today</h3>
+        <div id="nutrition-today"><div class="empty">Loading…</div></div>
+        <a class="btn btn-ghost btn-sm" href="nutrition.html">Open Food ›</a>
+        <h3 class="mt">Water</h3>
+        <div id="water-glasses" class="water-glasses" role="group" aria-label="Glasses of water today"></div>
+        <p class="muted small" id="water-label"></p>
+        <h3 class="mt">Weigh-in</h3>
         <div class="row" style="align-items:center">
-          <div class="fit" style="width:110px"><input type="number" id="weigh-in" step="0.1" placeholder="lbs" /></div>
-          <button id="btn-weight" class="btn-ghost btn-sm fit">Save</button>
+          <div class="fit" style="width:130px"><label for="weigh-in" class="sr-only">Weight in pounds</label>
+            <input type="number" id="weigh-in" step="0.1" inputmode="decimal" enterkeyhint="done" placeholder="lbs" /></div>
+          <button id="btn-weight" class="btn-ghost fit">Save</button>
           <span class="muted small" id="weight-trend"></span>
         </div>
-        <h2 class="mt">Reflection</h2>
-        <textarea id="reflection" placeholder="How did today feel?"></textarea>
-        <button id="btn-reflection" class="btn-ghost btn-sm mt">Save reflection</button>
-        <h2 class="mt">Latest run <button id="btn-sync-now" class="btn-ghost btn-sm" style="float:right;margin-top:-4px">🟠 Sync Strava</button></h2>
+        <h3 class="mt">Latest run</h3>
         <div id="latest-run"><div class="empty">No runs yet.</div></div>
-      </div>
+      </details>
+
+      <p class="streak" id="streak"></p>
     </div>
   </main>
+
+  <div class="timer-dock" id="timer-dock" hidden>
+    <span class="fill" id="timer-fill"></span>
+    <span class="label"><span id="timer-label">Rest</span><span class="time" id="timer-time" role="timer">1:30</span></span>
+    <button type="button" class="btn-ghost btn-sm" id="timer-add">+30 s</button>
+    <button type="button" class="btn-ghost btn-sm" id="timer-skip">Skip</button>
+  </div>
   <script type="module" src="js/dashboard.js"></script>
 </body>
 </html>

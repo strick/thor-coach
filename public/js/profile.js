@@ -1,4 +1,4 @@
-import { api, toast, esc, renderNav } from "./ui.js";
+import { api, toast, esc, renderNav, undoable } from "./ui.js";
 
 renderNav("health");
 const $ = (id) => document.getElementById(id);
@@ -25,7 +25,7 @@ $("btn-save").addEventListener("click", async () => {
     toast("Profile saved");
     $("save-status").textContent = `Saved ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
   } catch (err) {
-    toast(err.message, true);
+    toast(err, true);
   } finally {
     $("btn-save").disabled = false;
   }
@@ -45,7 +45,7 @@ function medRow(m) {
     <td class="center"><input type="checkbox" class="m-as_needed" style="width:auto"${m.as_needed ? " checked" : ""} /></td>
     <td><input class="m-purpose" value="${esc(m.purpose ?? "")}" /></td>
     <td class="center"><input type="checkbox" class="m-active" style="width:auto"${m.active ? " checked" : ""} title="${m.active ? "Taking it" : `Stopped${m.stopped_on ? " " + m.stopped_on : ""}`}" /></td>
-    <td style="white-space:nowrap"><button class="btn-ghost btn-sm m-save">Save</button> <button class="btn-danger m-del" title="Delete">✕</button></td>`;
+    <td style="white-space:nowrap"><button class="btn-ghost btn-sm m-save">Save</button> <button class="btn-danger m-del" aria-label="Delete ${esc(m.name)}">Delete</button></td>`;
   const read = () => ({
     ...Object.fromEntries(MED_INPUTS.map((f) => [f, tr.querySelector(`.m-${f}`).value])),
     kind: tr.querySelector(".m-kind").value,
@@ -57,16 +57,17 @@ function medRow(m) {
       await api(`/api/medications/${m.id}`, { method: "PATCH", body: read() });
       toast(`${read().name} saved`);
       loadMeds();
-    } catch (err) { toast(err.message, true); }
+    } catch (err) { toast(err, true); }
   });
   tr.querySelector(".m-active").addEventListener("change", () => tr.querySelector(".m-save").click());
-  tr.querySelector(".m-del").addEventListener("click", async () => {
-    if (!confirm(`Delete ${m.name}? (To keep the history, uncheck Active instead.)`)) return;
-    try {
-      await api(`/api/medications/${m.id}`, { method: "DELETE" });
-      loadMeds();
-    } catch (err) { toast(err.message, true); }
-  });
+  tr.querySelector(".m-del").addEventListener("click", () =>
+    undoable({
+      message: `${m.name} deleted. To keep its history, uncheck Active instead.`,
+      hide: [tr],
+      run: () => api(`/api/medications/${m.id}`, { method: "DELETE", keepalive: true }),
+      onDone: loadMeds,
+    })
+  );
   return tr;
 }
 
@@ -81,7 +82,7 @@ async function loadMeds() {
   for (const m of shown) body.appendChild(medRow(m));
 }
 
-$("show-stopped").addEventListener("change", () => loadMeds().catch((e) => toast(e.message, true)));
+$("show-stopped").addEventListener("change", () => loadMeds().catch((e) => toast(e, true)));
 
 $("btn-add-med").addEventListener("click", async () => {
   const row = $("med-new");
@@ -96,7 +97,7 @@ $("btn-add-med").addEventListener("click", async () => {
     row.querySelectorAll("input").forEach((i) => (i.type === "checkbox" ? (i.checked = false) : (i.value = "")));
     toast(`${body.name} added`);
     loadMeds();
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toast(err, true); }
 });
 
 // --- Long-term memory ---
@@ -108,14 +109,17 @@ async function loadMemories() {
       <div class="item">
         <div class="main"><div class="title" style="font-weight:600">${esc(m.content)}</div>
           <div class="meta">${m.category ? `${esc(m.category)} · ` : ""}saved ${esc(m.created_at.slice(0, 10))}${m.source === "chat" ? " from chat" : ""}</div></div>
-        <button class="btn-danger" data-forget="${m.id}" title="Forget">✕</button>
+        <button class="btn-danger" data-forget="${m.id}" aria-label="Forget: ${esc(m.content.slice(0, 60))}">Forget</button>
       </div>`).join("")
     : `<div class="empty">Nothing saved yet.</div>`;
   $("memories").querySelectorAll("[data-forget]").forEach((b) =>
-    b.addEventListener("click", async () => {
-      await api(`/api/memories/${b.dataset.forget}`, { method: "DELETE" });
-      loadMemories();
-    })
+    b.addEventListener("click", () =>
+      undoable({
+        message: "Forgotten",
+        hide: [b.closest(".item")],
+        run: () => api(`/api/memories/${b.dataset.forget}`, { method: "DELETE", keepalive: true }),
+      })
+    )
   );
 }
 
@@ -126,9 +130,9 @@ $("btn-memory-add").addEventListener("click", async () => {
     await api("/api/memories", { method: "POST", body: { content } });
     $("memory-new").value = "";
     loadMemories();
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toast(err, true); }
 });
 
-loadProfile().catch((e) => toast(e.message, true));
-loadMeds().catch((e) => toast(e.message, true));
+loadProfile().catch((e) => toast(e, true));
+loadMeds().catch((e) => toast(e, true));
 loadMemories().catch(() => {});

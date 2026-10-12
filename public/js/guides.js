@@ -1,11 +1,16 @@
-import { api, toast, esc, renderNav, renderMarkdown, fmtDate } from "./ui.js";
+import {
+  api, toast, esc, renderNav, fmtDate, segnav, THOR_SEGS, renderReader, wireReader, readingTime,
+  menuButton, wireMenu, undoable, waiting,
+} from "./ui.js";
 
 renderNav("guides");
 const $ = (id) => document.getElementById(id);
+$("segs").innerHTML = segnav("Thor", THOR_SEGS, "library");
 
-const KIND = { weekly_review: ["Weekly review", "gold"], lab_explainer: ["Labs", "red"], deep_dive: ["Deep dive", ""] };
+const KIND = { weekly_review: "Weekly review", lab_explainer: "Lab explainer", deep_dive: "Deep dive" };
 let filter = "";
 let openId = null;
+const narrow = () => matchMedia("(max-width: 899px)").matches;
 
 const created = (g) => new Date(g.created_at.replace(" ", "T") + "Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
@@ -14,79 +19,108 @@ async function loadList() {
   const list = await api(`/api/guides${q}`);
   $("list").innerHTML = list.length
     ? list.map((g) => `
-      <div class="item" style="cursor:pointer;${g.id === openId ? "border-color:var(--accent)" : ""}" data-id="${g.id}">
-        <div class="main">
-          <div class="title">${g.pinned ? "📌 " : ""}${esc(g.title)}</div>
-          <div class="meta">${esc(g.excerpt)}</div>
-        </div>
-        <div style="text-align:right">
-          <span class="pill ${KIND[g.kind][1]}">${KIND[g.kind][0]}</span>
-          <div class="muted small" style="margin-top:4px">${created(g)}</div>
-        </div>
-      </div>`).join("")
+      <button type="button" class="item" data-id="${g.id}"${g.id === openId ? ' aria-current="true" style="border-color:var(--accent)"' : ""}>
+        <span class="main">
+          <span class="title" style="display:block">${g.pinned ? '<span class="sr-only">Pinned: </span><span aria-hidden="true">📌</span> ' : ""}${esc(g.title)}</span>
+          <span class="meta" style="display:block">${esc(KIND[g.kind])} · ${created(g)}</span>
+          <span class="meta" style="display:block">${esc(g.excerpt)}</span>
+        </span><span class="chev" aria-hidden="true">›</span>
+      </button>`).join("")
     : `<div class="empty">${filter ? "Nothing here yet." : "No guides yet. Ask a question above, write last week's review, or confirm a lab report."}</div>`;
-  $("list").querySelectorAll("[data-id]").forEach((el) => el.addEventListener("click", () => openGuide(el.dataset.id)));
+  $("list").querySelectorAll("[data-id]").forEach((el) => el.addEventListener("click", () => openGuide(el.dataset.id).catch((e) => toast(e, true))));
 }
 
-async function openGuide(id) {
+// Phones: the reader takes the whole screen, with "‹ Library" and the Back gesture.
+function showReader() {
+  document.body.classList.add("reading");
+  if (narrow()) scrollTo(0, 0);
+}
+function hideReader() {
+  document.body.classList.remove("reading");
+  openId = null;
+  loadList().catch(() => {});
+}
+addEventListener("popstate", () => {
+  const id = history.state?.guide;
+  if (id) openGuide(id, { push: false }).catch(() => {});
+  else hideReader();
+});
+
+async function openGuide(id, { push = true } = {}) {
   openId = id;
-  history.replaceState(null, "", `#${id}`);
+  if (push) {
+    if (narrow() && history.state?.guide !== id) history.pushState({ guide: id }, "", `#${id}`);
+    else history.replaceState({ guide: id }, "", `#${id}`);
+  }
   const g = await api(`/api/guides/${id}`);
   const when = g.kind === "weekly_review" ? `${fmtDate(g.period_start)} – ${fmtDate(g.period_end)}` : `Written ${created(g)}`;
   $("detail").innerHTML = `
-    <div class="row-between">
-      <span class="pill ${KIND[g.kind][1]}">${KIND[g.kind][0]}</span>
-      <div class="row fit" style="gap:6px">
-        <button class="btn-ghost btn-sm fit" id="g-pin">${g.pinned ? "Unpin" : "📌 Pin"}</button>
-        <button class="btn-ghost btn-sm fit" id="g-regen">Refresh with new data</button>
-        <button class="btn-danger fit" id="g-del" title="Delete">✕</button>
-      </div>
+    <button type="button" class="back-link" data-back>‹ Library</button>
+    <div class="reader-head">
+      <span class="pill gray">${KIND[g.kind]}</span>
+      ${menuButton("Guide options", [
+        { act: "pin", label: g.pinned ? "Unpin" : "Pin to the top" },
+        { act: "regen", label: "Update with my latest data" },
+        { act: "delete", label: "Delete this guide", danger: true },
+      ])}
     </div>
-    <h2 style="text-transform:none;letter-spacing:0;color:var(--text);font-size:19px;margin:12px 0 2px">${esc(g.title)}</h2>
-    <div class="muted small">${esc(when)}${g.topic && g.kind === "deep_dive" ? ` · you asked: “${esc(g.topic)}”` : ""}${g.llm_model ? ` · ${esc(g.llm_model)}` : ""}</div>
-    ${g.lab_report_id ? `<a class="btn btn-ghost btn-sm mt" href="labs.html">Open the lab report →</a>` : ""}
-    <div class="md mt">${renderMarkdown(g.markdown)}</div>`;
-  $("g-pin").addEventListener("click", async () => {
-    await api(`/api/guides/${id}`, { method: "PATCH", body: { pinned: !g.pinned } });
-    openGuide(id);
-    loadList();
+    <h2 style="font-size:1.25rem;margin:12px 0 2px">${esc(g.title)}</h2>
+    <p class="read-meta">${esc(when)} · ${readingTime(g.markdown)}${g.topic && g.kind === "deep_dive" ? ` · you asked: “${esc(g.topic)}”` : ""}</p>
+    ${g.lab_report_id ? `<p><a href="labs.html#report-${esc(g.lab_report_id)}">Open the lab report ›</a></p>` : ""}
+    <div id="reader-body">${renderReader(g.markdown, { idPrefix: "g" })}</div>
+    <p class="muted small mt">${g.llm_model ? `Written by ${esc(g.llm_model)}.` : ""}</p>`;
+  wireReader($("detail"));
+  $("detail").querySelector("[data-back]").addEventListener("click", () => {
+    if (history.state?.guide && narrow()) history.back();
+    else { history.replaceState(null, "", "#"); hideReader(); }
   });
-  $("g-regen").addEventListener("click", async () => {
-    $("g-regen").disabled = true;
-    $("g-regen").innerHTML = '<span class="spin">⚡</span> Rewriting…';
-    try {
-      await api(`/api/guides/${id}/regenerate`, { method: "POST" });
-      toast("Updated with your latest data");
-      openGuide(id);
+  wireMenu($("detail"), {
+    pin: async () => {
+      await api(`/api/guides/${id}`, { method: "PATCH", body: { pinned: !g.pinned } });
+      toast(g.pinned ? "Unpinned" : "Pinned");
+      openGuide(id, { push: false });
       loadList();
-    } catch (err) {
-      toast(err.message, true);
-      $("g-regen").disabled = false;
-      $("g-regen").textContent = "Refresh with new data";
-    }
+    },
+    regen: async () => {
+      $("reader-body").innerHTML = `<p>${waiting("Thor is rewriting this with your latest data. This usually takes under a minute.")}</p>`;
+      try {
+        await api(`/api/guides/${id}/regenerate`, { method: "POST" });
+        toast("Updated with your latest data");
+        openGuide(id, { push: false });
+        loadList();
+      } catch (err) {
+        toast(err, true);
+        openGuide(id, { push: false });
+      }
+    },
+    delete: () => {
+      const row = $("list").querySelector(`[data-id="${CSS.escape(id)}"]`);
+      $("detail").innerHTML = `<div class="empty">Deleted.</div>`;
+      if (history.state?.guide && narrow()) history.back();
+      else { history.replaceState(null, "", "#"); hideReader(); }
+      undoable({
+        message: "Guide deleted",
+        hide: row ? [row] : [],
+        run: () => api(`/api/guides/${id}`, { method: "DELETE", keepalive: true }),
+        onDone: () => loadList(),
+        onUndo: () => openGuide(id),
+      });
+    },
   });
-  $("g-del").addEventListener("click", async () => {
-    if (!confirm("Delete this guide?")) return;
-    await api(`/api/guides/${id}`, { method: "DELETE" });
-    openId = null;
-    history.replaceState(null, "", "#");
-    $("detail").innerHTML = `<div class="empty">Deleted.</div>`;
-    loadList();
-  });
+  showReader();
   loadList();
-  if (window.innerWidth < 640) $("detail-card").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function ask(topic) {
   if (!topic.trim()) return toast("Type a question first", true);
   $("btn-ask").disabled = true;
-  $("ask-status").innerHTML = '<span class="spin">⚡</span> Reading through your data and writing your guide — usually under a minute…';
+  $("ask-status").innerHTML = waiting("Thor is reading through your data and writing your guide. This usually takes under a minute.");
   try {
     const g = await api("/api/guides/deep-dive", { method: "POST", body: { topic } });
     $("topic").value = "";
     await openGuide(g.id);
   } catch (err) {
-    toast(err.message, true);
+    toast(err, true);
   } finally {
     $("btn-ask").disabled = false;
     $("ask-status").textContent = "";
@@ -98,23 +132,23 @@ $("topic").addEventListener("keydown", (e) => { if (e.key === "Enter") ask($("to
 
 $("btn-weekly").addEventListener("click", async () => {
   $("btn-weekly").disabled = true;
-  $("btn-weekly").innerHTML = '<span class="spin">⚡</span> Writing…';
+  $("ask-status").innerHTML = waiting("Thor is reading your week. This usually takes under a minute.");
   try {
     const g = await api("/api/guides/weekly-review", { method: "POST", body: {} });
     await openGuide(g.id);
   } catch (err) {
-    toast(err.message, true);
+    toast(err, true);
   } finally {
     $("btn-weekly").disabled = false;
-    $("btn-weekly").textContent = "Write last week's review";
+    $("ask-status").textContent = "";
   }
 });
 
 document.querySelectorAll("#filters button").forEach((b) =>
   b.addEventListener("click", () => {
-    document.querySelectorAll("#filters button").forEach((x) => x.classList.toggle("on", x === b));
+    document.querySelectorAll("#filters button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     filter = b.dataset.kind;
-    loadList().catch((e) => toast(e.message, true));
+    loadList().catch((e) => toast(e, true));
   })
 );
 
@@ -137,7 +171,11 @@ async function loadArchive() {
 
 loadList().then(() => {
   const id = location.hash.slice(1);
-  if (id) openGuide(id).catch(() => {});
-}).catch((e) => toast(e.message, true));
+  if (id) {
+    // Arriving with a guide in the URL: make Back return to the list.
+    history.replaceState(null, "", "guides.html");
+    openGuide(id).catch(() => {});
+  }
+}).catch((e) => toast(e, true));
 loadSuggestions().catch(() => {});
 loadArchive().catch(() => {});

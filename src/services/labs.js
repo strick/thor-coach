@@ -119,6 +119,7 @@ export function listReports(userId = DEFAULT_USER_ID) {
     `SELECT r.id, r.collected_on, r.lab_name, r.source, r.status, r.created_at, r.confirmed_at,
        (SELECT COUNT(*) FROM lab_results x WHERE x.report_id = r.id) AS result_count,
        (SELECT COUNT(*) FROM lab_results x WHERE x.report_id = r.id AND x.flag IN ('low','high','abnormal','critical_low','critical_high')) AS out_of_range,
+       (SELECT COUNT(*) FROM lab_results x WHERE x.report_id = r.id AND x.flag IN ('critical_low','critical_high')) AS critical,
        (SELECT COUNT(*) FROM lab_report_files f WHERE f.report_id = r.id) AS file_count,
        (SELECT g.id FROM guides g WHERE g.lab_report_id = r.id AND g.kind = 'lab_explainer' LIMIT 1) AS explainer_id
      FROM lab_reports r WHERE r.user_id = ?
@@ -147,7 +148,8 @@ function warningsFor(report, results) {
     }
   }
   const crit = results.filter((r) => r.flag === "critical_low" || r.flag === "critical_high");
-  if (crit.length) w.push(`Critical value: ${crit.map((r) => `${r.name_on_report} ${r.value_num ?? r.value_text} ${r.unit ?? ""}`.trim()).join(", ")}. Contact your doctor promptly if you haven't heard from them.`);
+  // Critical values go first: they are the one thing to act on today.
+  if (crit.length) w.unshift(`Critical value: ${crit.map((r) => `${r.name_on_report} ${r.value_num ?? r.value_text} ${r.unit ?? ""}`.trim()).join(", ")}. Contact your doctor promptly if you haven't heard from them.`);
   return w;
 }
 
