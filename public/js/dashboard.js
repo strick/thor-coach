@@ -186,7 +186,7 @@ function quickForm(ex, latest) {
     ${!latest.today && latest.last ? `<button type="button" class="btn-block btn-lg qf-same">Log ${describeShort(latest.last)}</button>` : ""}
     ${!showFields ? `<div class="btn-row mt">
       <button type="button" class="btn-ghost qf-change" aria-expanded="false" aria-controls="${id}-fields">Change numbers</button>
-      ${nudge && !latest.today ? `<button type="button" class="btn-ghost qf-nudge">Try ${nudge.suggest} lbs</button>` : ""}
+      ${nudge && !latest.today ? `<button type="button" class="btn-ghost qf-nudge">${nudge.type === "weight" ? `Try ${nudge.suggest} lbs × ${nudge.suggest_reps}` : `Try ${nudge.sets}×${nudge.suggest_reps}`}</button>` : ""}
     </div>` : ""}
     <div class="qf-fields" id="${id}-fields"${showFields ? "" : " hidden"}>
       <div class="row">
@@ -196,7 +196,7 @@ function quickForm(ex, latest) {
       </div>
       <button type="button" class="btn-block mt qf-save">${latest.today ? "Update today" : "Log it"}</button>
     </div>
-    ${nudge && !latest.today ? `<p class="muted small">${nudge.current} lbs for ${nudge.sessions_at_weight} sessions — ${nudge.suggest} lbs might be ready.</p>` : ""}`;
+    ${nudge && !latest.today ? `<p class="muted small">${esc(nudge.message)}</p>` : ""}`;
 
   const fields = wrap.querySelector(".qf-fields");
   const showNumbers = () => {
@@ -206,8 +206,10 @@ function quickForm(ex, latest) {
   wrap.querySelector(".qf-change")?.addEventListener("click", () => { showNumbers(); wrap.querySelector(".qf-sets").focus(); });
   wrap.querySelector(".qf-nudge")?.addEventListener("click", () => {
     showNumbers();
+    wrap.querySelector(".qf-sets").value = nudge.sets;
+    wrap.querySelector(".qf-reps").value = nudge.suggest_reps;
     wrap.querySelector(".qf-weight").value = nudge.suggest;
-    wrap.querySelector(".qf-weight").focus();
+    wrap.querySelector(".qf-reps").focus();
   });
 
   async function save(body, btn) {
