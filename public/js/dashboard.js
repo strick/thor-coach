@@ -77,7 +77,9 @@ function quickForm(ex, latest) {
   const wrap = document.createElement("div");
   wrap.className = "quick-form";
   wrap.innerHTML = `
-    ${nudge && !latest.today ? `<button class="qf-nudge btn-gold btn-sm" style="margin-bottom:8px">📈 ${nudge.current} lbs for ${nudge.sessions_at_weight} sessions — load ${nudge.suggest} today</button>` : ""}
+    ${nudge && !latest.today ? `<button class="qf-nudge btn-gold btn-sm" style="margin-bottom:8px" title="${esc(nudge.message || "")}">📈 ${nudge.type === "weight"
+      ? `Hit ${nudge.last_reps[0]} on every set — load ${nudge.suggest} lbs × ${nudge.suggest_reps} today`
+      : `${nudge.sessions_at_weight > 1 ? `${nudge.sessions_at_weight} sessions at ${nudge.current} lbs — ` : ""}push for ${nudge.sets}×${nudge.suggest_reps} at ${nudge.current} lbs today`}</button>` : ""}
     <div class="row">
       <div><label>Sets</label><input type="number" class="qf-sets" min="1" value="${src?.sets ?? 3}" /></div>
       <div><label>Reps</label><input class="qf-reps" placeholder="12 or 12,10,8" value="${esc(fmtReps(src?.reps))}" /></div>
@@ -90,7 +92,9 @@ function quickForm(ex, latest) {
     </div>`;
   wrap.querySelector(".qf-nudge")?.addEventListener("click", () => {
     wrap.querySelector(".qf-weight").value = nudge.suggest;
-    toast(`Loaded ${nudge.suggest} lbs`);
+    wrap.querySelector(".qf-sets").value = nudge.sets;
+    wrap.querySelector(".qf-reps").value = nudge.suggest_reps;
+    toast(nudge.message || `Loaded ${nudge.suggest} lbs`);
   });
 
   const parseRepsInput = (raw) =>
