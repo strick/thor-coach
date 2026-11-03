@@ -6,7 +6,10 @@ import { DEFAULT_USER_ID, todayISO } from "../config.js";
 import { HttpError } from "../http.js";
 import { addDays, minutesBetween, avg, round } from "../util.js";
 import { classifyMed, classLabel, COMMON_HEADACHE_MEDS } from "../data/headacheMeds.js";
-import { analyzeHeadacheFactors, analyzeMedicationOveruse, headacheDaysByWeek, parseMealTime, CAVEAT } from "./headacheInsights.js";
+import {
+  analyzeHeadacheFactors, analyzeMedicationOveruse, headacheDaysByWeek, parseMealTime, CAVEAT,
+  MIN_EXPOSED, MIN_UNEXPOSED, MIN_HEADACHE_DAYS,
+} from "./headacheInsights.js";
 import { getWorkouts } from "./workouts.js";
 import { hrMaxEstimate } from "./running.js";
 import { listMedications } from "./profile.js";
@@ -341,6 +344,8 @@ export function getHeadacheInsights({ days = 90, end = todayISO() } = {}, userId
     },
     overuse: analyzeMedicationOveruse(recent, end),
     weekly: headacheDaysByWeek(allDates, end, 12),
+    // What a factor needs before it is compared (the UI shows progress toward it).
+    minimums: { exposed_days: MIN_EXPOSED, unexposed_days: MIN_UNEXPOSED, headache_days: MIN_HEADACHE_DAYS },
   };
 }
 

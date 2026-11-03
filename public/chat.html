@@ -2,42 +2,49 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Thor — Ask Thor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Thor — Chat</title>
   <meta name="theme-color" content="#0b0f17" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Thor" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="css/app.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
+  <link rel="icon" href="/icons/icon-192.png" />
 </head>
-<body>
-  <main class="container">
+<body class="chat-page">
+  <main class="container narrow">
     <div class="page-head">
-      <h1>Ask Thor</h1>
-      <div class="row fit" style="gap:8px">
-        <button class="btn-ghost btn-sm fit" id="btn-memory">What Thor remembers</button>
-        <button class="btn-ghost btn-sm fit" id="btn-new">New conversation</button>
+      <h1>Thor</h1>
+      <div class="btn-row fit" style="flex:0 0 auto">
+        <button type="button" class="btn-ghost btn-sm" id="btn-memory" aria-haspopup="dialog">Memory</button>
+        <button type="button" class="btn-ghost btn-sm" id="btn-new">New chat</button>
       </div>
     </div>
-
-    <div class="card mb" id="memory-card" hidden>
-      <div class="row-between">
-        <h2>What Thor remembers</h2>
-        <span class="muted small">Used in every answer and summary. Say "remember…" in chat, or add one here.</span>
-      </div>
-      <div id="memories" class="list"></div>
-      <div class="row mt">
-        <div><input id="memory-new" maxlength="500" placeholder="e.g. My doctor wants my LDL under 100 by next spring" /></div>
-        <button class="btn-ghost fit" id="btn-memory-add">Add</button>
-      </div>
-    </div>
+    <div id="segs"></div>
 
     <div class="card chat-box">
-      <div class="chat-log" id="log"></div>
-      <div class="chat-input">
-        <textarea id="input" placeholder="Ask anything…" rows="2"></textarea>
-        <button id="send" class="fit">Send</button>
-      </div>
+      <div class="chat-log" id="log" role="log" aria-live="polite" aria-label="Conversation with Thor"></div>
+      <div class="starters" id="starters" role="group" aria-label="Suggestions"></div>
+      <form class="chat-input" id="composer">
+        <label for="input" class="sr-only">Message Thor</label>
+        <textarea id="input" rows="1" placeholder="Ask, or tell me what to log…" enterkeyhint="send"></textarea>
+        <button id="send" type="submit">Send</button>
+      </form>
     </div>
   </main>
+
+  <dialog class="sheet" id="memory-sheet" aria-labelledby="memory-h">
+    <div class="sheet-head"><h2 id="memory-h">What Thor remembers</h2><button type="button" class="sheet-close" data-close>Close</button></div>
+    <p class="muted small" style="margin-top:0">Used in every answer and summary. Say "remember…" in chat, or add one here.</p>
+    <div id="memories" class="list"></div>
+    <div class="row mt">
+      <div><label for="memory-new" class="sr-only">Something for Thor to remember</label>
+        <input id="memory-new" maxlength="500" enterkeyhint="done" placeholder="e.g. My doctor wants my LDL under 100 by spring" /></div>
+      <button type="button" class="btn-ghost fit" id="btn-memory-add">Add</button>
+    </div>
+  </dialog>
   <script type="module" src="js/chat.js"></script>
 </body>
 </html>

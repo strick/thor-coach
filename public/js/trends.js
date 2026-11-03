@@ -25,7 +25,7 @@ async function loadExercises(progress) {
   const list = trained.length ? trained : all;
   $("ex-select").innerHTML = list.map((e) => `<option value="${e.id}">${esc(e.name)}</option>`).join("");
   await loadExerciseSeries();
-  $("ex-select").addEventListener("change", () => loadExerciseSeries().catch((e) => toast(e.message, true)));
+  $("ex-select").addEventListener("change", () => loadExerciseSeries().catch((e) => toast(e, true)));
 }
 
 async function loadExerciseSeries() {
@@ -36,16 +36,16 @@ async function loadExerciseSeries() {
   if (weighted.length >= 2) {
     $("c-exercise").innerHTML = chartLine(
       weighted.map((s) => ({ label: shortDate(s.date), value: s.weight_lbs })),
-      { unit: " lbs", color: "var(--gold)" }
+      { unit: " lbs", color: "var(--accent)" }
     );
     const first = weighted[0].weight_lbs, last = weighted[weighted.length - 1].weight_lbs;
     const delta = last - first;
     $("ex-meta").innerHTML = `Weight: ${first} → ${last} lbs ` +
-      (delta > 0 ? `<span class="pill green">+${delta} lbs 📈</span>` : delta < 0 ? `<span class="pill red">${delta} lbs</span>` : `<span class="pill gray">steady</span>`);
+      (delta > 0 ? `<span class="pill green">↑ ${delta} lbs</span>` : delta < 0 ? `<span class="pill gray">↓ ${Math.abs(delta)} lbs</span>` : `<span class="pill gray">steady</span>`);
   } else if (series.length >= 2) {
     $("c-exercise").innerHTML = chartLine(
       series.map((s) => ({ label: shortDate(s.date), value: s.volume })),
-      { unit: " reps·lbs", color: "var(--gold)" }
+      { unit: " reps·lbs", color: "var(--accent)" }
     );
     $("ex-meta").textContent = "Bodyweight — showing total volume per session.";
   } else {
@@ -76,31 +76,31 @@ async function loadNutrition() {
   const target = goals?.daily_protein_target_g || 150;
   $("c-protein").innerHTML =
     chartBars(recent.map((d) => ({ label: shortDate(d.date_local), value: d.protein_g, value2: target })), { unit: "g" }) +
-    `<div class="muted small mt">Gold line = ${target}g target · hit ${recent.filter((d) => d.protein_g >= target).length}/${recent.length} days</div>`;
+    `<div class="muted small mt">Dashed line = ${target}g target · hit ${recent.filter((d) => d.protein_g >= target).length}/${recent.length} days</div>`;
   $("c-cal").innerHTML = chartBars(
     recent.map((d) => ({ label: shortDate(d.date_local), value: d.calories_kcal })),
-    { unit: " kcal", color: "var(--gold)" }
+    { unit: " kcal", color: "var(--accent)" }
   );
 }
 
 async function loadWeight() {
   const rows = (await api(`/api/body?start=${addDays(today, -60)}&end=${today}`)).filter((r) => r.weight_lbs != null);
   if (rows.length < 2) {
-    $("c-weight").innerHTML = `<div class="empty">${rows.length ? "One weigh-in so far — need 2+ for a trend." : "No weigh-ins yet — log one on the dashboard."}</div>`;
+    $("c-weight").innerHTML = `<div class="empty">${rows.length ? "One weigh-in so far — need 2+ for a trend." : "No weigh-ins yet — log one with ＋ → Weight."}</div>`;
     return;
   }
   $("c-weight").innerHTML = chartLine(
     rows.map((r) => ({ label: shortDate(r.date), value: r.weight_lbs })),
-    { unit: " lbs", color: "var(--danger)" }
+    { unit: " lbs", color: "var(--muted-2)" }
   );
   const delta = (rows[rows.length - 1].weight_lbs - rows[0].weight_lbs).toFixed(1);
   $("weight-meta").innerHTML = `${rows[0].weight_lbs} → ${rows[rows.length - 1].weight_lbs} lbs ` +
-    `<span class="pill ${delta <= 0 ? "green" : "gold"}">${delta > 0 ? "+" : ""}${delta} lbs</span> over ${rows.length} weigh-ins`;
+    `(${delta > 0 ? "+" : ""}${delta} lbs) over ${rows.length} weigh-ins`;
 }
 
 loadVolume()
   .then((p) => loadExercises(p))
-  .catch((e) => toast(e.message, true));
+  .catch((e) => toast(e, true));
 loadRunning().catch(() => {});
 loadNutrition().catch(() => {});
 loadWeight().catch(() => {});

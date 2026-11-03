@@ -461,3 +461,29 @@ export function deleteTemplate(templateId) {
   if (!r.changes) throw new HttpError(404, "Template not found");
   return { deleted: templateId };
 }
+
+// --- Barcode by photo (iPhone Safari has no BarcodeDetector) ---------------
+
+const BARCODE_SYSTEM = `You read product barcodes (UPC/EAN) from photos. Reply with JSON only:
+{"digits": "<the digits printed under the bars, no spaces>"} — or {"digits": null} if you can't read every digit clearly. Never guess a digit.`;
+
+function imageType(buf) {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  if (buf.length >= 12 && buf.subarray(0, 4).toString("latin1") === "RIFF" && buf.subarray(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  return null;
+}
+
+/** Read the printed digits under a barcode with the vision model, then look the product up. */
+export async function barcodeFromPhoto(buffer) {
+  if (!buffer?.length) throw new HttpError(400, "Send a photo of the barcode");
+  const mime = imageType(buffer);
+  if (!mime) throw new HttpError(400, "Send the barcode photo as a JPEG, PNG or WebP");
+  const { data } = await chatJSON("nutrition_parsing", BARCODE_SYSTEM, [
+    { type: "text", text: "Read the barcode digits in this photo." },
+    { type: "image_url", image_url: { url: `data:${mime};base64,${buffer.toString("base64")}`, detail: "high" } },
+  ]);
+  const digits = String(data?.digits ?? "").replace(/\D/g, "");
+  if (!/^\d{6,14}$/.test(digits)) return { found: false, code: null, unreadable: true };
+  return { ...(await barcodeLookup(digits)), code: digits };
+}

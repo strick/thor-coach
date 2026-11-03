@@ -2,11 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Thor — Settings</title>
   <meta name="theme-color" content="#0b0f17" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Thor" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="css/app.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
+  <link rel="icon" href="/icons/icon-192.png" />
 </head>
 <body>
   <main class="container">
@@ -18,7 +23,7 @@
           <h2>Health profile</h2>
           <p class="muted small">Your conditions, medications, supplements and goals. Thor uses these to personalize every summary and answer.</p>
         </div>
-        <a class="btn-gold btn-sm fit" href="profile.html">Edit profile &amp; meds</a>
+        <a class="btn btn-sm fit" href="profile.html">Edit profile &amp; meds</a>
       </div>
     </div>
 
@@ -63,7 +68,7 @@
           <button class="btn-ghost btn-sm" data-export="headaches">Headaches CSV</button>
           <button class="btn-ghost btn-sm" data-export="checkins">Check-ins CSV</button>
           <button class="btn-ghost btn-sm" data-export="labs">Labs CSV</button>
-          <button class="btn-gold btn-sm" id="btn-export-json">Everything (JSON)</button>
+          <button class="btn-sm" id="btn-export-json">Everything (JSON)</button>
         </div>
       </div>
     </div>

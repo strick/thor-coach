@@ -1,4 +1,4 @@
-import { api, toast, esc, renderNav, downloadFile, todayISO } from "./ui.js";
+import { api, toast, esc, renderNav, downloadFile, todayISO, askText } from "./ui.js";
 
 renderNav("settings");
 const $ = (id) => document.getElementById(id);
@@ -10,9 +10,9 @@ async function loadConnections() {
   $("version").textContent = `Thor v2 — ${cfg.today}`;
   $("connections").innerHTML = `
     <div class="item"><div class="main"><div class="title">OpenAI</div><div class="meta">advice: ${esc(cfg.advice_model)} · parsing: ${esc(cfg.model)}</div></div>
-      ${cfg.openai_configured ? '<span class="pill green">configured</span>' : '<span class="pill red">missing OPENAI_API_KEY</span>'}</div>
+      ${cfg.openai_configured ? '<span class="pill green">configured</span>' : '<span class="pill amber">missing OPENAI_API_KEY</span>'}</div>
     <div class="item"><div class="main"><div class="title">Strava</div><div class="meta">run sync${cfg.strava.configured ? ` · token: ${cfg.strava.token_source}` : ""}</div></div>
-      ${cfg.strava.configured ? '<span class="pill green">authorized</span>' : cfg.strava.can_connect ? '<a class="pill gold" href="running.html">connect</a>' : `<span class="pill red">missing ${esc(cfg.strava.missing.join(", "))}</span>`}</div>
+      ${cfg.strava.configured ? '<span class="pill green">authorized</span>' : cfg.strava.can_connect ? '<a class="pill amber" href="running.html">connect</a>' : `<span class="pill amber">missing ${esc(cfg.strava.missing.join(", "))}</span>`}</div>
     <div class="item"><div class="main"><div class="title">Ollama</div><div class="meta" id="ollama-meta">checking…</div></div>
       <span class="pill gray" id="ollama-pill">local</span></div>
     <div class="item"><div class="main"><div class="title">Backups</div><div class="meta" id="backup-meta">checking…</div></div>
@@ -24,7 +24,7 @@ async function loadConnections() {
       : "no backups yet";
     const ok = latest && (b.mirror_available ? b.mirror.length > 0 : true);
     const pill = document.getElementById("backup-pill");
-    pill.className = "pill " + (ok ? "green" : latest ? "gold" : "red");
+    pill.className = "pill " + (ok ? "green" : "amber");
     pill.textContent = ok ? (b.mirror_available ? "local + mirror" : "local only") : latest ? "mirror missing" : "none";
   }).catch(() => {});
   const models = await api("/api/ollama/models");
@@ -85,7 +85,7 @@ async function loadLLM() {
         });
         toast(`${JOB_LABELS[tr.dataset.usage] || tr.dataset.usage} saved`);
         loadLLM();
-      } catch (err) { toast(err.message, true); }
+      } catch (err) { toast(err, true); }
     });
   });
 }
@@ -97,7 +97,8 @@ async function loadUsers() {
       <button class="btn-ghost btn-sm" data-rename="${u.id}">Rename</button></div>`).join("");
   $("users").querySelectorAll("[data-rename]").forEach((b) =>
     b.addEventListener("click", async () => {
-      const name = prompt("New name:");
+      const current = b.closest(".item").querySelector(".title").textContent;
+      const name = await askText({ title: "Rename", label: "Name", value: current });
       if (!name) return;
       await api(`/api/users/${b.dataset.rename}`, { method: "PATCH", body: { name } });
       toast("Renamed"); loadUsers();
@@ -129,12 +130,12 @@ $("btn-goals").addEventListener("click", async () => {
       body: { weekly_workouts: num("goal-workouts"), weekly_miles: num("goal-miles"), weekly_volume_lbs: num("goal-volume"), water_glasses: num("goal-water") },
     });
     toast("Goals saved — dashboard will show progress");
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toast(err, true); }
 });
 
 document.querySelectorAll("[data-export]").forEach((b) =>
   b.addEventListener("click", () =>
-    downloadFile(`/api/export/csv/${b.dataset.export}`, `thor-${b.dataset.export}-${todayISO()}.csv`).catch((e) => toast(e.message, true))
+    downloadFile(`/api/export/csv/${b.dataset.export}`, `thor-${b.dataset.export}-${todayISO()}.csv`).catch((e) => toast(e, true))
   )
 );
 $("btn-export-json").addEventListener("click", async () => {
@@ -146,7 +147,7 @@ $("btn-export-json").addEventListener("click", async () => {
     a.download = `thor-export-${todayISO()}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
-  } catch (err) { toast(err.message, true); }
+  } catch (err) { toast(err, true); }
 });
 
 loadGoals().catch(() => {});
@@ -156,5 +157,5 @@ $("btn-reset").addEventListener("click", async () => {
   toast("AI models reset to defaults"); loadLLM();
 });
 
-loadConnections().then(loadLLM).catch((e) => toast(e.message, true));
+loadConnections().then(loadLLM).catch((e) => toast(e, true));
 loadUsers().catch(() => {});
