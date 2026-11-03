@@ -35,7 +35,8 @@ Rules:
 - Handle: "4*12 floor press @45" (sets=4, reps=12, weight=45)
           "11, 8, 5 push ups" (variable_reps=[11,8,5], reps_per_set=null)
           "3x 25, 20, 15 pushups" (sets=3, variable_reps=[25,20,15], reps_per_set=null)
-- BODYWEIGHT EXERCISES (Push-ups, Leg Raises, Burpees, Mountain Climbers, Squat Jumps): ALWAYS use variable_reps array (even if all sets are the same), NEVER include weight_lbs.
+- ONE REP NUMBER means EVERY set got that many reps: "3 sets of 10", "3 sets 10 reps", "3x10" → sets=3, reps_per_set=10 (or variable_reps=[10,10,10]). Never return a one-element variable_reps when sets > 1.
+- BODYWEIGHT EXERCISES (Push-ups, Leg Raises, Burpees, Mountain Climbers, Squat Jumps): ALWAYS use variable_reps array with one entry PER SET (repeat the number when all sets are the same, e.g. "3x10 push ups" → [10,10,10]), NEVER include weight_lbs.
 - WEIGHTED EXERCISES: Use reps_per_set for consistent reps, variable_reps for varying reps, always include weight_lbs if mentioned.
 - Capture any contextual notes, feelings, or comments in the "notes" field ("this was brutal", "felt easy", "PR!").
 - Output ONLY valid JSON.`.trim();
@@ -51,10 +52,11 @@ export async function parseWorkoutText(text, dow) {
     let reps;
     if (Array.isArray(i?.variable_reps) && i.variable_reps.length) reps = i.variable_reps;
     else if (i?.reps_per_set != null) reps = i.reps_per_set;
+    const norm = normalizeSetsReps(i.sets, reps);
     return {
       exercise: i.exercise_match || i.exercise_free,
-      sets: i.sets ?? (Array.isArray(reps) ? reps.length : undefined),
-      reps,
+      sets: norm.sets ?? undefined,
+      reps: norm.reps ?? undefined,
       weight_lbs: i.weight_lbs ?? undefined,
       notes: i.notes ?? undefined,
     };
@@ -74,7 +76,31 @@ function getOrCreateSession(sessionDate, dow, llm) {
   return { id, existed: false };
 }
 
-function insertLog(sessionId, exerciseId, { sets, reps, weight_lbs, notes }) {
+/**
+ * One rep number means every set got that many reps. A single-element list
+ * ([10]) with sets=3 is the same thing, so collapse it to a plain 10 — otherwise
+ * it reads as one set of 10 and the volume is undercounted 3×. A list with no
+ * set count gets its length as the set count.
+ */
+export function normalizeSetsReps(sets, reps) {
+  let s = sets == null || sets === "" ? null : Number(sets);
+  if (!Number.isFinite(s) || s <= 0) s = null;
+  let r = reps;
+  if (Array.isArray(r)) {
+    r = r.map(Number).filter(Number.isFinite);
+    if (!r.length) r = null;
+    else if (r.length === 1) r = r[0];
+    else if (s == null) s = r.length;
+  } else if (r != null && r !== "") {
+    const n = Number(r);
+    r = Number.isFinite(n) ? n : null;
+  } else r = null;
+  return { sets: s, reps: r };
+}
+
+function insertLog(sessionId, exerciseId, input) {
+  const { weight_lbs, notes } = input;
+  const { sets, reps } = normalizeSetsReps(input.sets, input.reps);
   let repsValue = null;
   if (reps !== undefined && reps !== null) {
     repsValue = Array.isArray(reps) ? JSON.stringify(reps) : String(reps);
@@ -148,9 +174,16 @@ function parseReps(repsPerSet) {
   }
 }
 
+/** Per-set rep counts, e.g. sets=3 reps=10 → [10,10,10]; reps=[12,10,8] → as-is. */
+export function repsPerSetList(sets, repsPerSet) {
+  const { sets: s, reps } = normalizeSetsReps(sets, parseReps(repsPerSet));
+  if (reps == null) return [];
+  if (Array.isArray(reps)) return reps;
+  return Array(s || 1).fill(reps);
+}
+
 export function logVolume(log) {
-  const reps = parseReps(log.reps_per_set);
-  const totalReps = Array.isArray(reps) ? reps.reduce((a, b) => a + b, 0) : (log.sets || 0) * (reps || 0);
+  const totalReps = repsPerSetList(log.sets, log.reps_per_set).reduce((a, b) => a + b, 0);
   return totalReps * (log.weight_lbs || 0);
 }
 
@@ -182,11 +215,12 @@ export function deleteWorkout(id) {
 export function updateExerciseLog(id, patch) {
   const log = db.prepare("SELECT * FROM exercise_logs WHERE id = ?").get(id);
   if (!log) throw new HttpError(404, "Log not found");
-  const sets = patch.sets !== undefined ? patch.sets : log.sets;
-  let reps = log.reps_per_set;
-  if (patch.reps !== undefined) {
-    reps = patch.reps == null ? null : Array.isArray(patch.reps) ? JSON.stringify(patch.reps) : String(patch.reps);
-  }
+  const norm = normalizeSetsReps(
+    patch.sets !== undefined ? patch.sets : log.sets,
+    patch.reps !== undefined ? patch.reps : parseReps(log.reps_per_set)
+  );
+  const sets = norm.sets;
+  const reps = norm.reps == null ? null : Array.isArray(norm.reps) ? JSON.stringify(norm.reps) : String(norm.reps);
   const weight = patch.weight_lbs !== undefined ? patch.weight_lbs : log.weight_lbs;
   const notes = patch.notes !== undefined ? patch.notes : log.notes;
   db.prepare("UPDATE exercise_logs SET sets = ?, reps_per_set = ?, weight_lbs = ?, notes = ? WHERE id = ?").run(
@@ -213,25 +247,51 @@ export function latestForExercise(exerciseId, date) {
      WHERE l.exercise_id = ? AND s.session_date < ? ORDER BY s.session_date DESC, l.rowid DESC LIMIT 1`
   ).get(exerciseId, date);
 
-  // Progressive overload nudge: same weight for 3+ recent sessions → suggest a bump.
-  let nudge = null;
-  const recent = db.prepare(
-    `SELECT l.weight_lbs FROM exercise_logs l JOIN workout_sessions s ON s.id = l.session_id
-     WHERE l.exercise_id = ? AND s.session_date < ? AND l.weight_lbs IS NOT NULL
-     ORDER BY s.session_date DESC, l.rowid DESC LIMIT 6`
-  ).all(exerciseId, date);
-  if (recent.length >= 3) {
-    const current = recent[0].weight_lbs;
-    let sessionsAtWeight = 0;
-    for (const r of recent) {
-      if (r.weight_lbs === current) sessionsAtWeight += 1;
-      else break;
-    }
-    if (sessionsAtWeight >= 3) {
-      nudge = { sessions_at_weight: sessionsAtWeight, current, suggest: current + 5 };
-    }
-  }
+  const nudge = progressionNudge(exerciseId, date);
   return { today: shape(today), last: shape(last), nudge };
+}
+
+// Double progression: stay at a weight and add reps until every set hits the
+// top of the range, then go up in weight (and drop back to the bottom).
+export const REP_RANGE = { min: 6, max: 12 };
+export const WEIGHT_STEP_LBS = 5;
+
+/**
+ * What to aim for next time, from the most recent weighted session:
+ * - every set at REP_RANGE.max → { type: "weight", suggest: weight + 5, suggest_reps: 6 }
+ * - otherwise → { type: "reps", suggest_reps: one more rep per set (capped at 12) }, same weight
+ */
+export function progressionNudge(exerciseId, date) {
+  const recent = db.prepare(
+    `SELECT l.sets, l.reps_per_set, l.weight_lbs FROM exercise_logs l JOIN workout_sessions s ON s.id = l.session_id
+     WHERE l.exercise_id = ? AND s.session_date < ? AND l.weight_lbs IS NOT NULL
+     ORDER BY s.session_date DESC, l.rowid DESC LIMIT 20`
+  ).all(exerciseId, date);
+  if (!recent.length) return null;
+  const current = recent[0].weight_lbs;
+  let sessionsAtWeight = 0;
+  for (const r of recent) {
+    if (r.weight_lbs === current) sessionsAtWeight += 1;
+    else break;
+  }
+  const reps = repsPerSetList(recent[0].sets, recent[0].reps_per_set);
+  if (!reps.length) return null;
+  const sets = reps.length;
+  const lowest = Math.min(...reps);
+
+  if (lowest >= REP_RANGE.max) {
+    return {
+      type: "weight", current, sessions_at_weight: sessionsAtWeight, sets, last_reps: reps,
+      suggest: current + WEIGHT_STEP_LBS, suggest_reps: REP_RANGE.min,
+      message: `You hit ${REP_RANGE.max} on every set at ${current} lbs — go up to ${current + WEIGHT_STEP_LBS} lbs and start back at ${REP_RANGE.min} reps.`,
+    };
+  }
+  const target = Math.min(REP_RANGE.max, Math.max(lowest + 1, REP_RANGE.min));
+  return {
+    type: "reps", current, sessions_at_weight: sessionsAtWeight, sets, last_reps: reps,
+    suggest: current, suggest_reps: target,
+    message: `Stay at ${current} lbs and push for ${sets}×${target} — move up in weight once you get ${REP_RANGE.max} on every set.`,
+  };
 }
 
 // --- Plan editor ---
